@@ -47,10 +47,10 @@ export async function listUsers(
 					AND: [
 						{
 							OR: [
-								{ login: { contains: q, mode: "insensitive" } },
-								{ name: { contains: q, mode: "insensitive" } },
-								{ email: { contains: q, mode: "insensitive" } },
-								{ id: { contains: q, mode: "insensitive" } },
+								{ login: { contains: q } },
+								{ name: { contains: q } },
+								{ email: { contains: q } },
+								{ id: { contains: q } },
 							],
 						},
 					],

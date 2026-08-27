@@ -52,8 +52,8 @@ export async function ensureDreaminaSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS dreamina_accounts (
-      id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      owner_id VARCHAR(100) NOT NULL,
       label TEXT NOT NULL,
       cli_path TEXT,
       session_root TEXT NOT NULL,
@@ -76,10 +76,10 @@ export async function ensureDreaminaSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS dreamina_project_bindings (
-      id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      project_id TEXT NOT NULL,
-      account_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      owner_id VARCHAR(100) NOT NULL,
+      project_id VARCHAR(100) NOT NULL,
+      account_id VARCHAR(100) NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1,
       default_model_version TEXT,
       default_ratio TEXT,

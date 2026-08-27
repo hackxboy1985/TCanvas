@@ -87,11 +87,11 @@ export async function listProjectsForAdmin(
 			...(q
 				? {
 						OR: [
-							{ name: { contains: q, mode: "insensitive" } },
-							{ id: { contains: q, mode: "insensitive" } },
-							{ owner_id: { contains: q, mode: "insensitive" } },
-							{ users: { is: { login: { contains: q, mode: "insensitive" } } } },
-							{ users: { is: { name: { contains: q, mode: "insensitive" } } } },
+							{ name: { contains: q } },
+							{ id: { contains: q } },
+							{ owner_id: { contains: q } },
+							{ users: { is: { login: { contains: q } } } },
+							{ users: { is: { name: { contains: q } } } },
 						],
 					}
 				: {}),

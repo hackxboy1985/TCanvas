@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { PrismaClient } from "@prisma/client";
+import prismaPkg from "@prisma/client";
+const { PrismaClient } = prismaPkg;
 
 function resolvePatchDir() {
 	const candidates = [
@@ -73,9 +74,10 @@ function isAllowedModelCatalogMetaUpdate(stmt) {
 function isAllowedNonOverwriteInsert(stmt) {
 	const s = stmt.trim();
 	return (
-		/^INSERT\s+INTO\s+/i.test(s) &&
+		/^INSERT\s+IGNORE\s+INTO\s+/i.test(s) ||
+		(/^INSERT\s+INTO\s+/i.test(s) &&
 		/\bON\s+CONFLICT\b/i.test(s) &&
-		/\bDO\s+NOTHING\b/i.test(s)
+		/\bDO\s+NOTHING\b/i.test(s))
 	);
 }
 

@@ -157,7 +157,7 @@ async function backfillModelAliasByModelKey(): Promise<void> {
 				vendor_key: row.vendor_key,
 				kind: row.kind,
 				model_key: { not: row.model_key },
-				model_alias: { equals: row.model_key, mode: "insensitive" },
+				model_alias: { equals: row.model_key },
 			},
 			select: { model_key: true },
 		});
@@ -386,7 +386,7 @@ export async function listCatalogModelsByModelAlias(
 	const alias = String(modelAlias || "").trim();
 	if (!alias) return [];
 	const rows = await getPrismaClient().model_catalog_models.findMany({
-		where: { model_alias: { equals: alias, mode: "insensitive" } },
+		where: { model_alias: { equals: alias } },
 		orderBy: [{ vendor_key: "asc" }, { model_key: "asc" }],
 	});
 	return rows.map(modelToRow);
@@ -405,7 +405,7 @@ export async function getCatalogModelByVendorKindAndAlias(
 		where: {
 			vendor_key: vk,
 			kind,
-			model_alias: { equals: alias, mode: "insensitive" },
+			model_alias: { equals: alias },
 		},
 	});
 	return row ? modelToRow(row) : null;

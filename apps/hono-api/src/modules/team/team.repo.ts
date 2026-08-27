@@ -143,7 +143,7 @@ export async function ensureTeamSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS teams (
-      id TEXT PRIMARY KEY,
+      id VARCHAR(100) PRIMARY KEY,
       name TEXT NOT NULL,
       credits INTEGER NOT NULL DEFAULT 0,
       credits_frozen INTEGER NOT NULL DEFAULT 0,
@@ -165,9 +165,9 @@ export async function ensureTeamSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS team_memberships (
-      team_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'member',
+      team_id VARCHAR(100) NOT NULL,
+      user_id VARCHAR(100) NOT NULL,
+      role VARCHAR(100) NOT NULL DEFAULT 'member',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (team_id, user_id),
@@ -192,16 +192,16 @@ export async function ensureTeamSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS team_invites (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      team_id VARCHAR(100) NOT NULL,
       code TEXT NOT NULL UNIQUE,
       email TEXT,
       phone TEXT,
       login TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
+      status VARCHAR(100) NOT NULL DEFAULT 'pending',
       expires_at TEXT,
-      inviter_user_id TEXT NOT NULL,
-      accepted_user_id TEXT,
+      inviter_user_id VARCHAR(100) NOT NULL,
+      accepted_user_id VARCHAR(100),
       accepted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -225,13 +225,13 @@ export async function ensureTeamSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS team_credit_ledger (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      team_id VARCHAR(100) NOT NULL,
       entry_type TEXT NOT NULL, -- topup | reserve | deduct | release
       amount INTEGER NOT NULL,
-      task_id TEXT,
+      task_id VARCHAR(100),
       task_kind TEXT,
-      actor_user_id TEXT,
+      actor_user_id VARCHAR(100),
       note TEXT,
       created_at TEXT NOT NULL,
       UNIQUE (team_id, entry_type, task_id),
@@ -696,10 +696,9 @@ export async function tryChargeTeamCreditsOnce(
 	const inserted =
 		(await executeWithChanges(
 			db,
-			`INSERT INTO team_credit_ledger
+			`INSERT IGNORE INTO team_credit_ledger
        (id, team_id, entry_type, amount, task_id, task_kind, actor_user_id, note, created_at)
-       VALUES (?, ?, 'deduct', ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(team_id, entry_type, task_id) DO NOTHING`,
+       VALUES (?, ?, 'deduct', ?, ?, ?, ?, ?, ?)`,
 			[
 				crypto.randomUUID(),
 				input.teamId,
@@ -805,10 +804,9 @@ export async function tryReserveTeamCreditsOnce(
 	const inserted =
 		(await executeWithChanges(
 			db,
-			`INSERT INTO team_credit_ledger
+			`INSERT IGNORE INTO team_credit_ledger
        (id, team_id, entry_type, amount, task_id, task_kind, actor_user_id, note, created_at)
-       VALUES (?, ?, 'reserve', ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(team_id, entry_type, task_id) DO NOTHING`,
+       VALUES (?, ?, 'reserve', ?, ?, ?, ?, ?, ?)`,
 			[
 				crypto.randomUUID(),
 				input.teamId,
@@ -868,10 +866,9 @@ export async function tryDeductTeamCreditsOnce(
 	const inserted =
 		(await executeWithChanges(
 			db,
-			`INSERT INTO team_credit_ledger
+			`INSERT IGNORE INTO team_credit_ledger
        (id, team_id, entry_type, amount, task_id, task_kind, actor_user_id, note, created_at)
-       VALUES (?, ?, 'deduct', ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(team_id, entry_type, task_id) DO NOTHING`,
+       VALUES (?, ?, 'deduct', ?, ?, ?, ?, ?, ?)`,
 			[
 				crypto.randomUUID(),
 				input.teamId,
@@ -931,10 +928,9 @@ export async function tryReleaseTeamCreditsOnce(
 	const inserted =
 		(await executeWithChanges(
 			db,
-			`INSERT INTO team_credit_ledger
+			`INSERT IGNORE INTO team_credit_ledger
        (id, team_id, entry_type, amount, task_id, task_kind, actor_user_id, note, created_at)
-       VALUES (?, ?, 'release', ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(team_id, entry_type, task_id) DO NOTHING`,
+       VALUES (?, ?, 'release', ?, ?, ?, ?, ?, ?)`,
 			[
 				crypto.randomUUID(),
 				input.teamId,

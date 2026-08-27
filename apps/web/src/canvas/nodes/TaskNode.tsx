@@ -4171,15 +4171,30 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (isCharacterNode) return 'character'
     return 'text'
   }, [coreKind, isAudioNode, isCharacterNode, isSubtitleNode, isVideoNode, kind])
+  const imageBillingSpecValues = React.useMemo<Record<string, string> | null>(() => {
+    if (isVideoNode) return null
+    const out: Record<string, string> = {}
+    if (typeof imageResolution === 'string' && imageResolution.trim()) {
+      out.resolution = imageResolution.trim()
+    }
+    if (typeof imageSize === 'string' && imageSize.trim()) {
+      out.imageSize = imageSize.trim()
+    }
+    if (typeof aspect === 'string' && aspect.trim()) {
+      out.aspectRatio = aspect.trim()
+    }
+    return Object.keys(out).length > 0 ? out : null
+  }, [aspect, imageResolution, imageSize, isVideoNode])
   const requiredGenerationCredits = React.useMemo(
     () =>
       resolveModelGenerationCredits({
         kind: billingNodeKind,
         modelOption: selectedActiveModelOption,
         specKey: isVideoNode ? videoSpecKey : null,
+        specValues: imageBillingSpecValues,
         quantity: coreKind === 'image' ? sampleCount : 1,
       }),
-    [billingNodeKind, coreKind, isVideoNode, sampleCount, selectedActiveModelOption, videoSpecKey],
+    [billingNodeKind, coreKind, imageBillingSpecValues, isVideoNode, sampleCount, selectedActiveModelOption, videoSpecKey],
   )
   const requiredCreditsLabel = React.useMemo(() => {
     if (!(isVideoNode || coreKind === 'image')) return null

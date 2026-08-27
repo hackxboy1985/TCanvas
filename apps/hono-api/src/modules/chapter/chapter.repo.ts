@@ -119,19 +119,19 @@ export async function ensureChapterSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS chapters (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
 			chapter_index INTEGER NOT NULL,
 			title TEXT NOT NULL,
 			summary TEXT,
 			status TEXT NOT NULL,
 			sort_order INTEGER NOT NULL,
-			cover_asset_id TEXT,
+			cover_asset_id VARCHAR(100),
 			continuity_context TEXT,
 			style_profile_override TEXT,
 			legacy_chunk_index INTEGER,
-			source_book_id TEXT,
+			source_book_id VARCHAR(100),
 			source_book_chapter INTEGER,
 			last_worked_at TEXT,
 			created_at TEXT NOT NULL,
@@ -154,12 +154,12 @@ export async function ensureChapterSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`ALTER TABLE storyboard_shots
-				ADD COLUMN IF NOT EXISTS chapter_id TEXT`,
+				ADD COLUMN IF NOT EXISTS chapter_id VARCHAR(100)`,
 		);
 		await execute(
 			db,
 			`ALTER TABLE chapters
-				ADD COLUMN IF NOT EXISTS source_book_id TEXT`,
+				ADD COLUMN IF NOT EXISTS source_book_id VARCHAR(100)`,
 		);
 		await execute(
 			db,

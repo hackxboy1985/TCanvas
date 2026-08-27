@@ -718,7 +718,6 @@ export async function listNewApiModels(
 const VENDOR_ROUTING_SUFFIXES = [
 	"-apimart",
 	"-suchuang",
-	"-all",
 	"-rightcodes",
 	"-147ai",
 	"-magic666",

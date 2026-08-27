@@ -9,11 +9,10 @@ import {
 	deleteModelCreditCost,
 	getModelCreditCost,
 	listModelCreditCosts,
+	listModelCreditCostSpecs,
 	upsertModelCreditCost,
 } from "./billing.repo";
 import { listCatalogModels } from "../model-catalog/model-catalog.repo";
-import { getNewApiPricingSnapshot } from "./new-api-pricing";
-import { listNewApiModels } from "../new-api-models/new-api-models.service";
 
 function requireAdmin(c: AppContext): void {
 	if (!isAdminRequest(c)) {
@@ -28,20 +27,57 @@ function fallbackCostForTaskKind(kind: string | null | undefined): number {
 	return 0;
 }
 
-function inferSpecCandidates(modelKey?: string | null): string[] {
-	const raw = typeof modelKey === "string" ? modelKey.trim() : "";
-	if (!raw) return [];
-	const normalized = normalizeBillingModelKey(raw);
-	const out: string[] = [];
-	if (normalized && raw !== normalized) out.push(`variant:${raw}`);
-	const lower = raw.toLowerCase();
-	if (lower.includes("landscape")) out.push("orientation:landscape");
-	if (lower.includes("portrait")) out.push("orientation:portrait");
-	const d = lower.match(/(?:^|[-_])([0-9]{1,3})s(?:[-_]|$)/);
-	if (d && d[1]) out.push(`duration:${d[1]}s`);
-	if (lower.includes("-pro") || lower.endsWith("pro")) out.push("quality:pro");
-	if (lower.includes("-fast") || lower.endsWith("fast")) out.push("quality:fast");
-	return Array.from(new Set(out));
+type SpecCondition = {
+	field: string;
+	value: string;
+};
+
+// 解析规格条件：resolution:2K&&quality:medium -> [{field:"resolution",value:"2k"},{field:"quality",value:"medium"}]
+function parseSpecConditions(specKey: string): SpecCondition[] {
+	return specKey
+		.split("&&")
+		.map((segment) => segment.trim())
+		.filter(Boolean)
+		.map((segment) => {
+			const separatorIndex = segment.indexOf(":");
+			if (separatorIndex <= 0) return null;
+			const field = segment.slice(0, separatorIndex).trim().toLowerCase();
+			const value = segment.slice(separatorIndex + 1).trim().toLowerCase();
+			if (!field || !value) return null;
+			return { field, value };
+		})
+		.filter((item): item is SpecCondition => item !== null);
+}
+
+// 判断某条规格的全部条件是否都命中字段值
+function matchSpecConditions(
+	conditions: SpecCondition[],
+	specValues: Record<string, string>,
+): boolean {
+	if (conditions.length === 0) return false;
+	return conditions.every((condition) => {
+		const raw = specValues[condition.field];
+		return typeof raw === "string" && raw.trim().toLowerCase() === condition.value;
+	});
+}
+
+// 从多条规格里选出命中者：条件数最多（最具体）优先
+function pickMatchedSpec(
+	specRows: Array<{ spec_key: string; cost: number; enabled: number }>,
+	specValues: Record<string, string>,
+): number | null {
+	let best: { cost: number; conditionCount: number } | null = null;
+	for (const row of specRows) {
+		if (Number(row.enabled ?? 1) === 0) continue;
+		const conditions = parseSpecConditions(String(row.spec_key || ""));
+		if (conditions.length === 0) continue;
+		if (!matchSpecConditions(conditions, specValues)) continue;
+		const cost = Math.max(0, Math.floor(Number(row.cost ?? 0) || 0));
+		if (!best || conditions.length > best.conditionCount) {
+			best = { cost, conditionCount: conditions.length };
+		}
+	}
+	return best ? best.cost : null;
 }
 
 function imageResolutionSpecKey(specKey: string): string | null {
@@ -68,171 +104,57 @@ export function resolveSyntheticImageSpecCostFromBase(input: {
 	return resolutionSpec === "image:4k" ? baseCost * 2 : baseCost;
 }
 
-async function resolveDirectNewApiCreditsFallback(
-	c: AppContext,
-	normalizedModelKey: string,
-): Promise<number | null> {
-	const pricingSnapshot = await getNewApiPricingSnapshot(c.env);
-	const directCredits =
-		pricingSnapshot.directCreditsByModelKey.get(normalizedModelKey);
-	if (typeof directCredits === "number" && Number.isFinite(directCredits)) {
-		return Math.max(0, Math.floor(directCredits));
-	}
-
-	const newApiModels = await listNewApiModels(c.env, { enabled: true });
-	for (const model of newApiModels) {
-		const requestKey = normalizeBillingModelKey(model.requestModelKey);
-		const modelNameKey = normalizeBillingModelKey(model.modelName);
-		if (
-			requestKey !== normalizedModelKey &&
-			modelNameKey !== normalizedModelKey
-		) {
-			continue;
-		}
-		const translatedCredits =
-			pricingSnapshot.directCreditsByModelKey.get(requestKey) ??
-			pricingSnapshot.directCreditsByModelKey.get(modelNameKey);
-		if (
-			typeof translatedCredits === "number" &&
-			Number.isFinite(translatedCredits)
-		) {
-			return Math.max(0, Math.floor(translatedCredits));
-		}
-	}
-	return null;
-}
-
 export async function resolveTeamCreditsCostForTask(c: AppContext, input: {
 	taskKind: string | null | undefined;
 	modelKey?: string | null | undefined;
 	specKey?: string | null | undefined;
+	specValues?: Record<string, string> | null | undefined;
 }): Promise<number> {
 	const normalizedModelKey = normalizeBillingModelKey(input.modelKey);
-	if (normalizedModelKey) {
-		const explicitSpec = typeof input.specKey === "string" ? input.specKey.trim() : "";
-		if (explicitSpec) {
-			const specSnapshot = await (async () => {
-				const snap = await getNewApiPricingSnapshot(c.env);
-				const exact = snap.specCreditsByModelSpecKey.get(`${normalizedModelKey}:${explicitSpec}`);
-				if (typeof exact === "number") return exact;
-				const resolutionSpec = imageResolutionSpecKey(explicitSpec);
-				return resolutionSpec
-					? snap.specCreditsByModelSpecKey.get(`${normalizedModelKey}:${resolutionSpec}`)
-					: undefined;
-			})();
-			if (typeof specSnapshot === "number" && Number.isFinite(specSnapshot) && specSnapshot > 0) {
-				return specSnapshot;
-			}
-
-			// snapshot 没命中时不论是否 image spec 都先走 DB / direct fallback。
-			// Why: 2026-05-04 patch 把 gpt-image-2 的 model_credit_cost_specs 清空、
-			// 改为从 new-api /api/pricing 取价；但只要上游 new-api 部署滞后、模型 Status≠1
-			// 或 ability 缺失，snapshot 就拿不到 image:4k 这类 spec，原逻辑会硬抛 503，
-			// 现把 DB + direct credits 留作兜底，仍未命中再抛错。
-			const explicitSpecRow = await getModelCreditCost(
-				c.env.DB,
-				normalizedModelKey,
-				explicitSpec,
-			);
-			if (explicitSpecRow && Number(explicitSpecRow.enabled ?? 1) !== 0) {
-				const cost =
-					typeof explicitSpecRow.cost === "number" &&
-					Number.isFinite(explicitSpecRow.cost)
-						? explicitSpecRow.cost
-						: 0;
-				return Math.max(0, Math.floor(cost));
-			}
-			const baseRow = await getModelCreditCost(c.env.DB, normalizedModelKey);
-			if (baseRow && Number(baseRow.enabled ?? 1) !== 0) {
-				const syntheticImageSpecCost = resolveSyntheticImageSpecCostFromBase({
-					baseCost: baseRow.cost,
-					specKey: explicitSpec,
-				});
-				if (syntheticImageSpecCost !== null) {
-					return syntheticImageSpecCost;
-				}
-			}
-			const directFallbackCredits = await resolveDirectNewApiCreditsFallback(
-				c,
-				normalizedModelKey,
-			);
-			if (
-				typeof directFallbackCredits === "number" &&
-				Number.isFinite(directFallbackCredits) &&
-				directFallbackCredits > 0
-			) {
-				return directFallbackCredits;
-			}
-			throw new AppError("模型规格积分价格未配置", {
-				status: 503,
-				code: "model_spec_pricing_unavailable",
-				details: {
-					modelKey: normalizedModelKey,
-					taskKind: input.taskKind ?? null,
-					specKey: explicitSpec,
-				},
-			});
-		}
-
-		const specCandidates = inferSpecCandidates(input.modelKey);
-		for (const specKey of specCandidates) {
-			const specRow = await getModelCreditCost(c.env.DB, normalizedModelKey, specKey);
-			if (specRow && Number(specRow.enabled ?? 1) !== 0) {
-				const cost = typeof specRow.cost === "number" && Number.isFinite(specRow.cost) ? specRow.cost : 0;
-				return Math.max(0, Math.floor(cost));
-			}
-		}
-
-		const pricingSnapshot = await getNewApiPricingSnapshot(c.env);
-		const directCredits = pricingSnapshot.creditsByModelKey.get(normalizedModelKey);
-		if (typeof directCredits === "number" && Number.isFinite(directCredits)) {
-			return Math.max(0, Math.floor(directCredits));
-		}
-
-		const baseRow = await getModelCreditCost(c.env.DB, normalizedModelKey);
-		if (baseRow && Number(baseRow.enabled ?? 1) !== 0) {
-			const cost =
-				typeof baseRow.cost === "number" && Number.isFinite(baseRow.cost)
-					? baseRow.cost
-					: 0;
-			return Math.max(0, Math.floor(cost));
-		}
-
-		const newApiModels = await listNewApiModels(c.env, { enabled: true });
-		for (const model of newApiModels) {
-			const requestKey = normalizeBillingModelKey(model.requestModelKey);
-			const modelNameKey = normalizeBillingModelKey(model.modelName);
-			if (
-				requestKey !== normalizedModelKey &&
-				modelNameKey !== normalizedModelKey
-			) {
-				continue;
-			}
-			const translatedCredits =
-				pricingSnapshot.creditsByModelKey.get(requestKey) ??
-				pricingSnapshot.creditsByModelKey.get(modelNameKey);
-			if (
-				typeof translatedCredits === "number" &&
-				Number.isFinite(translatedCredits)
-			) {
-				return Math.max(0, Math.floor(translatedCredits));
-			}
-		}
-		const fallback = fallbackCostForTaskKind(input.taskKind);
-		if (fallback > 0) {
-			return fallback;
-		}
-		throw new AppError("模型积分价格未配置", {
-			status: 503,
-			code: "model_pricing_unavailable",
-			details: {
-				modelKey: normalizedModelKey,
-				taskKind: input.taskKind ?? null,
-				specKey: null,
-			},
-		});
+	if (!normalizedModelKey) {
+		return fallbackCostForTaskKind(input.taskKind);
 	}
-	return fallbackCostForTaskKind(input.taskKind);
+
+	// 1. 字段条件匹配：specKey 形如 resolution:2K&&quality:medium，按实际字段值命中（纯 DB 计价）
+	const specValues = input.specValues;
+	if (specValues && Object.keys(specValues).length > 0) {
+		const specRows = await listModelCreditCostSpecs(c.env.DB, normalizedModelKey);
+		const matchedCost = pickMatchedSpec(specRows, specValues);
+		if (matchedCost !== null) {
+			return matchedCost;
+		}
+	}
+
+	// 2. 精确 specKey 匹配：兼容 gpt-image-2-official 等旧格式（image:16_9:2k:high）
+	const explicitSpec = typeof input.specKey === "string" ? input.specKey.trim() : "";
+	if (explicitSpec) {
+		const specRow = await getModelCreditCost(c.env.DB, normalizedModelKey, explicitSpec);
+		if (specRow && Number(specRow.enabled ?? 1) !== 0) {
+			return Math.max(0, Math.floor(Number(specRow.cost ?? 0) || 0));
+		}
+	}
+
+	// 3. 基础价
+	const baseRow = await getModelCreditCost(c.env.DB, normalizedModelKey);
+	if (baseRow && Number(baseRow.enabled ?? 1) !== 0) {
+		return Math.max(0, Math.floor(Number(baseRow.cost ?? 0) || 0));
+	}
+
+	// 4. 兜底默认价
+	const fallback = fallbackCostForTaskKind(input.taskKind);
+	if (fallback > 0) {
+		return fallback;
+	}
+
+	throw new AppError("模型积分价格未配置", {
+		status: 503,
+		code: "model_pricing_unavailable",
+		details: {
+			modelKey: normalizedModelKey,
+			taskKind: input.taskKind ?? null,
+			specKey: null,
+		},
+	});
 }
 
 export async function listBillingModelCatalog(c: AppContext) {

@@ -66,9 +66,9 @@ export async function ensurePublicChatSessionSchema(db: PrismaClient): Promise<v
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS public_chat_sessions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      session_key TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      user_id VARCHAR(100) NOT NULL,
+      session_key VARCHAR(100) NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id),
@@ -83,9 +83,9 @@ export async function ensurePublicChatSessionSchema(db: PrismaClient): Promise<v
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS public_chat_messages (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      session_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      user_id VARCHAR(100) NOT NULL,
+      session_id VARCHAR(100) NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       assets_json TEXT,
@@ -102,23 +102,23 @@ export async function ensurePublicChatSessionSchema(db: PrismaClient): Promise<v
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS public_chat_turn_runs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      session_id TEXT NOT NULL,
-      request_id TEXT,
-      session_key TEXT NOT NULL,
-      project_id TEXT,
-      book_id TEXT,
-      chapter_id TEXT,
+      id VARCHAR(100) PRIMARY KEY,
+      user_id VARCHAR(100) NOT NULL,
+      session_id VARCHAR(100) NOT NULL,
+      request_id VARCHAR(100),
+      session_key VARCHAR(100) NOT NULL,
+      project_id VARCHAR(100),
+      book_id VARCHAR(100),
+      chapter_id VARCHAR(100),
       label TEXT,
-      workflow_key TEXT NOT NULL,
+      workflow_key VARCHAR(100) NOT NULL,
       request_kind TEXT NOT NULL,
-      user_message_id TEXT,
-      assistant_message_id TEXT,
+      user_message_id VARCHAR(100),
+      assistant_message_id VARCHAR(100),
       output_mode TEXT NOT NULL,
       turn_verdict TEXT NOT NULL,
       turn_verdict_reasons_json TEXT NOT NULL,
-      run_outcome TEXT NOT NULL DEFAULT 'hold',
+      run_outcome VARCHAR(100) NOT NULL DEFAULT 'hold',
       agent_decision_json TEXT,
       tool_status_summary_json TEXT,
       diagnostic_flags_json TEXT,
@@ -146,9 +146,9 @@ export async function ensurePublicChatSessionSchema(db: PrismaClient): Promise<v
 			`CREATE INDEX IF NOT EXISTS idx_public_chat_turn_runs_user_verdict_created
      ON public_chat_turn_runs(user_id, turn_verdict, created_at DESC)`,
 		);
-		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS project_id TEXT`);
-		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS book_id TEXT`);
-		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS chapter_id TEXT`);
+		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS project_id VARCHAR(100)`);
+		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS book_id VARCHAR(100)`);
+		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS chapter_id VARCHAR(100)`);
 		await execute(db, `ALTER TABLE public_chat_turn_runs ADD COLUMN IF NOT EXISTS label TEXT`);
 		await execute(
 			db,
@@ -192,8 +192,8 @@ export async function resolveOrCreatePublicChatSession(
 		db,
 		`INSERT INTO public_chat_sessions (id, user_id, session_key, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(user_id, session_key) DO UPDATE SET
-         updated_at = excluded.updated_at`,
+       ON DUPLICATE KEY UPDATE
+         updated_at = VALUES(updated_at)`,
 		[input.id, userId, sessionKey, input.nowIso, input.nowIso],
 	);
 	return queryOne<PublicChatSessionRow>(

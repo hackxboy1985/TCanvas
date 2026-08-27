@@ -644,7 +644,7 @@ async function resolvePublicVendorAuth(
 			where: {
 				key: {
 					equals: vk,
-					mode: "insensitive",
+
 				},
 			},
 			select: {

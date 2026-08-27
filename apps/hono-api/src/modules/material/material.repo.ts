@@ -99,9 +99,9 @@ export async function ensureMaterialSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS material_assets (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
 			kind TEXT NOT NULL,
 			name TEXT NOT NULL,
 			current_version INTEGER NOT NULL DEFAULT 1,
@@ -117,10 +117,10 @@ export async function ensureMaterialSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS material_asset_versions (
-			id TEXT PRIMARY KEY,
-			asset_id TEXT NOT NULL,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			asset_id VARCHAR(100) NOT NULL,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
 			version INTEGER NOT NULL,
 			data_json TEXT NOT NULL,
 			note TEXT,
@@ -137,11 +137,11 @@ export async function ensureMaterialSchema(db: PrismaClient): Promise<void> {
 	await execute(
 		db,
 		`CREATE TABLE IF NOT EXISTS shot_material_refs (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
-			shot_id TEXT NOT NULL,
-			asset_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
+			shot_id VARCHAR(100) NOT NULL,
+			asset_id VARCHAR(100) NOT NULL,
 			asset_version INTEGER NOT NULL,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL,
@@ -354,9 +354,9 @@ export async function upsertShotMaterialRef(
 		`INSERT INTO shot_material_refs (
 			id, owner_id, project_id, shot_id, asset_id, asset_version, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(project_id, shot_id, asset_id) DO UPDATE SET
-			asset_version = excluded.asset_version,
-			updated_at = excluded.updated_at`,
+		ON DUPLICATE KEY UPDATE
+			asset_version = VALUES(asset_version),
+			updated_at = VALUES(updated_at)`,
 		[
 			input.id,
 			input.ownerId,

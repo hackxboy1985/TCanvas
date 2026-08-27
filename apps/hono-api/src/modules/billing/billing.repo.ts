@@ -164,6 +164,27 @@ export async function getModelCreditCost(
 	};
 }
 
+export async function listModelCreditCostSpecs(
+	db: PrismaClient,
+	modelKey: string,
+): Promise<ModelCreditCostRow[]> {
+	await ensureModelCreditCostsSchema(db);
+	const prisma = getPrismaClient();
+	const key = normalizeModelKey(modelKey);
+	if (!key) return [];
+	const specRows = await prisma.model_credit_cost_specs.findMany({
+		where: { model_key: key },
+	});
+	return specRows.map((r) => ({
+		model_key: r.model_key,
+		spec_key: r.spec_key,
+		cost: r.cost,
+		enabled: r.enabled,
+		created_at: r.created_at,
+		updated_at: r.updated_at,
+	}));
+}
+
 export async function upsertModelCreditCost(
 	db: PrismaClient,
 	input: {

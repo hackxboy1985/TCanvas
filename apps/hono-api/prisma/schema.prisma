@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -14,10 +14,10 @@ model agent_pipeline_runs {
   title         String
   goal          String?
   status        String
-  stages_json   String
-  progress_json String?
-  result_json   String?
-  error_message String?
+  stages_json  String  @db.Text
+  progress_json  String?  @db.Text
+  result_json  String?  @db.Text
+  error_message  String?  @db.Text
   created_at    String
   updated_at    String
   started_at    String?
@@ -33,9 +33,9 @@ model agent_presets {
   id              String  @id
   key             String  @unique
   name            String
-  description     String?
-  system_prompt   String?
-  opening_message String?
+  description  String?  @db.Text
+  system_prompt  String?  @db.Text
+  opening_message  String?  @db.Text
   skill_ids       String?
   enabled         Int     @default(1)
   visible         Int     @default(1)
@@ -50,8 +50,8 @@ model agent_skills {
   id          String  @id
   key         String  @unique
   name        String
-  description String?
-  content     String
+  description  String?  @db.Text
+  content  String  @db.Text
   enabled     Int     @default(1)
   visible     Int     @default(1)
   sort_order  Int?
@@ -89,7 +89,7 @@ model api_request_logs {
   started_at  String
   finished_at String?
   duration_ms Int?
-  trace_json  String?
+  trace_json  String?  @db.Text
   created_at  String
   updated_at  String
 
@@ -101,7 +101,7 @@ model api_request_logs {
 model assets {
   id         String    @id
   name       String
-  data       String?
+  data  String?  @db.Text
   owner_id   String
   project_id String?
   created_at String
@@ -119,7 +119,7 @@ model commerce_dictionaries {
   dict_type  String
   code       String
   name       String
-  value_json String?
+  value_json  String?  @db.Text
   enabled    Int     @default(1)
   sort_order Int     @default(0)
   created_at String
@@ -135,7 +135,7 @@ model detail_page_evolution_runs {
   owner_id      String
   min_feedbacks Int
   action        String
-  metrics_json  String
+  metrics_json  String  @db.Text
   created_at    String
   users         users  @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -151,8 +151,8 @@ model detail_page_feedback_logs {
   score_structure     Int?
   score_visual        Int?
   score_conversion    Int?
-  edit_ratio          Float?              @db.Real
-  note                String?
+  edit_ratio          Float?
+  note  String?  @db.Text
   created_at          String
   users               users               @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   detail_page_samples detail_page_samples @relation(fields: [sample_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -164,11 +164,11 @@ model detail_page_feedback_logs {
 model detail_page_retrieval_logs {
   id                  String              @id
   owner_id            String
-  query_text          String?
+  query_text  String?  @db.Text
   category            String?
   sample_id           String
   rank_no             Int                 @default(0)
-  score               Float               @default(0) @db.Real
+  score               Float               @default(0)
   created_at          String
   users               users               @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   detail_page_samples detail_page_samples @relation(fields: [sample_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -185,13 +185,13 @@ model detail_page_samples {
   tags_json                  String                       @default("[]")
   source                     String?
   image_url                  String?
-  summary                    String?
-  modules_json               String?
-  copy_json                  String?
-  style_json                 String?
-  score_quality              Float                        @default(0) @db.Real
-  score_visual               Float                        @default(0) @db.Real
-  score_conversion           Float                        @default(0) @db.Real
+  summary  String?  @db.Text
+  modules_json  String?  @db.Text
+  copy_json  String?  @db.Text
+  style_json  String?  @db.Text
+  score_quality              Float                        @default(0)
+  score_visual               Float                        @default(0)
+  score_conversion           Float                        @default(0)
   usage_count                Int                          @default(0)
   last_used_at               String?
   created_at                 String
@@ -222,7 +222,7 @@ model flow_versions {
   id                  String                @id
   flow_id             String
   name                String
-  data                String
+  data  String  @db.Text
   user_id             String?
   created_at          String
   flows               flows                 @relation(fields: [flow_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -236,7 +236,7 @@ model flow_versions {
 model flows {
   id                  String                @id
   name                String
-  data                String
+  data  String  @db.Text
   owner_id            String?
   project_id          String?
   created_at          String
@@ -256,7 +256,7 @@ model chapters {
   project_id             String
   chapter_index          Int
   title                  String
-  summary                String?
+  summary  String?  @db.Text
   status                 String
   sort_order             Int
   cover_asset_id         String?
@@ -282,8 +282,8 @@ model llm_node_presets {
   scope       String
   preset_type String
   title       String
-  prompt      String
-  description String?
+  prompt  String  @db.Text
+  description  String?  @db.Text
   enabled     Int     @default(1)
   sort_order  Int?
   created_at  String
@@ -333,7 +333,7 @@ model model_catalog_models {
   label_zh              String
   kind                  String
   enabled               Int                   @default(1)
-  meta                  String?
+  meta  String?  @db.Text
   created_at            String
   updated_at            String
   model_catalog_vendors model_catalog_vendors @relation(fields: [vendor_key], references: [key], onDelete: Cascade, onUpdate: NoAction)
@@ -360,7 +360,7 @@ model model_catalog_vendors {
   auth_type                     String                         @default("bearer")
   auth_header                   String?
   auth_query_param              String?
-  meta                          String?
+  meta  String?  @db.Text
   created_at                    String
   updated_at                    String
   model_catalog_mappings        model_catalog_mappings[]
@@ -469,7 +469,7 @@ model order_entitlements {
   product_id       String
   entitlement_type String
   status           String
-  result_json      String?
+  result_json  String?  @db.Text
   created_at       String
   updated_at       String
   orders           orders      @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -510,8 +510,8 @@ model order_status_events {
   from_status  String?
   to_status    String
   event_type   String
-  reason       String?
-  payload_json String?
+  reason  String?  @db.Text
+  payload_json  String?  @db.Text
   created_at   String
   orders       orders  @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users        users   @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -532,8 +532,8 @@ model orders {
   paid_amount_cents   Int                   @default(0)
   refund_amount_cents Int                   @default(0)
   refund_status       String?
-  refund_reason       String?
-  buyer_note          String?
+  refund_reason  String?  @db.Text
+  buyer_note  String?  @db.Text
   paid_at             String?
   canceled_at         String?
   created_at          String
@@ -560,9 +560,9 @@ model payment_callbacks {
   out_trade_no    String?
   transaction_id  String?
   signature_valid Int       @default(0)
-  payload_json    String
-  headers_json    String?
-  error_message   String?
+  payload_json  String  @db.Text
+  headers_json  String?  @db.Text
+  error_message  String?  @db.Text
   created_at      String
   payments        payments? @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -584,9 +584,9 @@ model payments {
   currency            String              @default("CNY")
   refund_amount_cents Int                 @default(0)
   refund_status       String?
-  refund_reason       String?
-  raw_request_json    String?
-  raw_response_json   String?
+  refund_reason  String?  @db.Text
+  raw_request_json  String?  @db.Text
+  raw_response_json  String?  @db.Text
   created_at          String
   updated_at          String
   succeeded_at        String?
@@ -630,7 +630,7 @@ model points_ledger {
   balance_after   Int
   source_type     String
   source_id       String?
-  note            String?
+  note  String?  @db.Text
   idempotency_key String
   created_at      String
   users           users   @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -644,7 +644,7 @@ model product_entitlements {
   product_id       String
   owner_id         String
   entitlement_type String   @default("none")
-  config_json      String?
+  config_json  String?  @db.Text
   created_at       String
   updated_at       String
   users            users    @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -696,7 +696,7 @@ model products {
   merchant_id          String
   title                String
   subtitle             String?
-  description          String?
+  description  String?  @db.Text
   currency             String                 @default("CNY")
   price_cents          Int                    @default(0)
   stock                Int                    @default(0)
@@ -742,7 +742,7 @@ model prompt_evolution_runs {
   min_samples   Int
   dry_run       Int     @default(1)
   action        String
-  metrics_json  String
+  metrics_json  String  @db.Text
   created_at    String
 
   @@index([created_at(sort: Desc)], map: "idx_prompt_evolution_runs_created_at")
@@ -755,7 +755,7 @@ model prompt_evolution_runtime {
   canary_percent Int     @default(5)
   status         String  @default("idle")
   last_action    String?
-  note           String?
+  note  String?  @db.Text
   updated_at     String
   updated_by     String?
 }
@@ -767,10 +767,10 @@ model prompt_samples {
   scene        String
   command_type String
   title        String
-  prompt       String
-  description  String?
+  prompt  String  @db.Text
+  description  String?  @db.Text
   input_hint   String?
-  output_note  String?
+  output_note  String?  @db.Text
   keywords     String?
   created_at   String
   updated_at   String
@@ -838,7 +838,7 @@ model subscription_quota_events {
   quota_date      String
   delta           Int
   idempotency_key String
-  reason          String?
+  reason  String?  @db.Text
   created_at      String
   users           users         @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   subscriptions   subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -875,7 +875,7 @@ model task_results {
   vendor       String
   kind         String
   status       String
-  result       String
+  result  String  @db.Text
   created_at   String
   updated_at   String
   completed_at String?
@@ -892,7 +892,7 @@ model task_statuses {
   provider     String
   user_id      String?
   status       String
-  data         String?
+  data  String?  @db.Text
   created_at   String
   updated_at   String
   completed_at String?
@@ -924,7 +924,7 @@ model tasks {
   id          BigInt  @id @default(autoincrement())
   slug        String  @unique
   name        String
-  description String?
+  description  String?  @db.Text
   completed   Int     @default(0)
   due_date    String
 }
@@ -937,7 +937,7 @@ model team_credit_ledger {
   task_id       String?
   task_kind     String?
   actor_user_id String?
-  note          String?
+  note  String?  @db.Text
   created_at    String
   users         users?  @relation(fields: [actor_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   teams         teams   @relation(fields: [team_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1076,11 +1076,11 @@ model vendor_api_call_logs {
   started_at    String?
   finished_at   String?
   duration_ms   Int?
-  error_message String?
+  error_message  String?  @db.Text
   created_at    String
   updated_at    String
-  request_json  String?
-  response_json String?
+  request_json  String?  @db.Text
+  response_json  String?  @db.Text
   users         users   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([user_id, vendor, task_id])
@@ -1109,7 +1109,7 @@ model video_generation_histories {
   user_id         String
   node_id         String?
   project_id      String?
-  prompt          String
+  prompt  String  @db.Text
   parameters      String?
   image_url       String?
   task_id         String
@@ -1123,7 +1123,7 @@ model video_generation_histories {
   token_id        String?
   provider        String
   model           String?
-  cost            Float?    @db.Real
+  cost            Float?
   is_favorite     Int       @default(0)
   rating          Int?
   notes           String?
@@ -1145,8 +1145,8 @@ model workflow_execution_events {
   event_type          String
   level               String              @default("info")
   node_id             String?
-  message             String?
-  data                String?
+  message  String?  @db.Text
+  data  String?  @db.Text
   created_at          String
   workflow_executions workflow_executions @relation(fields: [execution_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -1163,7 +1163,7 @@ model workflow_executions {
   status                    String
   concurrency               Int                         @default(1)
   trigger                   String?
-  error_message             String?
+  error_message  String?  @db.Text
   created_at                String
   started_at                String?
   finished_at               String?
@@ -1186,7 +1186,7 @@ model workflow_node_runs {
   node_id             String
   status              String
   attempt             Int                 @default(1)
-  error_message       String?
+  error_message  String?  @db.Text
   output_refs         String?
   created_at          String
   started_at          String?

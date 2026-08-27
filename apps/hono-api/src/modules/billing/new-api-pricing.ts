@@ -168,10 +168,8 @@ function parseNewApiPricingRows(payload: unknown): {
 	rows: NewApiPricingRow[];
 } {
 	if (!isRecord(payload)) {
-		throw new AppError("new-api pricing response invalid", {
-			status: 502,
-			code: "new_api_pricing_invalid",
-		});
+		// 上游 pricing 禁用/不可用时降级为空定价，由 DB(model_credit_costs) 兜底
+		return { pricingVersion: null, rows: [] };
 	}
 	const pricingVersion =
 		typeof payload.pricing_version === "string" && payload.pricing_version.trim()
@@ -179,10 +177,8 @@ function parseNewApiPricingRows(payload: unknown): {
 			: null;
 	const data = payload.data;
 	if (!Array.isArray(data)) {
-		throw new AppError("new-api pricing response missing data", {
-			status: 502,
-			code: "new_api_pricing_invalid",
-		});
+		// pricing 数据缺失（如上游 pricing disabled）→ 空定价，由 DB 兜底
+		return { pricingVersion, rows: [] };
 	}
 	const rows: NewApiPricingRow[] = [];
 	for (const item of data) {
@@ -289,7 +285,7 @@ async function doFetchPricingSnapshot(env: WorkerEnv): Promise<NewApiPricingSnap
 	const relay = requireRelayConfig(env);
 	const [statusPayload, pricingPayload] = await Promise.all([
 		fetchJson(env, `${relay.baseUrl}/api/status`, relay.token),
-		fetchJson(env, `${relay.baseUrl}/api/pricing`, relay.token),
+		fetchJson(env, `${relay.baseUrl}/api/pricing`, relay.token).catch(() => null),
 	]);
 
 	const status = parseNewApiStatusResponse(statusPayload);

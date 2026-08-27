@@ -26,14 +26,25 @@ function readSchemaSql(): string {
 	return "";
 }
 
-function normalizeSqliteSchemaForPostgres(sql: string): string[] {
+function normalizeSqliteSchemaForMySql(sql: string): string[] {
 	const noComment = sql
 		.split("\n")
 		.filter((line) => !line.trim().startsWith("--"))
 		.join("\n");
 	const normalized = noComment
-		.replace(/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi, "BIGSERIAL PRIMARY KEY")
-		.replace(/AUTOINCREMENT/gi, "")
+		.replace(/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi, "INT AUTO_INCREMENT PRIMARY KEY")
+		.replace(/AUTOINCREMENT/gi, "AUTO_INCREMENT")
+		.replace(/TEXT\s+PRIMARY\s+KEY/gi, "VARCHAR(100) PRIMARY KEY")
+		.replace(/REAL/gi, "DOUBLE")
+		.replace(/ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS/gi, "ADD COLUMN")
+		.replace(/CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS/gi, "CREATE $1INDEX")
+		.replace(/TEXT\s+NOT\s+NULL\s+DEFAULT/gi, "VARCHAR(100) NOT NULL DEFAULT")
+		.replace(/([a-z_]+_id)\s+TEXT/gi, "$1 VARCHAR(100)")
+		.replace(/([a-z_]+_key)\s+TEXT/gi, "$1 VARCHAR(100)")
+		.replace(/([a-z_]+_at)\s+TEXT/gi, "$1 VARCHAR(100)")
+		.replace(/\bTEXT\b/gi, "VARCHAR(100)")
+		.replace(/^(\s*)(trigger|key)\s+(TEXT|INT|INTEGER|VARCHAR|DOUBLE)/gim, "$1`$2` $3")
+		.replace(/([(,])\s*key\s*([,)])/gi, "$1`key`$2")
 		.replace(/\bPRAGMA\b[^;]*;/gi, "");
 	return normalized
 		.split(";")
@@ -55,7 +66,7 @@ function isAllowedStatement(stmt: string): boolean {
 	const s = stmt.trim();
 	return (
 		/^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+/i.test(s) ||
-		/^CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+/i.test(s) ||
+		/^CREATE\s+(UNIQUE\s+)?INDEX\s+(IF\s+NOT\s+EXISTS\s+)?/i.test(s) ||
 		/^ALTER\s+TABLE\s+\S+\s+ADD\s+COLUMN(\s+IF\s+NOT\s+EXISTS)?\s+/i.test(s)
 	);
 }
@@ -73,20 +84,23 @@ function validateSafeSchemaStatements(statements: string[]): void {
 	}
 }
 
-async function initPostgresSchema(): Promise<void> {
+async function initSchema(): Promise<void> {
 	const schemaSql = readSchemaSql();
 	if (!schemaSql) return;
 	const prisma = getPrismaClient();
-	const statements = normalizeSqliteSchemaForPostgres(schemaSql);
+	const statements = normalizeSqliteSchemaForMySql(schemaSql);
 	validateSafeSchemaStatements(statements);
 	for (const stmt of statements) {
 		try {
 			await prisma.$executeRawUnsafe(stmt);
 		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			// MySQL 8.0 不支持 ADD COLUMN/CREATE INDEX IF NOT EXISTS：重复加列(1060)/重复索引(1061)按幂等跳过
+			const isDuplicateColumn = /ALTER\s+TABLE/i.test(stmt) && /1060|Duplicate column/i.test(message);
+			const isDuplicateIndex = /CREATE\s+(UNIQUE\s+)?INDEX/i.test(stmt) && /1061|Duplicate key name/i.test(message);
+			if (isDuplicateColumn || isDuplicateIndex) continue;
 			throw new Error(
-				`Failed to apply Postgres schema statement: ${stmt.slice(0, 120)}...; cause: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
+				`Failed to apply schema statement: ${stmt.slice(0, 120)}...; cause: ${message}`,
 			);
 		}
 	}
@@ -97,7 +111,7 @@ async function createRuntimePrismaClient() {
 	if (!databaseUrl) {
 		throw new Error("DATABASE_URL is required. SQLite runtime has been removed.");
 	}
-	await initPostgresSchema();
+	await initSchema();
 	try {
 		if (process.env.NODE_ENV !== "production") {
 			// eslint-disable-next-line no-console

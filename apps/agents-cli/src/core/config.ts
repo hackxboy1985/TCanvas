@@ -8,7 +8,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   apiBaseUrl: "https://right.codes/codex/v1",
   apiKey: "",
   // model: "gpt-5.3-codex",
-  model: "gpt-5.2",
+  model: "gpt-5.4",
   apiStyle: "responses",
   stream: true,
   memoryDir: ".agents/memory",

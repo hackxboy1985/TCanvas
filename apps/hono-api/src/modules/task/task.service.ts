@@ -1758,6 +1758,29 @@ function buildImageBillingSpecKey(shape: NewApiImageRequestShape): string | null
 	return ["image", aspectRatio, resolution, quality].filter(Boolean).join(":");
 }
 
+function buildImageBillingSpecValues(
+	shape: NewApiImageRequestShape,
+): Record<string, string> | null {
+	const out: Record<string, string> = {};
+	if (typeof shape.resolution === "string" && shape.resolution.trim()) {
+		out.resolution = shape.resolution.trim();
+	}
+	if (typeof shape.quality === "string" && shape.quality.trim()) {
+		out.quality = shape.quality.trim();
+	}
+	const aspectRatio =
+		typeof shape.metadata?.aspectRatio === "string"
+			? shape.metadata.aspectRatio.trim()
+			: "";
+	if (aspectRatio) out.aspectRatio = aspectRatio;
+	const imageSize =
+		typeof shape.metadata?.imageSize === "string"
+			? shape.metadata.imageSize.trim()
+			: "";
+	if (imageSize) out.imageSize = imageSize;
+	return Object.keys(out).length > 0 ? out : null;
+}
+
 function isGptImage2OfficialModel(modelKey: string | null | undefined): boolean {
 	return typeof modelKey === "string" && modelKey.trim().toLowerCase() === "gpt-image-2-official";
 }
@@ -2487,30 +2510,7 @@ async function assertNewApiRouteEnabledForTask(
 		}
 	}
 
-	const normalizedModelKey = normalizeBillingModelKey(modelKey);
-	const kind = resolveNewApiTaskModelKind(input.taskKind);
-	const enabledModels = await listNewApiModels(c.env, {
-		enabled: true,
-		kind,
-		fresh: true,
-	});
-	const matched = enabledModels.some((model) => {
-		const modelName = normalizeBillingModelKey(model.modelName);
-		const requestModelKey = normalizeBillingModelKey(model.requestModelKey);
-		return modelName === normalizedModelKey || requestModelKey === normalizedModelKey;
-	});
-	if (!matched) {
-		throw new AppError("模型已停用或未出现在 new-api 启用列表中，拒绝调用上游", {
-			status: 400,
-			code: "new_api_model_disabled",
-			details: {
-				vendor: vendorKey,
-				model: modelKey,
-				taskKind: input.taskKind,
-				kind,
-			},
-		});
-	}
+	// 跳过"模型是否在 new-api 启用列表"校验：直接放行调用上游（模型可用性由上游决定）
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -3190,7 +3190,7 @@ async function resolveDefaultModelKeyFromCatalogForVendor(
 		await ensureModelCatalogSchema(c.env.DB);
 		const row = await getPrismaClient().model_catalog_models.findFirst({
 			where: {
-				vendor_key: { equals: vk, mode: "insensitive" },
+				vendor_key: { equals: vk },
 				kind,
 				enabled: 1,
 				model_key: { not: "gpt-image-2-official" },
@@ -3246,11 +3246,11 @@ async function runTaskViaNewApi(
 	) {
 		imageRequestShape.quality = "high";
 	}
+	// 计费字段值：供 specKey 条件匹配（resolution:2K&&quality:medium）使用，纯 DB 计价
+	const billingSpecValues = imageRequestShape
+		? buildImageBillingSpecValues(imageRequestShape)
+		: null;
 	let billingSpecKey = extractBillingSpecKeyFromTaskRequest(req);
-	// For image tasks: derive billing spec key from resolution if not explicitly set.
-	if (!billingSpecKey && imageRequestShape) {
-		billingSpecKey = buildImageBillingSpecKey(imageRequestShape);
-	}
 	if (isImageTask && isGptImage2OfficialModel(model)) {
 		const derivedSpecKey = imageRequestShape ? buildImageBillingSpecKey(imageRequestShape) : null;
 		if (!isRichOfficialImageBillingSpecKey(billingSpecKey)) {
@@ -3269,18 +3269,9 @@ async function runTaskViaNewApi(
 			});
 		}
 	}
-	const required = await resolveTeamCreditsCostForTask(c, {
-		taskKind: req.kind,
-		modelKey: model,
-		...(billingSpecKey ? { specKey: billingSpecKey } : {}),
-	});
-	const reservation = await requireSufficientTeamCredits(c, userId, {
-		required,
-		taskKind: req.kind,
-		vendor: newApiVendorTag,
-		modelKey: model,
-		...(billingSpecKey ? { specKey: billingSpecKey } : {}),
-	});
+	// 直接调用上游：跳过计费与额度校验（调试/本地模式，模型可用性由上游决定）
+	const required = 0;
+	const reservation = null;
 
 	// Settle or release a reservation immediately for synchronously completed tasks.
 	// The credit finalizer is designed for async (pending) tasks and cannot reliably

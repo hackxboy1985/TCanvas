@@ -152,18 +152,18 @@ export async function ensureMemorySchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS memory_entries (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      user_id VARCHAR(100) NOT NULL,
       scope_type TEXT NOT NULL,
-      scope_id TEXT NOT NULL,
+      scope_id VARCHAR(100) NOT NULL,
       memory_type TEXT NOT NULL,
       title TEXT,
       summary_text TEXT,
       content_json TEXT NOT NULL,
       source_kind TEXT NOT NULL,
-      source_id TEXT,
+      source_id VARCHAR(100),
       importance REAL NOT NULL DEFAULT 0.6,
-      status TEXT NOT NULL DEFAULT 'active',
+      status VARCHAR(100) NOT NULL DEFAULT 'active',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id)
@@ -188,8 +188,8 @@ export async function ensureMemorySchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS memory_entry_tags (
-      id TEXT PRIMARY KEY,
-      memory_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      memory_id VARCHAR(100) NOT NULL,
       tag TEXT NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
@@ -208,10 +208,10 @@ export async function ensureMemorySchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS memory_links (
-      id TEXT PRIMARY KEY,
-      memory_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      memory_id VARCHAR(100) NOT NULL,
       target_type TEXT NOT NULL,
-      target_id TEXT NOT NULL,
+      target_id VARCHAR(100) NOT NULL,
       relation TEXT NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY (memory_id) REFERENCES memory_entries(id)
@@ -225,11 +225,11 @@ export async function ensureMemorySchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS execution_traces (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      id VARCHAR(100) PRIMARY KEY,
+      user_id VARCHAR(100) NOT NULL,
       scope_type TEXT NOT NULL,
-      scope_id TEXT NOT NULL,
-      task_id TEXT,
+      scope_id VARCHAR(100) NOT NULL,
+      task_id VARCHAR(100),
       request_kind TEXT NOT NULL,
       input_summary TEXT NOT NULL,
       decision_log_json TEXT,

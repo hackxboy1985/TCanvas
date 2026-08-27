@@ -22,7 +22,7 @@ export async function suggestPrompts(
 		where: {
 			user_id: userId,
 			provider,
-			prompt: { contains: trimmed, mode: "insensitive" },
+			prompt: { contains: trimmed },
 		},
 		orderBy: { updated_at: "desc" },
 		take: limit * 3,

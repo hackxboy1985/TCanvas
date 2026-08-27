@@ -229,13 +229,13 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS storyboard_assets (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
 			kind TEXT NOT NULL,
 			name TEXT NOT NULL,
 			version INTEGER NOT NULL DEFAULT 1,
-			prompt_pack_id TEXT,
+			prompt_pack_id VARCHAR(100),
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
@@ -249,10 +249,10 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS storyboard_asset_views (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
-			asset_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
+			asset_id VARCHAR(100) NOT NULL,
 			view_kind TEXT NOT NULL,
 			image_url TEXT NOT NULL,
 			metadata_json TEXT,
@@ -270,14 +270,14 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS storyboard_shots (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
 			chunk_index INTEGER NOT NULL,
 			shot_index INTEGER NOT NULL,
 			title TEXT,
 			summary TEXT,
-			scene_asset_id TEXT NOT NULL,
+			scene_asset_id VARCHAR(100) NOT NULL,
 			character_asset_ids TEXT NOT NULL,
 			prop_asset_ids TEXT NOT NULL,
 			camera_plan_json TEXT NOT NULL,
@@ -298,7 +298,7 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`ALTER TABLE storyboard_shots
-				ADD COLUMN IF NOT EXISTS chapter_id TEXT`,
+				ADD COLUMN IF NOT EXISTS chapter_id VARCHAR(100)`,
 		);
 		await execute(
 			db,
@@ -319,11 +319,11 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS storyboard_render_jobs (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
-			shot_id TEXT NOT NULL,
-			model_key TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
+			shot_id VARCHAR(100) NOT NULL,
+			model_key VARCHAR(100) NOT NULL,
 			mode TEXT NOT NULL,
 			params_json TEXT NOT NULL,
 			seed INTEGER,
@@ -334,7 +334,7 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 			latency_ms INTEGER,
 			fail_code TEXT,
 			fail_reason TEXT,
-			based_on_job_id TEXT,
+			based_on_job_id VARCHAR(100),
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL,
 			FOREIGN KEY (shot_id) REFERENCES storyboard_shots(id),
@@ -356,14 +356,14 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS storyboard_timeline_tracks (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
-			shot_id TEXT NOT NULL,
-			active_job_id TEXT NOT NULL,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
+			shot_id VARCHAR(100) NOT NULL,
+			active_job_id VARCHAR(100) NOT NULL,
 			position INTEGER NOT NULL DEFAULT 0,
 			duration_ms INTEGER NOT NULL DEFAULT 0,
-			audio_track_id TEXT,
+			audio_track_id VARCHAR(100),
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL,
 			UNIQUE (project_id, shot_id),
@@ -380,11 +380,11 @@ export async function ensureStoryboardSchema(db: PrismaClient): Promise<void> {
 		await execute(
 			db,
 			`CREATE TABLE IF NOT EXISTS storyboard_diagnostic_logs (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			project_id TEXT NOT NULL,
-			shot_id TEXT,
-			job_id TEXT,
+			id VARCHAR(100) PRIMARY KEY,
+			owner_id VARCHAR(100) NOT NULL,
+			project_id VARCHAR(100) NOT NULL,
+			shot_id VARCHAR(100),
+			job_id VARCHAR(100),
 			stage TEXT NOT NULL,
 			level TEXT NOT NULL,
 			message TEXT NOT NULL,
@@ -559,15 +559,15 @@ export async function upsertStoryboardShot(
 			created_at,
 			updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(project_id, chunk_index, shot_index) DO UPDATE SET
-			scene_asset_id = excluded.scene_asset_id,
-			character_asset_ids = excluded.character_asset_ids,
-			prop_asset_ids = excluded.prop_asset_ids,
-			camera_plan_json = excluded.camera_plan_json,
-			lighting_plan_json = excluded.lighting_plan_json,
-			continuity_tail_frame_url = excluded.continuity_tail_frame_url,
-			status = excluded.status,
-			updated_at = excluded.updated_at`,
+		ON DUPLICATE KEY UPDATE
+			scene_asset_id = VALUES(scene_asset_id),
+			character_asset_ids = VALUES(character_asset_ids),
+			prop_asset_ids = VALUES(prop_asset_ids),
+			camera_plan_json = VALUES(camera_plan_json),
+			lighting_plan_json = VALUES(lighting_plan_json),
+			continuity_tail_frame_url = VALUES(continuity_tail_frame_url),
+			status = VALUES(status),
+			updated_at = VALUES(updated_at)`,
 		[
 			id,
 			ownerId,
@@ -890,12 +890,12 @@ export async function replaceTimelineShot(
 			created_at,
 			updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(project_id, shot_id) DO UPDATE SET
-			active_job_id = excluded.active_job_id,
-			position = excluded.position,
-			duration_ms = excluded.duration_ms,
-			audio_track_id = excluded.audio_track_id,
-			updated_at = excluded.updated_at`,
+		ON DUPLICATE KEY UPDATE
+			active_job_id = VALUES(active_job_id),
+			position = VALUES(position),
+			duration_ms = VALUES(duration_ms),
+			audio_track_id = VALUES(audio_track_id),
+			updated_at = VALUES(updated_at)`,
 		[
 			input.id,
 			input.ownerId,
