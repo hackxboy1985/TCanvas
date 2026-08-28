@@ -42,14 +42,90 @@ function readQueryParams(): { dramaId: string; episode: number } {
  */
 const LAYOUT_VERSION = 4
 
+/** 预加载分镜媒体宽高比：图片用 Image，视频用隐藏 video 的 metadata；失败/无媒体返回 null */
+async function loadShotAspects(storyboards: LensStoryboard[]): Promise<Map<string, number | null>> {
+  const aspects = new Map<string, number | null>()
+  const jobs = storyboards.map((shot) => {
+    const url = String(shot.selectedImageUrl ?? '').trim()
+    if (!url) {
+      aspects.set(String(shot.id), null)
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => {
+      const done = () => resolve()
+      const timer = window.setTimeout(() => {
+        // 超时：媒体存在但比例未知 → 保守高度（-1）
+        aspects.set(String(shot.id), -1)
+        done()
+      }, 3000)
+      if (shot.selectFileType === 1) {
+        // 视频：隐藏 video（挂到 DOM 确保 loadedmetadata 触发）读 metadata
+        const v = document.createElement('video')
+        v.preload = 'metadata'
+        v.muted = true
+        v.style.display = 'none'
+        document.body.appendChild(v)
+        const cleanup = () => { document.body.removeChild(v) }
+        v.onloadedmetadata = () => {
+          window.clearTimeout(timer)
+          aspects.set(String(shot.id), v.videoWidth > 0 && v.videoHeight > 0 ? v.videoWidth / v.videoHeight : -1)
+          cleanup()
+          done()
+        }
+        v.onerror = () => {
+          window.clearTimeout(timer)
+          aspects.set(String(shot.id), -1)
+          cleanup()
+          done()
+        }
+        v.src = url
+      } else {
+        // 图片
+        const img = new Image()
+        img.onload = () => {
+          window.clearTimeout(timer)
+          aspects.set(String(shot.id), img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : -1)
+          done()
+        }
+        img.onerror = () => {
+          window.clearTimeout(timer)
+          aspects.set(String(shot.id), -1)
+          done()
+        }
+        img.src = url
+      }
+    })
+  })
+  await Promise.all(jobs)
+  return aspects
+}
+
+/** 预估单个分镜节点高度（媒体按 800 宽/竖屏 720 高 + 顶部栏 + 引用行） */
+function estimateShotNodeHeight(mediaAspect: number | null, showRefs: boolean): number {
+  const HEADER = 30
+  const REFS = showRefs ? 38 : 0
+  let mediaHeight = 450
+  if (mediaAspect === -1) {
+    // 有媒体但比例未知：保守按竖屏最大高度 720，避免预估过矮导致节点叠加
+    mediaHeight = 720
+  } else if (mediaAspect && mediaAspect > 0) {
+    mediaHeight = mediaAspect >= 1 ? Math.round(800 / mediaAspect) : Math.min(720, Math.round(800 / mediaAspect))
+  }
+  return mediaHeight + HEADER + REFS
+}
+
 /** 把 lens 数据投影成 React Flow 节点与引用连线（引用模式：节点只存 entityId，展示字段为投影快照） */
 function buildCanvasNodes(input: {
   storyboards: LensStoryboard[]
   assets: LensAssetEnriched[]
   script: LensScriptContent
   dramaId: string
+  /** 分镜 id → 预估媒体宽高比（用于纵向布局按上一节点高度累计，防叠加） */
+  shotAspects?: Map<string, number | null>
+  /** 是否显示引用行（影响节点高度） */
+  showRefs?: boolean
 }): { nodes: Node[]; edges: Edge[] } {
-  const { storyboards, assets, script, dramaId } = input
+  const { storyboards, assets, script, dramaId, shotAspects, showRefs } = input
   const nodes: Node[] = []
   const edges: Edge[] = []
   // 资产节点 id 映射：category:id → 画布节点 id（分镜引用连线用）
@@ -70,7 +146,6 @@ function buildCanvasNodes(input: {
   // 默认布局：第 1 列角色；第 2 列场景（在前）+ 道具（在后），首个场景与首个角色同高
   const COL1_X = 40
   const COL2_X = 460
-  const SHOT_X = 1300
   const START_Y = 40
   const ROW_GAP = 280
   const seenAssets = new Set<string>()
@@ -144,17 +219,23 @@ function buildCanvasNodes(input: {
     rememberAssetNode(3, assetId, `prop-${assetId}`)
   })
 
-  // 2. 剧本/台本文本节点（默认隐藏）：第 2 列道具下方，与道具空出 3 个场景节点高度（250×3）的空间
+  // 2. 剧本/台本文本节点（默认隐藏）：第 2 列道具下方，纵向按内容估算高度累计（避免叠加）
   const col2Count = sceneAssets.length + propAssets.length
   const lastCol2Y = col2Count > 0 ? START_Y + (col2Count - 1) * ROW_GAP : START_Y - ROW_GAP
-  const scriptY = lastCol2Y + 3 * 250
-  addNode('script-content', 'text', '剧本原文', { x: COL2_X, y: scriptY }, {
+  const estimateTextNodeHeight = (text: string): number => {
+    const lines = Math.max(1, Math.ceil(String(text || '').length / 40))
+    return Math.min(800, Math.max(160, lines * 20 + 80))
+  }
+  const TEXT_GAP = 40
+  let scriptCursorY = lastCol2Y + 3 * 250
+  addNode('script-content', 'text', '剧本原文', { x: COL2_X, y: scriptCursorY }, {
     prompt: script.content || '',
     hidden: true,
     source: 'lens_projection',
     lensTypeLabel: '剧本',
   })
-  addNode('script-script-content', 'text', '台本', { x: COL2_X, y: scriptY + ROW_GAP }, {
+  scriptCursorY += estimateTextNodeHeight(script.content || '') + TEXT_GAP
+  addNode('script-script-content', 'text', '台本', { x: COL2_X, y: scriptCursorY }, {
     prompt: script.scriptContent || '',
     hidden: true,
     source: 'lens_projection',
@@ -162,10 +243,13 @@ function buildCanvasNodes(input: {
   })
 
   // 3. 分镜节点（单个 lensShot 节点，参考生视频；按 storyboardOrder 纵向排列）
+  // 纵向布局：y 按上一节点预估高度累计 + 间距，横竖屏都不叠加
+  const SHOT_COL_X = 1300
+  const SHOT_GAP = 40
+  let shotCursorY = START_Y
   storyboards.forEach((shot, index) => {
     const order = shot.storyboardOrder ?? index + 1
-    // 分镜节点 16:9 高 216，纵向间隔 280 避免重叠
-    const y = START_Y + index * ROW_GAP
+    const y = shotCursorY
     const shotId = `storyboard-${shot.id}`
     // 该分镜引用的资产（场景/道具/角色/站位），从 assets 按 refId 关联
     const speakerList = String(shot.speakerName || '').split(',').map((s) => s.trim()).filter(Boolean)
@@ -184,7 +268,7 @@ function buildCanvasNodes(input: {
     nodes.push({
       id: shotId,
       type: 'lensShot',
-      position: { x: SHOT_X, y },
+      position: { x: SHOT_COL_X, y },
       data: {
         kind: 'lensShot',
         label: `分镜${order}`,
@@ -217,6 +301,8 @@ function buildCanvasNodes(input: {
       connectedAssets.add(sourceId)
       edges.push({ id: `edge-ref-${sourceId}-${shotId}`, source: sourceId, target: shotId })
     }
+    // 按上一节点高度累计下一个分镜的 y（防叠加）
+    shotCursorY += estimateShotNodeHeight(shotAspects?.get(String(shot.id)) ?? null, Boolean(showRefs)) + SHOT_GAP
   })
 
   return { nodes, edges }
@@ -234,6 +320,10 @@ export default function LensCanvasApp(): JSX.Element {
   const [showRefs, setShowRefs] = useState<boolean>(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadedForRef = useRef<string>('')
+  // 最新 flow 版本（ref 同步，避免并发保存读到旧 version 触发「已被他人修改」）
+  const flowVersionRef = useRef<number>(0)
+  // 保存进行中标志：防 debounce 自动保存与切集保存并发
+  const savingRef = useRef<boolean>(false)
   // 最近一次投影结果缓存：整理画布时恢复默认布局
   const lastProjectionRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
   // 画布实例 API（视口读写经 Canvas ref 暴露，绕开 ReactFlowProvider 层级）
@@ -256,17 +346,19 @@ export default function LensCanvasApp(): JSX.Element {
     })
   }, [])
 
-  /** 保存当前编排（立即，切集前用） */
+  /** 保存当前编排（立即，切集前用）。用 ref 记录最新版本，避免并发保存读到旧 version */
   const saveNow = useCallback(async (targetEpisode: number, snapshot: { nodes: Node[]; edges: Edge[] }): Promise<boolean> => {
-    if (!dramaId) return false
+    if (!dramaId || savingRef.current) return false
+    savingRef.current = true
     try {
       const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
       const res = await saveFlow(dramaId, targetEpisode, {
         name: `第${targetEpisode}集`,
         data: { nodes: snapshot.nodes, edges: snapshot.edges, viewport, layoutVersion: LAYOUT_VERSION },
-        version: flowVersion,
+        version: flowVersionRef.current,
       })
-      setFlowVersion((res?.version ?? 0) + 1)
+      flowVersionRef.current = (res?.version ?? 0) + 1
+      setFlowVersion(flowVersionRef.current)
       setSavedAt(new Date().toLocaleTimeString())
       return true
     } catch (err) {
@@ -277,8 +369,10 @@ export default function LensCanvasApp(): JSX.Element {
         setError(`编排保存失败：${msg}`)
       }
       return false
+    } finally {
+      savingRef.current = false
     }
-  }, [dramaId, flowVersion, setSavedAt])
+  }, [dramaId, setSavedAt])
 
   /** 切集：先自动保存当前集，再加载新集 */
   const switchEpisode = useCallback(async (next: number) => {
@@ -311,12 +405,14 @@ export default function LensCanvasApp(): JSX.Element {
         getEpisodeAssets(dramaId, targetEpisode),
         getScriptContent(dramaId, targetEpisode),
       ])
-      // 2. 投影成节点
-      const projected = buildCanvasNodes({ storyboards, assets, script, dramaId })
+      // 2. 预加载分镜媒体宽高比（用于纵向布局按高度累计，防叠加），再投影成节点
+      const shotAspects = await loadShotAspects(storyboards)
+      const projected = buildCanvasNodes({ storyboards, assets, script, dramaId, shotAspects, showRefs })
       lastProjectionRef.current = projected
       // 3. 恢复编排（有 flow 则用 flow 的位置/连线，无则用投影默认布局）
       const flow = await getFlow(dramaId, targetEpisode)
-      setFlowVersion(flow?.version ?? 0)
+      flowVersionRef.current = flow?.version ?? 0
+      setFlowVersion(flowVersionRef.current)
       if (flow?.data) {
         try {
           const parsed = JSON.parse(flow.data) as { nodes?: Node[]; edges?: Edge[]; viewport?: { x: number; y: number; zoom: number }; layoutVersion?: number }

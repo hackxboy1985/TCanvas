@@ -11,7 +11,7 @@
  */
 import { memo, useCallback, useEffect, useState } from 'react'
 import { Handle, Position, NodeToolbar, type Node, type NodeProps } from '@xyflow/react'
-import { Button, Group, Paper, Select, Switch, Text, Textarea, Tooltip } from '@mantine/core'
+import { Button, Group, Select, Switch, Text, Textarea, Tooltip } from '@mantine/core'
 import { useRFStore } from '../../canvas/store'
 import { useMantineColorScheme } from '@mantine/core'
 import { useModelOptions } from '../../config/useModelOptions'
@@ -153,8 +153,6 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   const isDark = colorScheme === 'dark'
   const showRefs = Boolean(data.showRefs)
   const hasResult = Boolean(data.selectedImageUrl && String(data.selectedImageUrl).trim())
-  // 媒体（图/视频）实际宽高比：节点高度恒 216，宽度按比例自适应（竖屏变窄、横屏变宽）
-  const [mediaAspect, setMediaAspect] = useState<number | null>(null)
   // 分镜时长（秒）：优先 lens 分镜 time 字段，有视频时用视频实际时长
   const [mediaSeconds, setMediaSeconds] = useState<number | null>(typeof data.time === 'number' && data.time > 0 ? data.time : null)
   // lens 模式下 useModelOptions('video') 走 /api/model/shot_video（分镜生视频模型）
@@ -164,8 +162,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   const [timeDraft, setTimeDraft] = useState<string>(String(data.timeOfDay ?? ''))
   const [modelValue, setModelValue] = useState<string | null>(typeof data.model === 'string' && data.model ? data.model : null)
   const [saveState, setSaveState] = useState<string>('')
-  // 提示词编辑模式：text=分镜脚本，json=生视频提示词
-  const [promptMode, setPromptMode] = useState<'text' | 'json'>('text')
+  // 编辑模式：script=分镜剧本（默认），prompt=分镜提示词（生视频用）
+  const [promptMode, setPromptMode] = useState<'script' | 'prompt'>('script')
   const [promptDraft, setPromptDraft] = useState<string>(String(data.prompt ?? ''))
   // 画幅 / 分辨率（生成参数，随节点持久化）
   const [aspectValue, setAspectValue] = useState<string>(String(data.aspectRatio ?? '16:9'))
@@ -173,6 +171,9 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   // 所选模型的单次积分消耗（lens 模型接口 unitConsume）
   const selectedModel = models.find((m) => m.value === modelValue)
   const consumePoints = (selectedModel?.meta as { lensUnitConsume?: number } | undefined)?.lensUnitConsume ?? '—'
+
+  // 媒体实际宽高比（用于节点高度随视频比例：宽度恒 384 填满，高度按比例）
+  const [mediaAspect, setMediaAspect] = useState<number | null>(null)
 
   // 换媒体时重置比例与时长，等新图/视频加载后重新计算
   useEffect(() => {
@@ -226,7 +227,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         storyboardId,
         model: modelValue,
         appid: Number(modelValue) || undefined,
-        prompt: scriptDraft || String(data.prompt ?? ''),
+        prompt: promptDraft || scriptDraft,
         aspectRatio: aspectValue,
         resolution: resolutionValue,
         refImages: JSON.stringify(refs.map((r) => r.imgUrl).filter(Boolean)),
@@ -237,25 +238,15 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     }
   }, [data.entityId, data.sourceProjectId, data.episodeNum, data.prompt, scriptDraft, modelValue, refs, aspectValue, resolutionValue])
 
-  // 媒体区域尺寸：短边基准 384——横屏宽 384、竖屏高 384，另一条边按实际宽高比自适应（clamp 96~640）
-  // 节点高度随媒体动态（竖屏视频完整大小播放，编辑面板为独立浮层不撑高节点）
-  const MEDIA_SHORT_EDGE = 384
+  // 横屏：宽 800、高按比例（16:9→450）；竖屏：高度限制 720、宽度随高度收窄（9:16→720×405），视频完整不裁切
   const HEADER_HEIGHT = 30
-  let mediaWidth = 384
-  let mediaHeight = 216
-  if (mediaAspect) {
-    if (mediaAspect >= 1) {
-      mediaWidth = MEDIA_SHORT_EDGE
-      mediaHeight = Math.min(640, Math.max(96, MEDIA_SHORT_EDGE / mediaAspect))
-    } else {
-      mediaHeight = MEDIA_SHORT_EDGE
-      mediaWidth = Math.min(640, Math.max(96, MEDIA_SHORT_EDGE * mediaAspect))
-    }
-  }
-  const shellWidth = Math.round(mediaWidth)
-  // 引用行高度（showRefs 打开时节点底部加一行，不悬浮遮挡媒体内容）
   const REFS_BAR_HEIGHT = 38
-  const shellHeight = Math.round(mediaHeight) + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
+  const VERTICAL_MAX_HEIGHT = 720
+  const mediaHeight = mediaAspect
+    ? Math.max(96, mediaAspect >= 1 ? Math.round(800 / mediaAspect) : Math.min(VERTICAL_MAX_HEIGHT, Math.round(800 / mediaAspect)))
+    : 450
+  const shellWidth = mediaAspect && mediaAspect < 1 ? Math.round(mediaHeight * mediaAspect) : 800
+  const shellHeight = mediaHeight + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
 
   const shell = {
     background: isDark ? 'rgba(15,20,28,0.96)' : 'rgba(255,255,255,0.98)',
@@ -263,7 +254,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     boxShadow: selected ? '0 0 0 3px rgba(91,141,239,0.25), 0 8px 24px rgba(0,0,0,0.12)' : '0 4px 16px rgba(0,0,0,0.08)',
     color: isDark ? '#f0f0f0' : '#1d2129',
     borderRadius: 12,
-    // 宽高随媒体比例动态：横屏 384×216、竖屏 216×384（+顶部栏高）；relative 供底部悬浮引用行定位
+    // 宽度固定 384、高度随视频比例（+顶部栏/引用行高）；relative 供底部悬浮引用行定位
     width: shellWidth,
     height: shellHeight,
     position: 'relative' as const,
@@ -277,16 +268,16 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       <Handle className="lens-shot-handle" type="target" position={Position.Left} />
       <Handle className="lens-shot-handle" type="source" position={Position.Right} />
 
-      {/* 顶部栏：分镜号 + 时间段/时长 + 状态圆点（时长取分镜 time 字段或视频实际时长，不显示氛围） */}
+      {/* 顶部栏：分镜号 + 时长（紧跟序号左侧）+ 状态圆点（不显示 timeOfDay，时长取分镜 time 字段或视频实际时长） */}
       <div className="lens-shot-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid rgba(127,127,127,0.18)', fontSize: 12, fontWeight: 600 }}>
-        <span className="lens-shot-order">分镜{data.storyboardOrder ?? '-'}</span>
-        {(data.timeOfDay || mediaSeconds != null) ? (
-          <span className="lens-shot-time" style={{ fontWeight: 400, opacity: 0.72 }}>
-            {data.timeOfDay ? data.timeOfDay : ''}
-            {data.timeOfDay && mediaSeconds != null ? ' · ' : ''}
-            {mediaSeconds != null ? formatSeconds(mediaSeconds) : ''}
-          </span>
-        ) : null}
+        <span className="lens-shot-order">
+          分镜{data.storyboardOrder ?? '-'}
+          {mediaSeconds != null && (
+            <span className="lens-shot-duration" style={{ fontWeight: 400, opacity: 0.72, marginLeft: 6 }}>
+              {formatSeconds(mediaSeconds)}
+            </span>
+          )}
+        </span>
         <StatusDot data={data} />
       </div>
 
@@ -308,20 +299,21 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                   setMediaSeconds(Math.round(v.duration))
                 }
               }}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6, display: 'block', background: 'rgba(0,0,0,0.35)' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6, display: 'block', background: 'rgba(0,0,0,0.35)' }}
             />
           ) : (
             <img
               className="lens-shot-media"
               src={data.selectedImageUrl}
               alt="分镜图"
+
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6, display: 'block' }}
               onLoad={(e) => {
                 const img = e.currentTarget
                 if (img.naturalWidth > 0 && img.naturalHeight > 0) {
                   setMediaAspect(img.naturalWidth / img.naturalHeight)
                 }
               }}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6, display: 'block' }}
             />
           )
         ) : (
@@ -362,24 +354,45 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
           ))}
         </div>
       )}
-      {/* 选中时节点下方浮出独立编辑面板（完整复刻角色/场景节点的编辑弹框布局） */}
+      {/* 选中时节点下方浮出编辑面板（框架对齐角色节点原生弹窗：tc-task-node__toolbar-frame，固定 100% 不随画布缩放） */}
       {selected && (
-        <NodeToolbar className="lens-shot-edit-toolbar" position={Position.Bottom} align="start">
-          <Paper className="lens-shot-edit-panel" shadow="lg" radius="md" p={12} withBorder style={{ width: 480 }}>
-    <Text size="sm" fw={600} style={{ marginBottom: 10 }}>分镜编辑</Text>
+        <NodeToolbar className="lens-shot-edit-toolbar" position={Position.Bottom} align="center">
+          <div
+            className="tc-task-node__toolbar-frame tc-task-node__toolbar-frame--media"
+            onWheelCapture={(e) => {
+              // 弹窗区域内滚轮不触发画布缩放（内部可滚动元素自行滚动）
+              e.stopPropagation()
+            }}
+            style={{
+              position: 'relative',
+              zIndex: 3001,
+              width: 'min(800px, calc((100vw - 48px)))',
+              maxHeight: '60vh',
+              overflowY: 'auto',
+              overflowX: 'visible',
+              transformOrigin: 'top center',
+              transform: 'scale(1)',
+            }}
+          >
+            <div className="tc-task-node__toolbar-content tc-task-node__toolbar-content--media">
+              {/* 弹窗标题行：左侧「上游参考」，中间「分镜#N」真正居中（三列 grid：1fr auto 1fr） */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', marginBottom: 10 }}>
+                <Text size="xs" fw={600} c="dimmed" style={{ letterSpacing: 0.4, whiteSpace: 'nowrap' }}>上游参考</Text>
+                <Text size="md" fw={700} style={{ textAlign: 'center', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>分镜#{data.storyboardOrder ?? '-'}</Text>
+                <div />
+              </div>
 
-              {/* 上游参考：缩略图 + 添加按钮 + 拖动调整顺序（对齐角色节点） */}
-              <Text size="xs" c="dimmed" style={{ marginBottom: 4 }}>上游参考</Text>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+              {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，右上角类型胶囊） */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
                 {refs.length > 0 ? refs.map((ref) => (
                   <Tooltip key={`${ref.category}-${ref.id}`} label={`${REF_LABEL[ref.category] ?? '引用'} · ${ref.name}`} position="top" withArrow>
                     <span style={{ position: 'relative', display: 'inline-flex', cursor: 'grab' }}>
                       {ref.imgUrl ? (
-                        <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(127,127,127,0.25)' }} />
+                        <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)' }} />
                       ) : (
-                        <span style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid rgba(127,127,127,0.25)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
+                        <span style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
                       )}
-                      <span style={{ position: 'absolute', left: -2, bottom: -2, fontSize: 9, padding: '0 3px', borderRadius: 4, background: 'rgba(20,30,45,0.85)', color: '#fff' }}>{REF_LABEL[ref.category] ?? '引'}</span>
+                      <span style={{ position: 'absolute', left: 3, bottom: 3, fontSize: 9, lineHeight: 1, padding: '2px 5px', borderRadius: 999, background: 'rgba(10,14,20,0.72)', color: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)' }}>{REF_LABEL[ref.category] ?? '引'}</span>
                     </span>
                   </Tooltip>
                 )) : (
@@ -387,75 +400,74 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 )}
                 <Tooltip label="添加参考（后续支持从画布选取）" position="top" withArrow>
                   <span
-                    style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px dashed rgba(127,127,127,0.45)', fontSize: 16, color: 'rgba(127,127,127,0.8)', cursor: 'pointer' }}
+                    style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px dashed rgba(127,127,127,0.4)', fontSize: 16, color: 'rgba(127,127,127,0.75)', cursor: 'pointer', transition: 'all 0.15s ease' }}
                     title="添加参考"
                   >
                     +
                   </span>
                 </Tooltip>
               </div>
-              <Text size="xs" c="dimmed" style={{ marginBottom: 10 }}>拖动调整顺序</Text>
 
-              {/* 提示词编辑区（对齐角色节点「提示词编辑模式」区）：文本=脚本，JSON=生视频提示词 */}
-              <Group justify="space-between" align="center" mb={4}>
-                <Text size="xs" fw={600}>提示词编辑模式</Text>
+              {/* 编辑区：剧本 / 提示词 切换（默认剧本；提示词为分镜生视频提示词 data.prompt） */}
+              <Group justify="space-between" align="center" mb={6} style={{ marginTop: 10 }}>
+                <Text size="sm" fw={600}>{promptMode === 'prompt' ? '分镜提示词' : '分镜剧本'}</Text>
                 <Switch
                   size="xs"
-                  label="JSON"
-                  checked={promptMode === 'json'}
-                  onChange={(e) => setPromptMode(e.currentTarget.checked ? 'json' : 'text')}
+                  label="提示词"
+                  checked={promptMode === 'prompt'}
+                  onChange={(e) => setPromptMode(e.currentTarget.checked ? 'prompt' : 'script')}
                 />
               </Group>
               <Textarea
-                size="xs"
+                size="sm"
                 autosize
                 minRows={4}
-                maxRows={6}
-                value={promptMode === 'json' ? promptDraft : scriptDraft}
+                maxRows={7}
+                value={promptMode === 'prompt' ? promptDraft : scriptDraft}
                 onChange={(e) => {
                   const next = e.currentTarget.value
-                  if (promptMode === 'json') setPromptDraft(next)
+                  if (promptMode === 'prompt') setPromptDraft(next)
                   else setScriptDraft(next)
                 }}
-                placeholder={promptMode === 'json' ? '生视频提示词（JSON）' : '分镜脚本（含动作与对白）'}
-                mb={10}
+                placeholder={promptMode === 'prompt' ? '分镜提示词（生视频用，可为 JSON）' : '分镜剧本（含动作与对白）'}
+                mb={12}
               />
 
-              {/* 底部控制栏：模型 + 画幅 + 分辨率 + 积分 + 生成（对齐角色节点） */}
-              <Group gap={6} align="flex-end" wrap="nowrap">
-                <Select
-                  size="xs"
-                  searchable
-                  clearable
-                  style={{ flex: 1, minWidth: 0 }}
-                  data={models.map((m) => ({ value: m.value, label: m.label, disabled: m.disabled }))}
-                  value={modelValue}
-                  onChange={(v) => setModelValue(v)}
-                  placeholder={models.length ? '选择生视频模型' : '暂无可用模型'}
-                />
-                <Select
-                  size="xs"
-                  w={88}
-                  data={[{ value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }]}
-                  value={aspectValue}
-                  onChange={(v) => setAspectValue(v ?? '16:9')}
-                />
-                <Select
-                  size="xs"
-                  w={88}
-                  data={[{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }, { value: '2K', label: '2K' }]}
-                  value={resolutionValue}
-                  onChange={(v) => setResolutionValue(v ?? '1080p')}
-                />
-                <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{consumePoints}积分</Text>
-              </Group>
-              <Group justify="flex-end" gap={6} mt={10}>
-                {saveState && <Text size="xs" c="dimmed" style={{ marginRight: 'auto' }}>{saveState}</Text>}
-                <Button size="xs" onClick={() => void handleGenerate()}>生成</Button>
-                <Button size="xs" variant="light" onClick={() => void handleSave()}>保存到分镜板</Button>
-              </Group>
-
-          </Paper>
+              {/* 底部控制栏：模型 + 画幅 + 分辨率 + 积分 + 生成 + 保存（同一行；顶部细线与提示词区隔开，完全对齐角色节点 toolbar-controls--footer） */}
+              <div className="tc-task-node__toolbar-controls--footer tc-task-node__toolbar-controls--media-footer">
+                <Group gap={8} align="flex-end" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                  <Select
+                    size="xs"
+                    searchable
+                    clearable
+                    style={{ flex: 1, minWidth: 0 }}
+                    data={models.map((m) => ({ value: m.value, label: m.label, disabled: m.disabled }))}
+                    value={modelValue}
+                    onChange={(v) => setModelValue(v)}
+                    placeholder={models.length ? '选择生视频模型' : '暂无可用模型'}
+                  />
+                  <Select
+                    size="xs"
+                    w={92}
+                    data={[{ value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }]}
+                    value={aspectValue}
+                    onChange={(v) => setAspectValue(v ?? '16:9')}
+                  />
+                  <Select
+                    size="xs"
+                    w={92}
+                    data={[{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }, { value: '2K', label: '2K' }]}
+                    value={resolutionValue}
+                    onChange={(v) => setResolutionValue(v ?? '1080p')}
+                  />
+                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints} 积分</Text>
+                  <Button size="xs" variant="filled" onClick={() => void handleGenerate()}>生成</Button>
+                  <Button size="xs" variant="outline" onClick={() => void handleSave()}>保存到分镜板</Button>
+                </Group>
+              </div>
+              {saveState && <Text size="xs" c="dimmed" mt={8} style={{ textAlign: 'right' }}>{saveState}</Text>}
+            </div>
+          </div>
         </NodeToolbar>
       )}
 

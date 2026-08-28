@@ -1299,7 +1299,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler }: CanvasInnerPro
 
   const SNAP_DISTANCE = 96
   const NODE_SNAP_DISTANCE = 200
-  const MIN_ZOOM = 0.3 // 允许缩小，但避免过度拉远导致节点与连线失去可读性
+  const MIN_ZOOM = 0.1 // 最小缩放 10%：整体结构（多集分镜/竖屏长节点）可全局概览
   const MAX_ZOOM = 4 // 放大上限放宽到 4 倍：竖屏分镜/细节查看需要较大放大倍率（对标同类工具的 4~8 倍）
   const DEFAULT_ZOOM_MULTIPLIER = 0.32 // 首屏默认在 fitView 基础上再退一档，优先保证整体结构先可见
 
