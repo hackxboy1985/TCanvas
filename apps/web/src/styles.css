@@ -9374,3 +9374,28 @@ body {
 }
 
 
+
+/* 画布左下工具条（资产管理/整理画布/小地图/连线显隐/网格吸附/缩放菜单） */
+.tc-canvas-bottom-toolbar-panel {
+  z-index: 20;
+}
+.tc-canvas-bottom-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(17, 22, 31, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.tc-canvas-bottom-toolbar .tc-canvas-bottom-toolbar__zoom {
+  min-width: 52px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.tc-canvas-bottom-toolbar__divider {
+  margin: 0 4px;
+  align-self: stretch;
+}

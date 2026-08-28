@@ -108,6 +108,7 @@ export function ImageContent(props: ImageContentProps) {
     imageEditPreview,
     objectFit,
     emptyPromptText,
+    responsiveOss,
   } = props
 
   const [imageError, setImageError] = React.useState(false)

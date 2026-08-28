@@ -86,7 +86,7 @@ import {
   STORYBOARD_DEFAULT_DURATION,
   enforceStoryboardTotalLimit,
 } from './storyboardUtils'
-import { getTaskNodeCoreType, getTaskNodeSchema, normalizeTaskNodeKind } from './taskNodeSchema'
+import { getTaskNodeCoreType, getTaskNodeSchema, normalizeTaskNodeKind, type TaskNodeFeature } from './taskNodeSchema'
 import { buildTaskNodeFeatureFlags, type TaskNodeFeatureFlags } from './taskNode/features'
 import {
   applyMentionFallback,
@@ -5192,11 +5192,6 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       upstreamReferenceOrder: reordered.map((item) => item.sourceNodeId),
     })
   }, [id, updateNodeData, upstreamReferenceItems])
-  const canvasZoom = useStore((state) => {
-    if (!showBottomToolbar) return 1
-    const zoom = state.transform[2]
-    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
-  })
 
   const clampFinite = (value: unknown, min: number, max: number, fallback: number) => {
     const n = Number(value)
@@ -5208,7 +5203,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (coreKind === 'video') return { width: 400, height: 225, minWidth: 240, maxWidth: 960, minHeight: 160, maxHeight: 720 }
     if (isStoryboardEditorNode) return { width: 560, height: 470, minWidth: 360, maxWidth: 960, minHeight: 260, maxHeight: 760 }
     if (kind === 'imageEdit') return { width: 320, height: 220, minWidth: 180, maxWidth: 420, minHeight: 120, maxHeight: 420 }
-    return { width: 120, height: 210, minWidth: 110, maxWidth: 420, minHeight: 90, maxHeight: 420 }
+    return { width: 120, height: 210, minWidth: 110, maxWidth: 560, minHeight: 90, maxHeight: 420 }
   }, [coreKind, isStoryboardEditorNode, kind])
 
   const nodeWidth = isResizableVisualNode
@@ -5223,8 +5218,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     ? clampFinite((data as any)?.nodeHeight, visualNodeDefaults.minHeight, visualNodeDefaults.maxHeight, visualNodeDefaults.height)
     : null
   const toolbarBaseWidth = useMediaFocusToolbar ? 650 : 380
-  const toolbarMinScale = 220 / toolbarBaseWidth
-  const toolbarScale = Math.max(toolbarMinScale, canvasZoom)
+  // 弹窗固定 100% 显示，不随画布缩放缩小（始终可读；宽度仅受视口宽度约束）
+  const toolbarScale = 1
   const toolbarWidthCss = `min(${toolbarBaseWidth}px, calc((100vw - 48px) / ${toolbarScale}))`
   const toolbarMaxHeightCss = `calc(60vh / ${toolbarScale})`
   const textNodeHeight = isPlainTextNode
@@ -6294,12 +6289,16 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     })
   }, [data?.label, kind, toolbarPreview])
 
-  const featureBlocks = renderFeatureBlocks(schema.features, {
+  // 拆分为媒体块（image 等）与表单块（prompt/模型/参数等）：lens 资产节点选中时表单块作为弹窗固定大小
+  const lensMediaFeatures = new Set<TaskNodeFeature>(['image', 'imageUpload', 'imageResults', 'video', 'videoResults'])
+  const featureCtx = {
     featureFlags,
     videoContent,
     imageProps,
     storyboardEditorProps,
-  })
+  }
+  const mediaBlocks = renderFeatureBlocks(schema.features.filter((f) => lensMediaFeatures.has(f)), featureCtx)
+  const formBlocks = renderFeatureBlocks(schema.features.filter((f) => !lensMediaFeatures.has(f)), featureCtx)
 	  const [mentionOpen, setMentionOpen] = React.useState(false)
 	  const [mentionFilter, setMentionFilter] = React.useState('')
 	  const [mentionItems, setMentionItems] = React.useState<MentionSuggestionItem[]>([])
@@ -8254,7 +8253,8 @@ const rewritePromptWithCharacters = React.useCallback(
         />
       )}
       {/* Content Area for Character/Image/Video/Text kinds */}
-      {featureBlocks}
+      {mediaBlocks}
+      {formBlocks}
       {isProjectDocNode && !isResizableVisualNode && (
         <Paper
           className="tc-task-node__doc-preview"

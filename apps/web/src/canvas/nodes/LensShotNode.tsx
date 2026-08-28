@@ -253,7 +253,9 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     }
   }
   const shellWidth = Math.round(mediaWidth)
-  const shellHeight = Math.round(mediaHeight) + HEADER_HEIGHT
+  // 引用行高度（showRefs 打开时节点底部加一行，不悬浮遮挡媒体内容）
+  const REFS_BAR_HEIGHT = 38
+  const shellHeight = Math.round(mediaHeight) + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
 
   const shell = {
     background: isDark ? 'rgba(15,20,28,0.96)' : 'rgba(255,255,255,0.98)',
@@ -329,6 +331,37 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         )}
 
       </div>
+      {/* 底部引用行：场景/道具/角色/站位（画布顶部「引用」开关控制，作为节点底部独立一行，不悬浮不遮挡媒体内容） */}
+      {showRefs && refs.length > 0 && (
+        <div className="lens-shot-refs" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderTop: '1px solid rgba(127,127,127,0.16)', flexWrap: 'wrap', flexShrink: 0 }}>
+          {refs.map((ref) => (
+            <Tooltip key={`${ref.category}-${ref.id}`} label={`${REF_LABEL[ref.category] ?? '引用'} · ${ref.name}`} position="top" withArrow>
+              <span className="lens-shot-ref" style={{ position: 'relative', display: 'inline-flex', cursor: ref.category === 1 ? 'pointer' : 'default' }}>
+                {ref.imgUrl ? (
+                  <img className="lens-shot-ref-img" src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid rgba(127,127,127,0.2)' }} />
+                ) : (
+                  <span className="lens-shot-ref-empty" style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '1px solid rgba(127,127,127,0.2)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
+                )}
+                {ref.category === 1 && (
+                  <span
+                    className={`lens-shot-speaker ${ref.isSpeaker ? 'is-speaker' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref.name) }}
+                    title={ref.isSpeaker ? '取消说话者' : '设为说话者'}
+                    style={{
+                      position: 'absolute', right: -4, top: -4, width: 14, height: 14, borderRadius: '50%',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: ref.isSpeaker ? '#22c55e' : 'rgba(127,127,127,0.45)', color: '#fff',
+                      fontSize: 9, boxShadow: '0 0 0 1.5px rgba(255,255,255,0.85)',
+                    }}
+                  >
+                    🎤
+                  </span>
+                )}
+              </span>
+            </Tooltip>
+          ))}
+        </div>
+      )}
       {/* 选中时节点下方浮出独立编辑面板（完整复刻角色/场景节点的编辑弹框布局） */}
       {selected && (
         <NodeToolbar className="lens-shot-edit-toolbar" position={Position.Bottom} align="start">

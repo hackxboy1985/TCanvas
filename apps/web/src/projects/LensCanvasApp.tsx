@@ -40,7 +40,7 @@ function readQueryParams(): { dramaId: string; episode: number } {
  * 默认投影布局版本：布局规则变化时 +1。
  * 恢复 flow 时若版本不一致，节点位置改用最新投影布局（用户手动拖过的位置随布局版本重置）。
  */
-const LAYOUT_VERSION = 3
+const LAYOUT_VERSION = 4
 
 /** 把 lens 数据投影成 React Flow 节点与引用连线（引用模式：节点只存 entityId，展示字段为投影快照） */
 function buildCanvasNodes(input: {
@@ -70,7 +70,6 @@ function buildCanvasNodes(input: {
   // 默认布局：第 1 列角色；第 2 列场景（在前）+ 道具（在后），首个场景与首个角色同高
   const COL1_X = 40
   const COL2_X = 460
-  const COL3_X = 880
   const SHOT_X = 1300
   const START_Y = 40
   const ROW_GAP = 280
@@ -104,6 +103,8 @@ function buildCanvasNodes(input: {
       nodeWidth: 384,
       nodeHeight: 250,
       lensTypeLabel: '角色',
+      assetCategory: 1,
+      entityId: assetId,
       prompt: asset.description || '',
     })
     rememberAssetNode(1, assetId, `role-${assetId}`)
@@ -120,6 +121,8 @@ function buildCanvasNodes(input: {
       nodeWidth: 384,
       nodeHeight: 250,
       lensTypeLabel: '场景',
+      assetCategory: 2,
+      entityId: assetId,
       prompt: asset.description || '',
     })
     rememberAssetNode(2, assetId, `scene-${assetId}`)
@@ -134,19 +137,24 @@ function buildCanvasNodes(input: {
       nodeWidth: 384,
       nodeHeight: 250,
       lensTypeLabel: '道具',
+      assetCategory: 3,
+      entityId: assetId,
       prompt: asset.description || '',
     })
     rememberAssetNode(3, assetId, `prop-${assetId}`)
   })
 
-  // 2. 剧本/台本文本节点（默认隐藏，第 3 列）
-  addNode('script-content', 'text', '剧本原文', { x: COL3_X, y: START_Y }, {
+  // 2. 剧本/台本文本节点（默认隐藏）：第 2 列道具下方，与道具空出 3 个场景节点高度（250×3）的空间
+  const col2Count = sceneAssets.length + propAssets.length
+  const lastCol2Y = col2Count > 0 ? START_Y + (col2Count - 1) * ROW_GAP : START_Y - ROW_GAP
+  const scriptY = lastCol2Y + 3 * 250
+  addNode('script-content', 'text', '剧本原文', { x: COL2_X, y: scriptY }, {
     prompt: script.content || '',
     hidden: true,
     source: 'lens_projection',
     lensTypeLabel: '剧本',
   })
-  addNode('script-script-content', 'text', '台本', { x: COL3_X, y: START_Y + ROW_GAP }, {
+  addNode('script-script-content', 'text', '台本', { x: COL2_X, y: scriptY + ROW_GAP }, {
     prompt: script.scriptContent || '',
     hidden: true,
     source: 'lens_projection',
@@ -226,6 +234,8 @@ export default function LensCanvasApp(): JSX.Element {
   const [showRefs, setShowRefs] = useState<boolean>(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadedForRef = useRef<string>('')
+  // 最近一次投影结果缓存：整理画布时恢复默认布局
+  const lastProjectionRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
   // 画布实例 API（视口读写经 Canvas ref 暴露，绕开 ReactFlowProvider 层级）
   const canvasApiRef = useRef<CanvasHandle>(null)
 
@@ -278,6 +288,14 @@ export default function LensCanvasApp(): JSX.Element {
     setEpisodeNum(next)
   }, [episodeNum, saveNow])
 
+  /** 整理画布：恢复默认打开时的投影布局（左下工具条「整理画布」按钮 / ⌥⌘F） */
+  const arrangeLayout = useCallback(() => {
+    const projection = lastProjectionRef.current
+    if (!projection) return
+    load({ nodes: projection.nodes, edges: projection.edges })
+    window.setTimeout(() => { canvasApiRef.current?.fitView() }, 60)
+  }, [load])
+
   /** 加载某集数据（投影节点 + 恢复编排） */
   const loadEpisode = useCallback(async (targetEpisode: number) => {
     if (!dramaId) return
@@ -295,6 +313,7 @@ export default function LensCanvasApp(): JSX.Element {
       ])
       // 2. 投影成节点
       const projected = buildCanvasNodes({ storyboards, assets, script, dramaId })
+      lastProjectionRef.current = projected
       // 3. 恢复编排（有 flow 则用 flow 的位置/连线，无则用投影默认布局）
       const flow = await getFlow(dramaId, targetEpisode)
       setFlowVersion(flow?.version ?? 0)
@@ -308,10 +327,25 @@ export default function LensCanvasApp(): JSX.Element {
             const restored = parsed.nodes.map((n) => {
               const fresh = projected.nodes.find((p) => p.id === n.id)
               if (!fresh) return n
-              const merged = { ...n, data: { ...(n.data as Record<string, unknown>), ...(fresh.data as Record<string, unknown>) } }
+              const nData = n.data as Record<string, unknown>
+              const freshData = fresh.data as Record<string, unknown>
+              // 业务展示字段以最新投影快照为准；引用行开关（showRefs）是编排 UI 状态，以 flow 为准避免被覆盖丢失
+              const merged = {
+                ...n,
+                data: {
+                  ...nData,
+                  ...freshData,
+                  showRefs: typeof nData.showRefs === 'boolean' ? nData.showRefs : Boolean(freshData.showRefs),
+                },
+              }
               // 布局版本不一致：位置与节点类型都以最新投影为准（如 asset 节点类型变化）
               return useFlowLayout ? merged : { ...merged, type: fresh.type, position: fresh.position }
             })
+            // 同步顶部「引用」开关状态（与恢复出的分镜节点一致）
+            const restoredShot = restored.find((nd) => nd.type === 'lensShot')
+            if (restoredShot) {
+              setShowRefs(Boolean((restoredShot.data as Record<string, unknown>)?.showRefs))
+            }
             // 连线：布局版本一致时尊重 flow 里的连线（用户手动改过）；不一致时用最新投影引用连线
             const restoredEdges = useFlowLayout
               ? (Array.isArray(parsed.edges) ? parsed.edges : [])
@@ -401,7 +435,7 @@ export default function LensCanvasApp(): JSX.Element {
       {error && <Alert className="lens-canvas-error" color="red" title="提示" mb={8}>{error}</Alert>}
       <div className="lens-canvas-body" style={{ position: 'relative', height: 'calc(100vh - 56px)' }}>
         <LoadingOverlay visible={loading} />
-        <Canvas className="app-canvas" ref={canvasApiRef} />
+        <Canvas className="app-canvas" ref={canvasApiRef} arrangeHandler={arrangeLayout} />
       </div>
     </div>
   )

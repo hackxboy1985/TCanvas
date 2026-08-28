@@ -5,6 +5,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   useReactFlow,
   useStore,
   NodeTypes,
@@ -55,6 +56,7 @@ import { getPointToRectDistance, screenPathIntersectsRect } from './utils/connec
 import { getNodeAbsPosition, getNodeSize } from './utils/nodeBounds'
 import { downloadGroupAssets } from './utils/groupAssetDownload'
 import { GroupTemplateModal, type TemplateSaveMode, type TemplateVisibility } from './components/GroupTemplateModal'
+import { CanvasBottomToolbar } from './components/CanvasBottomToolbar'
 import { extractCanvasGraph, type CanvasImportData } from './utils/serialization'
 import { getTapImageDragPayload } from './dnd/setTapImageDragData'
 import { buildStoryboardEditorPatch, normalizeStoryboardNodeData } from './nodes/taskNode/storyboardEditor'
@@ -261,12 +263,16 @@ export interface CanvasHandle {
   getViewport: () => { x: number; y: number; zoom: number } | null
   /** 设置视口（用于恢复持久化的编排视口） */
   setViewport: (viewport: { x: number; y: number; zoom: number }, opts?: { duration?: number }) => void
+  /** 适合屏幕（fitView，整理画布后调用） */
+  fitView: () => void
 }
 
 type CanvasInnerProps = {
   className?: string
   /** 外部调用方的 ref（透传给 useImperativeHandle） */
   canvasApiRef?: React.Ref<CanvasHandle>
+  /** 整理画布回调（lens 模式恢复默认投影布局；未提供时工具栏只做适合屏幕） */
+  arrangeHandler?: () => void
 }
 
 type CanvasStyle = React.CSSProperties & Record<'--tc-spotlight-grid-color' | '--tc-spotlight-radius', string>
@@ -345,7 +351,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className, canvasApiRef }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef, arrangeHandler }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -391,7 +397,32 @@ function CanvasInner({ className, canvasApiRef }: CanvasInnerProps): JSX.Element
     setViewport: (viewport: { x: number; y: number; zoom: number }, opts?: { duration?: number }) => {
       rf.setViewport(viewport, opts)
     },
+    fitView: () => {
+      rf.fitView({ padding: 0.2, duration: 250 })
+    },
   }), [rf])
+
+  // 左下工具条状态：小地图默认隐藏；连线默认显示
+  const [miniMapVisible, setMiniMapVisible] = React.useState(false)
+  const [edgesVisible, setEdgesVisible] = React.useState(true)
+  // 画布缩放（工具栏百分比显示；zoom 变化才重渲染）
+  const canvasZoom = useStore((s) => s.transform[2])
+
+  // 整理画布快捷键 ⌥⌘F（Alt+Meta+F）
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'f' && e.metaKey && e.altKey) {
+        e.preventDefault()
+        if (arrangeHandler) {
+          arrangeHandler()
+        } else {
+          rf.fitView({ padding: 0.2, duration: 250 })
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [arrangeHandler, rf])
 
   useEffect(() => {
     const previousMap = previousNodeImageMapRef.current
@@ -2890,6 +2921,11 @@ function CanvasInner({ className, canvasApiRef }: CanvasInnerProps): JSX.Element
     }))
   }, [focusFiltered.edges])
   const viewEdges = useMemo(() => {
+    // 连线整体显隐（左下工具条开关）：隐藏时全部置 hidden，不渲染不参与交互
+    if (!edgesVisible) {
+      const base = dragging || viewportMoving ? dragViewEdges : focusFiltered.edges
+      return base.map((edge) => ({ ...edge, hidden: true }))
+    }
     if (dragging || viewportMoving) {
       return dragViewEdges
     }
@@ -2939,7 +2975,7 @@ function CanvasInner({ className, canvasApiRef }: CanvasInnerProps): JSX.Element
             },
           }
     })
-  }, [dragViewEdges, dragging, edgeRoute, focusFiltered.edges, focusFiltered.nodes, hasVisibilityFilter, heavySelectionActive, isDarkCanvas, nodeVisibility, selectedIds, shouldHighlightSelectedEdges, viewportMoving])
+  }, [dragViewEdges, dragging, edgeRoute, edgesVisible, focusFiltered.edges, focusFiltered.nodes, hasVisibilityFilter, heavySelectionActive, isDarkCanvas, nodeVisibility, selectedIds, shouldHighlightSelectedEdges, viewportMoving])
 
   // 使用多选拖拽（内置），不自定义组拖拽，避免与画布交互冲突
 
@@ -3374,16 +3410,33 @@ function CanvasInner({ className, canvasApiRef }: CanvasInnerProps): JSX.Element
         connectionLineType={ConnectionLineType.SimpleBezier}
         connectionLineStyle={connectionLineStyle}
       >
-        <MiniMap
-          className="tc-canvas__minimap"
-          position="bottom-left"
-          style={{ width: 160, height: 110 }}
-          pannable
-          zoomable={false}
-          onClick={handleMiniMapClick}
-          onNodeClick={handleMiniMapNodeClick}
-        />
-        <Controls className="tc-canvas__controls" position="bottom-left" />
+        {miniMapVisible && (
+          <MiniMap
+            className="tc-canvas__minimap"
+            position="bottom-left"
+            style={{ width: 160, height: 110, bottom: 56 }}
+            pannable
+            zoomable={false}
+            onClick={handleMiniMapClick}
+            onNodeClick={handleMiniMapNodeClick}
+          />
+        )}
+        {/* 左下工具条：资产管理/整理画布/小地图/连线显隐/网格吸附/缩放菜单 */}
+        <Panel className="tc-canvas-bottom-toolbar-panel" position="bottom-left">
+          <CanvasBottomToolbar
+            zoomPercent={Math.round(canvasZoom * 100)}
+            onZoomIn={() => rf.zoomIn({ duration: 200 })}
+            onZoomOut={() => rf.zoomOut({ duration: 200 })}
+            onFitView={() => rf.fitView({ padding: 0.2, duration: 250 })}
+            onZoomTo={(zoom) => rf.zoomTo(zoom, { duration: 250 })}
+            miniMapVisible={miniMapVisible}
+            onToggleMiniMap={() => setMiniMapVisible((v) => !v)}
+            edgesVisible={edgesVisible}
+            onToggleEdges={() => setEdgesVisible((v) => !v)}
+            onArrange={arrangeHandler}
+          />
+        </Panel>
+        <Controls className="tc-canvas__controls" position="bottom-right" />
         <Background id="tc-canvas-grid-base" className="tc-canvas__background" gap={16} size={1} color={backgroundGridColor} />
         <Background
           id="tc-canvas-grid-spotlight"
@@ -4014,14 +4067,16 @@ const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
 /** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
-const Canvas = forwardRef<CanvasHandle, { className?: string }>(function Canvas({ className }, ref): JSX.Element {
-  const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
+const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void }>(
+  function Canvas({ className, arrangeHandler }, ref): JSX.Element {
+    const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
-  return (
-    <ReactFlowProviderWithClass className="tc-canvas-provider">
-      <CanvasInner className={innerClassName} canvasApiRef={ref} />
-    </ReactFlowProviderWithClass>
-  )
-})
+    return (
+      <ReactFlowProviderWithClass className="tc-canvas-provider">
+        <CanvasInner className={innerClassName} canvasApiRef={ref} arrangeHandler={arrangeHandler} />
+      </ReactFlowProviderWithClass>
+    )
+  },
+)
 
 export default Canvas
