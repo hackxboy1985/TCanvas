@@ -9307,3 +9307,70 @@ body {
     height: 84px;
   }
 }
+
+/* ===== Lens 分镜节点（参考生视频，LensShotNode） ===== */
+
+/* 状态圆点（对齐 lens 分镜板 SceneShotCard） */
+.lens-shot-status-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.lens-shot-status-dot--idle { background: rgba(127, 127, 127, 0.4); }
+.lens-shot-status-dot--failed { background: #ef4444; }
+.lens-shot-status-dot--success { background: #22c55e; }
+.lens-shot-status-dot--generating {
+  background: #eab308;
+  animation: lens-shot-generate-breath 1.6s ease-in-out infinite;
+}
+
+/* 分析中/线稿中呼吸光圈（叠加在成功绿点外围） */
+.lens-shot-status-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+.lens-shot-status-ring--analyze {
+  border-color: rgba(59, 130, 246, 0.75);
+  animation: lens-shot-analyze-breath 2s ease-in-out infinite;
+}
+.lens-shot-status-ring--lineart {
+  border-color: rgba(234, 179, 8, 0.75);
+  animation: lens-shot-lineart-breath 1.8s ease-in-out infinite;
+}
+.lens-shot-status-ring--failed {
+  border-color: #ef4444;
+}
+
+@keyframes lens-shot-generate-breath {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+@keyframes lens-shot-analyze-breath {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.6); opacity: 0.25; }
+}
+@keyframes lens-shot-lineart-breath {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.45); opacity: 0.3; }
+}
+
+/* 节点基础（与 taskNode 视觉一致） */
+.lens-shot-node {
+  font-family: inherit;
+  position: relative;
+}
+.lens-shot-handle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(127, 127, 127, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+

@@ -5145,6 +5145,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const imageStateLabel = isUploadingImage ? '上传中' : isImageExpired ? '已过期' : null
 
   const isCanvasMediaNode = coreKind === 'image' || coreKind === 'video'
+  // lens 投影节点（角色/场景/道具）：即使属于媒体节点也渲染顶部栏（类型 + 名称）
+  const isLensProjectionNode = (data as { source?: string })?.source === 'lens_projection'
   const isResizableVisualNode = isCanvasMediaNode || isStoryboardEditorNode
   const useMediaFocusToolbar = isCanvasMediaNode
   const showBottomToolbar = isSingleSelectionActive && !isCameraRefNode && !isPlainTextNode && !isStoryboardEditorNode
@@ -6069,6 +6071,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     variantsOpen,
     variantsBaseWidth,
     variantsBaseHeight,
+    // lens 投影节点：主图按原始宽高比完整显示（contain），tapCanvas 原生节点保持 cover 裁切
+    objectFit: isLensProjectionNode ? 'contain' : 'cover',
+    // lens 投影节点：无图时把提示词展示在图片位置（对齐分镜节点行为）
+    emptyPromptText: isLensProjectionNode ? String((data as { prompt?: string })?.prompt ?? '').trim() || null : null,
+    // lens 投影节点：按画布缩放选 OSS 响应式图档位
+    responsiveOss: isLensProjectionNode,
     hasPrimaryImage,
     imageResults,
     imagePrimaryIndex,
@@ -8009,13 +8017,13 @@ const rewritePromptWithCharacters = React.useCallback(
         progress={(data as any)?.progress}
       />
       {productionMetadata && <ChapterGroundedBadge metadata={productionMetadata} />}
-      {!hideImageMeta && !isCanvasMediaNode && !isStoryboardEditorNode && !isCameraRefNode && (
+      {((!hideImageMeta && !isCanvasMediaNode && !isStoryboardEditorNode && !isCameraRefNode) || isLensProjectionNode) && (
         <TaskNodeHeader
           NodeIcon={NodeIcon}
           editing={editing}
           labelDraft={labelDraft}
           currentLabel={currentLabel}
-          subtitle={subtitle}
+          subtitle={isLensProjectionNode ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel) : subtitle}
           metaBadges={headerMetaBadges}
           statusLabel={statusLabel}
           statusColor={color}
@@ -8028,6 +8036,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showMeta={false}
         showIcon={false}
         showStatus={false}
+        showSubtitle={isLensProjectionNode}
           onLabelDraftChange={setLabelDraft}
           onCommitLabel={commitLabel}
           onCancelEdit={() => {

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build --mode production",
+    "build:lens": "vite build --mode production && node ./scripts/sync-to-lens.mjs",
     "preview": "vite preview",
     "smoke:project-chapter-ui": "node ./scripts/project-chapter-ui-smoke.mjs",
     "smoke:project-chapter-production": "node ./scripts/project-chapter-production-smoke.mjs",

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ReactFlow,
@@ -21,6 +21,7 @@ import '@xyflow/react/dist/style.css'
 import TaskNode from './nodes/TaskNode'
 import IONode from './nodes/IONode'
 import GroupNode from './nodes/GroupNode'
+import LensShotNode from './nodes/LensShotNode'
 import { useRFStore } from './store'
 import { toast } from '../ui/toast'
 import { applyTemplateAt } from '../templates'
@@ -69,6 +70,7 @@ const NODE_TYPES = Object.freeze({
   taskNode: TaskNode,
   ioNode: IONode,
   groupNode: GroupNode,
+  lensShot: LensShotNode,
 }) as unknown as NodeTypes
 
 const EDGE_TYPES = Object.freeze({
@@ -253,8 +255,18 @@ const isCanvasReferencePickerCandidateNode = (node: FlowNode, targetNodeId: stri
   return getTaskNodeCoreType(kind) === 'image' && Boolean(resolveNodePrimaryImageUrl(node))
 }
 
+/** 画布对外暴露的视口 API（LensCanvasApp 等外部调用方通过 ref 使用） */
+export interface CanvasHandle {
+  /** 读当前视口（画布实例的真实值） */
+  getViewport: () => { x: number; y: number; zoom: number } | null
+  /** 设置视口（用于恢复持久化的编排视口） */
+  setViewport: (viewport: { x: number; y: number; zoom: number }, opts?: { duration?: number }) => void
+}
+
 type CanvasInnerProps = {
   className?: string
+  /** 外部调用方的 ref（透传给 useImperativeHandle） */
+  canvasApiRef?: React.Ref<CanvasHandle>
 }
 
 type CanvasStyle = React.CSSProperties & Record<'--tc-spotlight-grid-color' | '--tc-spotlight-radius', string>
@@ -333,7 +345,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -372,6 +384,14 @@ function CanvasInner({ className }: CanvasInnerProps): JSX.Element {
   const rf = useReactFlow()
   const theme = useMantineTheme()
   const previousNodeImageMapRef = useRef<Map<string, string | null>>(new Map())
+
+  // 对外暴露画布实例的视口 API（外部调用方绕开 ReactFlowProvider 层级问题直接读写真实视口）
+  useImperativeHandle(canvasApiRef, () => ({
+    getViewport: () => rf.getViewport(),
+    setViewport: (viewport: { x: number; y: number; zoom: number }, opts?: { duration?: number }) => {
+      rf.setViewport(viewport, opts)
+    },
+  }), [rf])
 
   useEffect(() => {
     const previousMap = previousNodeImageMapRef.current
@@ -1249,7 +1269,7 @@ function CanvasInner({ className }: CanvasInnerProps): JSX.Element {
   const SNAP_DISTANCE = 96
   const NODE_SNAP_DISTANCE = 200
   const MIN_ZOOM = 0.3 // 允许缩小，但避免过度拉远导致节点与连线失去可读性
-  const MAX_ZOOM = 1 // 放大上限保持克制，避免轻易进入“单节点占满屏幕”的状态
+  const MAX_ZOOM = 4 // 放大上限放宽到 4 倍：竖屏分镜/细节查看需要较大放大倍率（对标同类工具的 4~8 倍）
   const DEFAULT_ZOOM_MULTIPLIER = 0.32 // 首屏默认在 fitView 基础上再退一档，优先保证整体结构先可见
 
   const onConnectEnd = useCallback((evt: any) => {
@@ -3993,12 +4013,15 @@ const CanvasSelectionActionBar = React.memo(function CanvasSelectionActionBar({
 const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
-export default function Canvas({ className }: { className?: string }): JSX.Element {
+/** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
+const Canvas = forwardRef<CanvasHandle, { className?: string }>(function Canvas({ className }, ref): JSX.Element {
   const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
   return (
     <ReactFlowProviderWithClass className="tc-canvas-provider">
-      <CanvasInner className={innerClassName} />
+      <CanvasInner className={innerClassName} canvasApiRef={ref} />
     </ReactFlowProviderWithClass>
   )
-}
+})
+
+export default Canvas

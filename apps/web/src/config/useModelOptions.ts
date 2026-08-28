@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react'
 import { listModelCatalogModels, listModelCatalogVendors, type BillingModelKind, type ModelCatalogModelDto } from '../api/server'
+import { getImageModels, getShotVideoModels, type LensModelOption } from '../api/lens'
 import { getDefaultModel } from './models'
 import type { ModelOption, ModelOptionPricing, NodeKind } from './models'
 
 export const MODEL_REFRESH_EVENT = 'tapcanvas-models-refresh'
+
+/** 是否 lens 画布模式（URL 带 dramaId） */
+export function isLensMode(): boolean {
+  if (typeof window === 'undefined') return false
+  return Boolean(new URLSearchParams(window.location.search).get('dramaId'))
+}
 
 type RefreshDetail = 'openai' | 'anthropic' | 'all' | undefined
 
@@ -277,7 +284,64 @@ export function resolveExecutableImageModelFromOptions(
   }
 }
 
+/** lens 模型条目 → 画布模型选项（value/label 对齐 ModelOption；enabled=false 的条目灰显禁用） */
+function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
+  if (!Array.isArray(items)) return []
+  const seen = new Set<string>()
+  const out: ModelOption[] = []
+  for (const item of items) {
+    const value = String(item?.value ?? '').trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    const label = String(item?.label ?? '').trim() || value
+    out.push({
+      value,
+      label,
+      vendor: undefined,
+      // 不设 modelKey：显示优先 label（应用名），任务提交时用 value（应用 ID）
+      modelKey: undefined,
+      modelAlias: null,
+      pricing: undefined,
+      // 透传 lens 单次消耗（unitConsume），供编辑面板显示积分
+      meta: { lensUnitConsume: typeof item?.unitConsume === 'number' ? item.unitConsume : undefined },
+      // enabled 为 buildResult 合并的勾选状态（toModelJson 另有 enable 字段），未勾选灰显
+      disabled: item?.enabled === false || item?.enable === false,
+    })
+  }
+  return out
+}
+
+/** lens 模式下的模型选项：按节点类型走 lens 现有模型接口（生图 /api/model/image，生视频 /api/model/shot_video） */
+async function getLensModelOptions(kind?: NodeKind): Promise<ModelOption[]> {
+  const cacheKey = `lens:${kind || 'default'}`
+  const cached = catalogOptionsCache.get(cacheKey)
+  if (cached) return cached
+  const inflight = catalogPromiseCache.get(cacheKey)
+  if (inflight) return inflight
+  const promise = (async () => {
+    try {
+      let rows: LensModelOption[] = []
+      if (kind === 'image' || kind === 'imageEdit') {
+        rows = await getImageModels()
+      } else if (kind === 'video') {
+        // lens 画布的生视频即分镜生视频：使用 /api/model/shot_video 接口
+        rows = await getShotVideoModels()
+      }
+      // 其余类型（text 等）在 lens 模式无对应模型列表：返回空，交由上游显式处理
+      const normalized = toLensModelOptions(rows)
+      catalogOptionsCache.set(cacheKey, normalized)
+      return normalized
+    } finally {
+      catalogPromiseCache.delete(cacheKey)
+    }
+  })()
+  catalogPromiseCache.set(cacheKey, promise)
+  return promise
+}
+
 async function getCatalogModelOptions(kind?: NodeKind): Promise<ModelOption[]> {
+  // lens 画布模式：模型列表走 lens 后端接口，不调 tapCanvas 的 model-catalog
+  if (isLensMode()) return getLensModelOptions(kind)
   const catalogKind = resolveCatalogKind(kind)
   const cacheKey = catalogKind
   const cached = catalogOptionsCache.get(cacheKey)

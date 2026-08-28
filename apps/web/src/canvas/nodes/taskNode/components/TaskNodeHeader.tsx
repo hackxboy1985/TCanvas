@@ -19,6 +19,7 @@ type TaskNodeHeaderProps = {
   showMeta?: boolean
   showIcon?: boolean
   showStatus?: boolean
+  showSubtitle?: boolean
   isNew?: boolean
   metaBadges?: Array<{
     label: string
@@ -48,6 +49,7 @@ export function TaskNodeHeader({
   showMeta = true,
   showIcon = true,
   showStatus = true,
+  showSubtitle = false,
   isNew = false,
   metaBadges = [],
   onLabelDraftChange,
@@ -79,22 +81,33 @@ export function TaskNodeHeader({
             <NodeIcon className="task-node-header-icon-svg" size={18} />
           </div>
         )}
-        <Text
-          className="task-node-header-compact-title"
-          size="sm"
-          fw={600}
-          style={{
-            color: nodeShellText,
-            lineHeight: 1.2,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            minWidth: 0,
-          }}
-          title={currentLabel}
-        >
-          {currentLabel}
-        </Text>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            className="task-node-header-compact-title"
+            size="sm"
+            fw={600}
+            style={{
+              color: nodeShellText,
+              lineHeight: 1.2,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+            }}
+            title={currentLabel}
+          >
+            {currentLabel}
+          </Text>
+          {showSubtitle && subtitle.trim() && (
+            <Text
+              className="task-node-header-compact-subtitle"
+              size="xs"
+              style={{ color: 'rgba(127,127,127,0.85)', fontSize: 11, lineHeight: 1.2, marginTop: 1 }}
+            >
+              {subtitle}
+            </Text>
+          )}
+        </div>
         {isNew && (
           <Badge className="task-node-header-new-badge" size="xs" radius="md" color="pink" variant="light">
             新建

@@ -1,7 +1,9 @@
 import React from 'react'
+import { useStore } from '@xyflow/react'
 import { ActionIcon, Tooltip } from '@mantine/core'
 import { IconCheck } from '@tabler/icons-react'
 import { IconUpload } from '@tabler/icons-react'
+import { toOssResponsiveUrl, computeNodeImageDisplayWidth } from '../../../utils/ossResponsive'
 import { setTapImageDragData } from '../../../dnd/setTapImageDragData'
 import { useUIStore } from '../../../../ui/uiStore'
 import { ManagedImage } from '../../../../domain/resource-runtime'
@@ -47,6 +49,12 @@ type ImageContentProps = {
   subtleOverlayBackground: string
   imageUrl?: string | null
   themeWhite: string
+  /** 主图填充方式：cover 裁切铺满 / contain 按图片宽高比完整显示（lens 投影节点用 contain 自适应） */
+  objectFit?: 'cover' | 'contain'
+  /** 无图时展示在图片位置的提示词文本（lens 投影节点） */
+  emptyPromptText?: string | null
+  /** 是否按画布缩放选 OSS 响应式图（lens 投影节点）：放大才拉大图，缩小用低分辨率档位 */
+  responsiveOss?: boolean
   imageEditPreview?: {
     label: string
     width: number
@@ -98,6 +106,8 @@ export function ImageContent(props: ImageContentProps) {
     imageUrl,
     themeWhite,
     imageEditPreview,
+    objectFit,
+    emptyPromptText,
   } = props
 
   const [imageError, setImageError] = React.useState(false)
@@ -107,7 +117,12 @@ export function ImageContent(props: ImageContentProps) {
     [imageResults],
   )
   const activeImageUrl = primaryImageUrl || validImageResults[imagePrimaryIndex]?.url || ''
-  const mainImageSrc = activeImageUrl
+  // 画布缩放（zoom 变化才触发，平移不触发），用于 OSS 响应式选档
+  const zoom = useStore((s) => s.transform[2])
+  // OSS 响应式：按节点显示宽度（节点宽 × 缩放 × dpr）选档位；非响应式直接用原图
+  const mainImageSrc = responsiveOss
+    ? toOssResponsiveUrl(activeImageUrl, computeNodeImageDisplayWidth(nodeWidth, zoom))
+    : activeImageUrl
   const hasLoadedCurrentImage = loadedImageUrl === activeImageUrl
   const shouldShowRuntimeImagePending = Boolean(mainImageSrc) && !hasLoadedCurrentImage && !imageError
   const variantEntries = React.useMemo(
@@ -309,7 +324,7 @@ export function ImageContent(props: ImageContentProps) {
                   width: '100%',
                   height: '100%',
                   display: 'block',
-                  objectFit: 'cover',
+                  objectFit: objectFit ?? 'cover',
                   opacity: imageError ? 0 : 1,
                 }}
                 onLoad={handleMainImageLoad}
@@ -347,9 +362,27 @@ export function ImageContent(props: ImageContentProps) {
                 textAlign: 'center',
               }}
             >
-              {selected
-                ? (compact ? '单击上传，或拖拽/粘贴图片' : '单击上传，或拖拽/粘贴图片到画布')
-                : (compact ? '单击聚焦，聚焦后上传' : '单击聚焦，聚焦后上传，或拖拽/粘贴图片到画布')}
+              {emptyPromptText && emptyPromptText.trim() ? (
+                <div
+                  className="task-node-image__empty-prompt"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    textAlign: 'left',
+                    letterSpacing: 0,
+                    opacity: 1,
+                  }}
+                >
+                  {emptyPromptText}
+                </div>
+              ) : (
+                selected
+                  ? (compact ? '单击上传，或拖拽/粘贴图片' : '单击上传，或拖拽/粘贴图片到画布')
+                  : (compact ? '单击聚焦，聚焦后上传' : '单击聚焦，聚焦后上传，或拖拽/粘贴图片到画布')
+              )}
             </div>
           </div>
         )}

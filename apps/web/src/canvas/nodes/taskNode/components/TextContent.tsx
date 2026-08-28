@@ -40,6 +40,10 @@ export function TextContent({
   onCompositionEnd,
   onBlur,
 }: TextContentProps) {
+  // 双击进入编辑态：默认展示态只可拖拽/选中，双击后才允许编辑
+  const [editRequested, setEditRequested] = React.useState(false)
+  const editing = editRequested || textEditorFocused
+
   const handleWheelCapture: React.WheelEventHandler<HTMLDivElement> = (event) => {
     const editor = editorRef.current
     if (!editor) return
@@ -48,9 +52,20 @@ export function TextContent({
     event.stopPropagation()
   }
 
+  const handleDoubleClick = () => {
+    setEditRequested(true)
+    const editor = editorRef.current
+    if (editor) editor.focus()
+  }
+
+  const handleBlur: React.FocusEventHandler<HTMLDivElement> = (event) => {
+    setEditRequested(false)
+    onBlur(event)
+  }
+
   const editorClassName = [
     'tc-task-node__text-editor-input',
-    selected ? 'nodrag nopan' : '',
+    editing ? 'nodrag nopan' : '',
   ].filter(Boolean).join(' ')
 
   return (
@@ -69,19 +84,16 @@ export function TextContent({
       <div
         ref={editorRef}
         className={editorClassName}
-        contentEditable={selected}
+        contentEditable={editing}
         suppressContentEditableWarning
+        onDoubleClick={handleDoubleClick}
         onWheelCapture={handleWheelCapture}
         onFocus={onFocus}
         onInput={onInput}
         onCompositionStart={onCompositionStart}
         onCompositionEnd={onCompositionEnd}
-        onBlur={onBlur}
-        onPointerDownCapture={(event) => {
-          if (selected) return
-          event.preventDefault()
-        }}
-        tabIndex={selected ? 0 : -1}
+        onBlur={handleBlur}
+        tabIndex={editing ? 0 : -1}
         style={{
           flex: 1,
           minHeight: 0,
@@ -98,6 +110,8 @@ export function TextContent({
           paddingRight: 4,
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
+          // 编辑态光标为文本输入，展示态为可拖拽抓手
+          cursor: editing ? 'text' : 'grab',
         }}
       />
     </PanelCard>

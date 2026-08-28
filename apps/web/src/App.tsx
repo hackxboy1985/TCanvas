@@ -64,6 +64,7 @@ import { ExecutionLogModal } from './ui/ExecutionLogModal'
 import ProjectManagerPage from './projects/ProjectManagerPage'
 import ProjectChapterRouteRedirectPage from './projects/ProjectChapterRouteRedirectPage'
 import ProjectDefaultEntryRedirectPage from './projects/ProjectDefaultEntryRedirectPage'
+import LensCanvasApp from './projects/LensCanvasApp'
 import RechargeModal from './ui/RechargeModal'
 import AgentAdminWorkbenchPanel from './ui/AgentAdminWorkbenchPanel'
 import { validateWorkflowIoForRun } from './canvas/workflowIo'
@@ -1223,6 +1224,13 @@ function isProjectsRoute(): boolean {
   return path === '/projects' || path.startsWith('/projects/')
 }
 
+/** Lens 画布入口：URL 带 dramaId query 参数（lens 前端跳转过来） */
+function isLensCanvasRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  const params = new URLSearchParams(window.location.search)
+  return Boolean(params.get('dramaId'))
+}
+
 function matchProjectChapterWorkbenchRoute(): {
   projectId: string
   chapterId: string
@@ -1308,6 +1316,9 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
+  if (isLensCanvasRoute()) {
+    return <LensCanvasApp />
+  }
   if (isTapshowRoute()) {
     return <TapshowFullPage />
   }

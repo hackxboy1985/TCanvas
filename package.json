@@ -12,6 +12,7 @@
     "build:web": "pnpm --filter @tapcanvas/web build",
     "build:api": "pnpm --filter @tapcanvas/api build",
     "build:agents": "pnpm --filter agents build",
+    "build:lens": "VITE_API_BASE=http://localhost:9096 VITE_GITHUB_CLIENT_ID=lens-local VITE_GITHUB_REDIRECT_URI=http://localhost:9096/oauth/github ALLOW_LOCALHOST_IN_PROD_BUILD=1 pnpm --filter @tapcanvas/web build:lens",
     "test": "pnpm run test:web && pnpm run test:api && pnpm run test:agents",
     "test:web": "pnpm --filter @tapcanvas/web test",
     "test:api": "pnpm --filter @tapcanvas/api test",

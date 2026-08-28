@@ -65,6 +65,8 @@ export default defineConfig(({ command, mode }) => {
   }
 
 	  return {
+	    // Lens 部署：构建产物进 zsapps-admin templates/canvas/，访问路径 /canvas/
+	    base: '/canvas/',
 	    plugins: [react()],
 	    resolve: {
 	      alias: {

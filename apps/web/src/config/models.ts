@@ -23,6 +23,8 @@ export interface ModelOption {
   modelAlias?: string | null
   meta?: unknown
   pricing?: ModelOptionPricing
+  /** 选项是否禁用（lens 模型接口 enabled=false 时灰显） */
+  disabled?: boolean
 }
 
 export const TEXT_MODELS: ModelOption[] = [
