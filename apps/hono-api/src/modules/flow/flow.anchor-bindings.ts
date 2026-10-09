@@ -69,6 +69,18 @@ function normalizeAnchorReferenceView(
 	return null;
 }
 
+/**
+ * 锚点绑定的去重身份键。
+ *
+ * 身份只由「绑定了谁」决定，禁止包含可变属性：
+ * - imageUrl 会随用户换图、OSS 签名变化而改变，若参与身份，同一实体换图会被
+ *   判定为「新增绑定」，导致旧绑定残留、同实体多条并存，且评分相同时旧值优先，
+ *   使换图不生效。
+ * - referenceView / category / note 属于展示与备注信息，同样不参与身份判定。
+ *
+ * 因此身份 = kind + 实体标识（refId/entityId/assetId/assetRefId）+ label + sourceNodeId。
+ * 注意 label 保留：它是无 refId/entityId 时唯一的实体标识来源。
+ */
 function buildAnchorBindingKey(binding: PublicFlowAnchorBinding): string {
 	return [
 		binding.kind,
@@ -77,11 +89,7 @@ function buildAnchorBindingKey(binding: PublicFlowAnchorBinding): string {
 		readTrimmedString(binding.label).toLowerCase(),
 		readTrimmedString(binding.assetId).toLowerCase(),
 		readTrimmedString(binding.assetRefId).toLowerCase(),
-		readRemoteUrl(binding.imageUrl),
 		readTrimmedString(binding.sourceNodeId).toLowerCase(),
-		readTrimmedString(binding.referenceView).toLowerCase(),
-		readTrimmedString(binding.category).toLowerCase(),
-		readTrimmedString(binding.note).toLowerCase(),
 	].join("\u0001");
 }
 
