@@ -593,9 +593,11 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                     size="sm"
                     checked={cameraControl.enabled}
                     onChange={(event) => {
+                      // 防御：重开编辑器时事件对象可能已被回收（currentTarget 为 null），不得直接读 .checked
+                      const nextChecked = Boolean(event?.currentTarget?.checked ?? event?.target?.checked ?? false)
                       setCameraControl((current) => ({
                         ...current,
-                        enabled: event.currentTarget.checked,
+                        enabled: nextChecked,
                       }))
                     }}
                     label="启用角度控制"
@@ -714,8 +716,10 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                   size="sm"
                   checked={activeLight.enabled}
                   onChange={(event) => {
+                    // 防御：重开编辑器时事件对象可能已被回收（currentTarget 为 null），不得直接读 .checked
+                    const nextChecked = Boolean(event?.currentTarget?.checked ?? event?.target?.checked ?? false)
                     setLightingRig((current) =>
-                      updateLightSlot(current, activeLightSlot, { enabled: event.currentTarget.checked }),
+                      updateLightSlot(current, activeLightSlot, { enabled: nextChecked }),
                     )
                   }}
                   label={`启用${activeLightSlot === 'main' ? '主光' : '辅光'}`}
