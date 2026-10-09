@@ -1,5 +1,5 @@
 import { ActionIcon, Button, Divider, Group, Menu, Text, Tooltip } from '@mantine/core'
-import { IconMaximize, IconMap, IconRoute, IconLayoutGrid, IconBrush, IconZoomIn, IconZoomOut } from '@tabler/icons-react'
+import { IconMaximize, IconMap, IconRoute, IconLayoutGrid, IconBrush, IconZoomIn, IconZoomOut, IconArrowsVertical, IconArrowsHorizontal } from '@tabler/icons-react'
 
 type CanvasBottomToolbarProps = {
   /** 当前画布缩放百分比（0-800） */
@@ -16,6 +16,10 @@ type CanvasBottomToolbarProps = {
   onToggleEdges: () => void
   /** 整理画布（恢复默认布局）；未提供时点击只做适合屏幕 */
   onArrange?: () => void
+  /** 分镜组排列方向（lens 模式）：column=垂直 / flow=水平 */
+  shotArrange?: 'column' | 'flow'
+  /** 切换分镜组排列方向 */
+  onShotArrangeChange?: (direction: 'column' | 'flow') => void
 }
 
 /**
@@ -33,6 +37,8 @@ export function CanvasBottomToolbar({
   edgesVisible,
   onToggleEdges,
   onArrange,
+  shotArrange,
+  onShotArrangeChange,
 }: CanvasBottomToolbarProps): JSX.Element {
   return (
     <div
@@ -61,6 +67,21 @@ export function CanvasBottomToolbar({
           <IconMaximize size={16} />
         </ActionIcon>
       </Tooltip>
+
+      {/* 排列：点击直接切换分镜组排列方向（垂直 ⇄ 水平），仅 lens 模式提供 */}
+      {shotArrange && onShotArrangeChange && (
+        <Tooltip label={`排列：${shotArrange === 'column' ? '垂直（点击切水平）' : '水平（点击切垂直）'}`} position="top" withArrow>
+          <ActionIcon
+            className="tc-canvas-bottom-toolbar__arrange"
+            variant="subtle"
+            color="gray"
+            size="md"
+            onClick={() => onShotArrangeChange(shotArrange === 'column' ? 'flow' : 'column')}
+          >
+            {shotArrange === 'column' ? <IconArrowsVertical size={16} /> : <IconArrowsHorizontal size={16} />}
+          </ActionIcon>
+        </Tooltip>
+      )}
 
       {/* 画布小地图：默认隐藏，点击切换 */}
       <Tooltip label={miniMapVisible ? '隐藏小地图' : '显示小地图'} position="top" withArrow>

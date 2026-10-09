@@ -273,6 +273,10 @@ type CanvasInnerProps = {
   canvasApiRef?: React.Ref<CanvasHandle>
   /** 整理画布回调（lens 模式恢复默认投影布局；未提供时工具栏只做适合屏幕） */
   arrangeHandler?: () => void
+  /** 分镜组排列方向（lens 模式，左下工具条「排列」按钮用） */
+  shotArrange?: 'column' | 'flow'
+  /** 切换分镜组排列方向 */
+  onShotArrangeChange?: (direction: 'column' | 'flow') => void
 }
 
 type CanvasStyle = React.CSSProperties & Record<'--tc-spotlight-grid-color' | '--tc-spotlight-radius', string>
@@ -351,7 +355,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className, canvasApiRef, arrangeHandler }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -3434,6 +3438,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler }: CanvasInnerPro
             edgesVisible={edgesVisible}
             onToggleEdges={() => setEdgesVisible((v) => !v)}
             onArrange={arrangeHandler}
+            shotArrange={shotArrange}
+            onShotArrangeChange={onShotArrangeChange}
           />
         </Panel>
         <Controls className="tc-canvas__controls" position="bottom-right" />
@@ -4067,13 +4073,19 @@ const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
 /** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
-const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void }>(
-  function Canvas({ className, arrangeHandler }, ref): JSX.Element {
+const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void }>(
+  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange }, ref): JSX.Element {
     const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
     return (
       <ReactFlowProviderWithClass className="tc-canvas-provider">
-        <CanvasInner className={innerClassName} canvasApiRef={ref} arrangeHandler={arrangeHandler} />
+        <CanvasInner
+          className={innerClassName}
+          canvasApiRef={ref}
+          arrangeHandler={arrangeHandler}
+          shotArrange={shotArrange}
+          onShotArrangeChange={onShotArrangeChange}
+        />
       </ReactFlowProviderWithClass>
     )
   },

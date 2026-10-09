@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import { Button, Group, Menu, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
+import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
 import Canvas from '../canvas/Canvas'
 import type { CanvasHandle } from '../canvas/Canvas'
 import { useRFStore } from '../canvas/store'
@@ -394,12 +394,18 @@ export default function LensCanvasApp(): JSX.Element {
     })
     const groupId = useRFStore.getState().createGroupForNodeIds(ordered.map((n) => n.id), '分镜组')
     if (!groupId) return
-    useRFStore.getState().arrangeGroupChildren(groupId, direction)
+    shotGroupIdRef.current = groupId
     // 组内位置固定：禁止拖动
     useRFStore.setState({
       nodes: useRFStore.getState().nodes.map((n) => (n.parentId === groupId ? { ...n, draggable: false } : n)),
     })
-    shotGroupIdRef.current = groupId
+    // 等节点渲染测量完成后再排列并适配组框尺寸（竖版节点更高时组框需要跟着变高）
+    window.setTimeout(() => {
+      const store2 = useRFStore.getState()
+      if (shotGroupIdRef.current !== groupId) return
+      store2.arrangeGroupChildren(groupId, direction)
+      useRFStore.getState().fitGroupToChildren(groupId)
+    }, 120)
   }, [])
 
   /** 解除分镜组：组合框消失、节点位置保持不变、恢复可拖动 */
@@ -604,36 +610,7 @@ export default function LensCanvasApp(): JSX.Element {
               if (!on) clearShotGroup()
             }}
           />
-          <Menu className="lens-canvas-shot-arrange-menu" withinPortal position="bottom-start">
-            <Menu.Target>
-              <Button
-                className="lens-canvas-shot-arrange-button"
-                size="xs"
-                variant="light"
-                disabled={!shotGroupOn}
-              >
-                排列：{shotArrange === 'column' ? '垂直' : '水平'}
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                onClick={() => {
-                  setShotArrange('column')
-                  window.localStorage.setItem('lens_shot_arrange', 'column')
-                }}
-              >
-                垂直
-              </Menu.Item>
-              <Menu.Item
-                onClick={() => {
-                  setShotArrange('flow')
-                  window.localStorage.setItem('lens_shot_arrange', 'flow')
-                }}
-              >
-                水平
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
+
         </Group>
         <Group gap="xs">
           {savedAt && <Text size="xs" c="dimmed">已保存 {savedAt}</Text>}
@@ -652,7 +629,16 @@ export default function LensCanvasApp(): JSX.Element {
       {error && <Alert className="lens-canvas-error" color="red" title="提示" mb={8}>{error}</Alert>}
       <div className="lens-canvas-body" style={{ position: 'relative', height: 'calc(100vh - 56px)' }}>
         <LoadingOverlay visible={loading} />
-        <Canvas className="app-canvas" ref={canvasApiRef} arrangeHandler={arrangeLayout} />
+        <Canvas
+          className="app-canvas"
+          ref={canvasApiRef}
+          arrangeHandler={arrangeLayout}
+          shotArrange={shotArrange}
+          onShotArrangeChange={(direction) => {
+            setShotArrange(direction)
+            window.localStorage.setItem('lens_shot_arrange', direction)
+          }}
+        />
       </div>
     </div>
   )
