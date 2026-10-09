@@ -293,6 +293,17 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     ? Math.max(96, mediaAspect >= 1 ? Math.round(800 / mediaAspect) : Math.min(VERTICAL_MAX_HEIGHT, Math.round(800 / mediaAspect)))
     : 450
   const shellWidth = mediaAspect && mediaAspect < 1 ? Math.round(mediaHeight * mediaAspect) : 800
+
+  // 媒体尺寸确定后节点高度会变化：若该分镜在组合框内，多次补适配组框高度
+  // （刷新时媒体加载可能晚于首次适配，多时机重试避免视频超出组合框）
+  useEffect(() => {
+    const fitParentGroup = () => {
+      const parentId = useRFStore.getState().nodes.find((n) => n.id === id)?.parentId
+      if (parentId) useRFStore.getState().fitGroupToChildren(parentId)
+    }
+    const timers = [160, 500, 1200].map((delay) => window.setTimeout(fitParentGroup, delay))
+    return () => timers.forEach((t) => window.clearTimeout(t))
+  }, [id, mediaHeight, mediaAspect])
   const shellHeight = mediaHeight + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
 
   const shell = {

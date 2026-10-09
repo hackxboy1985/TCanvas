@@ -284,6 +284,24 @@ export function resolveExecutableImageModelFromOptions(
   }
 }
 
+/** lens 模型条目的质量档位（others.qualities 优先，兼容存量单值 quality；无配置返回空数组） */
+export function readLensModelQualities(meta: unknown): string[] {
+  if (!meta || typeof meta !== 'object') return []
+  const others = (meta as { others?: unknown }).others
+  if (!others || typeof others !== 'object') return []
+  const record = others as { qualities?: unknown; quality?: unknown }
+  if (Array.isArray(record.qualities)) {
+    return record.qualities
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter((value) => value.length > 0)
+  }
+  // 存量数据可能是单值字符串
+  if (typeof record.quality === 'string' && record.quality.trim()) {
+    return [record.quality.trim()]
+  }
+  return []
+}
+
 /** lens 模型条目 → 画布模型选项（value/label 对齐 ModelOption；enabled=false 的条目灰显禁用） */
 function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
   if (!Array.isArray(items)) return []
@@ -302,8 +320,18 @@ function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
       modelKey: undefined,
       modelAlias: null,
       pricing: undefined,
-      // 透传 lens 单次消耗（unitConsume），供编辑面板显示积分
-      meta: { lensUnitConsume: typeof item?.unitConsume === 'number' ? item.unitConsume : undefined },
+      // 透传 lens 单次消耗（unitConsume）、模型扩展参数（others，含 qualities 质量档位）
+      // 以及模型能力配置（resolutions → 分辨率/尺寸选项）：选择模型后右侧参数跟随变化
+      meta: {
+        lensUnitConsume: typeof item?.unitConsume === 'number' ? item.unitConsume : undefined,
+        others: item?.others,
+        imageOptions: {
+          aspectRatioOptions: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+          ...(Array.isArray(item?.resolutions) && item.resolutions.length > 0
+            ? { resolutionOptions: item.resolutions, imageSizeOptions: item.resolutions }
+            : {}),
+        },
+      },
       // enabled 为 buildResult 合并的勾选状态（toModelJson 另有 enable 字段），未勾选灰显
       disabled: item?.enabled === false || item?.enable === false,
     })

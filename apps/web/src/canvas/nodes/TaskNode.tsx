@@ -190,6 +190,196 @@ import {
   upsertSemanticNodeAnchorBinding,
 } from '../utils/semanticBindings'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
+import { getCanvasTaskStatus, runTaskByCanvas } from '../../api/lens'
+import { isLensMode, readLensModelQualities } from '../../config/useModelOptions'
+
+/** lens 生图质量档位中文名（后端 others.qualities 取值：medium/high/xhigh/max） */
+const LENS_QUALITY_LABELS: Record<string, string> = {
+  medium: '标准',
+  high: '高清',
+  xhigh: '超高清',
+  max: '最高',
+}
+
+/**
+ * 读取 lens 画布模式的 URL 参数（dramaId 必填）。
+ *
+ * <p>与 {@code projects/LensCanvasApp.tsx#readQueryParams} 保持一致：episode 缺省 1、非正数回退 1。
+ */
+function readLensCanvasUrlParams(): { dramaId: string; episodeNum: number } | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const dramaId = String(params.get('dramaId') || '').trim()
+  if (!dramaId) return null
+  const episodeRaw = Number(params.get('episode') || 1)
+  const episodeNum = Number.isFinite(episodeRaw) && episodeRaw > 0 ? Math.trunc(episodeRaw) : 1
+  return { dramaId, episodeNum }
+}
+
+/** 从任务结果里取第一张图片 URL（兼容 assets[].type === 'image' 与仅有 url 的形态） */
+function readFirstImageUrlFromTaskResult(result: { assets?: unknown }): string {
+  const assets = Array.isArray(result.assets) ? result.assets : []
+  const typed = assets.find(
+    (asset): asset is { type: string; url: string } =>
+      !!asset &&
+      typeof asset === 'object' &&
+      (asset as { type?: unknown }).type === 'image' &&
+      typeof (asset as { url?: unknown }).url === 'string',
+  )
+  if (typed) return typed.url.trim()
+  const fallback = assets.find(
+    (asset): asset is { url: string } =>
+      !!asset && typeof asset === 'object' && typeof (asset as { url?: unknown }).url === 'string',
+  )
+  return fallback ? fallback.url.trim() : ''
+}
+
+/** 姿势/深度/尺寸调整的生图提交入参 */
+interface PoseImageEditTaskInput {
+  apiKey: string
+  id: string
+  kind: string
+  prompt: string
+  dimensions: { width?: number; height?: number }
+  imageEditSize: string
+  aspectRatio: string
+  modelKey: string
+  referenceImages: string[]
+  assetInputs: unknown
+  referenceSheetMeta: unknown
+  persist: boolean
+  /** 节点数据，用于读取用户显式选择的模型/比例/尺寸/质量 */
+  nodeData: Record<string, unknown>
+}
+
+/**
+ * 读取用户显式选择的生图参数（lens 模式专用）。
+ *
+ * <p>节点数据里的模型/比例/尺寸/质量都有系统默认兜底，只有对应
+ * `*UserSelected` 标记为 true（用户在面板里显式选过）才下发，避免用默认值
+ * 覆盖后端从剧配置推导的结果。
+ */
+function readUserSelectedImageSubmitParams(nodeData: Record<string, unknown>): {
+  appId?: number
+  ratio?: string
+  width?: number
+  height?: number
+  quality?: string
+} {
+  const out: { appId?: number; ratio?: string; width?: number; height?: number; quality?: string } = {}
+
+  if (nodeData.imageModelUserSelected === true) {
+    const rawModel = typeof nodeData.imageModel === 'string' ? nodeData.imageModel.trim() : ''
+    // lens 模型下拉的 value 即 lens_application.id
+    const parsed = Number(rawModel)
+    if (rawModel && Number.isFinite(parsed) && parsed > 0) out.appId = Math.trunc(parsed)
+  }
+  if (nodeData.imageRatioUserSelected === true) {
+    const rawRatio = typeof nodeData.aspect === 'string' ? nodeData.aspect.trim() : ''
+    if (rawRatio) out.ratio = rawRatio
+  }
+  if (nodeData.imageSizeUserSelected === true) {
+    const rawSize = typeof nodeData.imageSize === 'string' ? nodeData.imageSize.trim() : ''
+    if (rawSize) {
+      const dimensions = parseImageEditSizeDimensions(rawSize)
+      out.width = Math.trunc(dimensions.width)
+      out.height = Math.trunc(dimensions.height)
+    }
+  }
+  if (nodeData.imageQualityUserSelected === true) {
+    const rawQuality = typeof nodeData.imageQuality === 'string' ? nodeData.imageQuality.trim() : ''
+    if (rawQuality) out.quality = rawQuality
+  }
+
+  return out
+}
+
+/**
+ * 提交并轮询姿势/深度/尺寸调整的生图任务。
+ *
+ * <p>lens 模式走 lens 接口（按 taskId 查 task_queue 状态）；非 lens 模式保持原
+ * /public/tasks 链路与 24×1.5s 内联轮询不变。
+ *
+ * @returns 生成结果的图片 URL
+ */
+async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<string> {
+  const lensUrlParams = readLensCanvasUrlParams()
+  if (lensUrlParams) {
+    const submitted = await runTaskByCanvas({
+      prompt: input.prompt,
+      dramaId: lensUrlParams.dramaId,
+      episodeNum: lensUrlParams.episodeNum,
+      refImages: input.referenceImages,
+      ...readUserSelectedImageSubmitParams(input.nodeData),
+      nodeId: input.id,
+      nodeKind: input.kind,
+    })
+    for (let i = 0; i < 24; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const status = await getCanvasTaskStatus(submitted.taskId)
+      if (status.status === 'SUCCESS') {
+        const fileUrl = typeof status.fileUrl === 'string' ? status.fileUrl.split(',')[0].trim() : ''
+        if (!fileUrl) {
+          throw new Error('单镜头微调失败：任务已完成但未返回图片地址')
+        }
+        return fileUrl
+      }
+      if (status.status === 'FAILED') {
+        throw new Error(status.resMsg?.trim() || status.remark?.trim() || '单镜头微调失败：任务执行失败')
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => window.setTimeout(r, 1500))
+    }
+    throw new Error('单镜头微调失败：任务轮询超时')
+  }
+
+  const taskRes = await runPublicTask(input.apiKey, {
+    request: {
+      kind: 'image_edit',
+      prompt: input.prompt,
+      ...input.dimensions,
+      extras: {
+        nodeKind: input.kind,
+        nodeId: input.id,
+        modelKey: input.modelKey,
+        aspectRatio: input.aspectRatio,
+        imageEditSize: input.imageEditSize,
+        size: input.imageEditSize,
+        resolution: input.imageEditSize,
+        image_size: input.imageEditSize,
+        referenceImages: input.referenceImages,
+        ...(Array.isArray(input.assetInputs) && input.assetInputs.length
+          ? { assetInputs: input.assetInputs }
+          : {}),
+        ...(input.referenceSheetMeta ? { referenceSheet: input.referenceSheetMeta } : {}),
+        persistAssets: input.persist,
+      },
+    },
+  })
+
+  let result = taskRes.result
+  const taskId = String(result?.id || '').trim()
+  if ((result.status === 'queued' || result.status === 'running') && taskId) {
+    for (let i = 0; i < 24; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => window.setTimeout(r, 1500))
+      // eslint-disable-next-line no-await-in-loop
+      const polled = await fetchPublicTaskResult(input.apiKey, {
+        taskId,
+        vendor: taskRes.vendor,
+        taskKind: 'image_edit',
+        prompt: input.prompt,
+      })
+      result = polled.result
+      if (result.status === 'succeeded' || result.status === 'failed') break
+    }
+  }
+
+  if (result.status !== 'succeeded') {
+    throw new Error('单镜头微调失败：任务未成功完成')
+  }
+  return readFirstImageUrlFromTaskResult(result)
+}
 
 const {
   hasActiveImageCameraControl,
@@ -2771,6 +2961,63 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     () => findModelOptionByIdentifier(modelMenuOptions, activeModelKey),
     [activeModelKey, modelMenuOptions],
   )
+
+  /**
+   * 当前模型支持的质量档位（来自 lens 模型配置 others.qualities）。
+   * 仅 lens 模式生效：非 lens 模式画布无质量概念，保持原行为（菜单隐藏）。
+   * 未配置或空数组时返回空数组 → 菜单隐藏，与分辨率选择器行为一致。
+   */
+  const lensQualityOptions = React.useMemo<{ value: string; label: string }[]>(() => {
+    if (!isLensMode()) return []
+    return readLensModelQualities(selectedActiveModelOption?.meta).map((quality) => ({
+      value: quality,
+      label: LENS_QUALITY_LABELS[quality] || quality,
+    }))
+  }, [selectedActiveModelOption])
+
+  /** 用户已选质量档位（存节点数据，未选为空串） */
+  const [imageQuality, setImageQuality] = React.useState<string>(() => {
+    const raw = (data as Record<string, unknown>)?.imageQuality
+    return typeof raw === 'string' ? raw.trim() : ''
+  })
+  React.useEffect(() => {
+    const raw = (data as Record<string, unknown>)?.imageQuality
+    setImageQuality(typeof raw === 'string' ? raw.trim() : '')
+  }, [(data as Record<string, unknown>)?.imageQuality])
+
+  /**
+   * 模型切换后校正质量档位：当前档位不在新模型支持范围内时回退到首档。
+   * 与 lens 既有实现（commonv/index.vue）保持一致，避免把无效档位下发给渠道。
+   *
+   * <p>注意：此处是**系统自动回退**，不是用户显式选择，因此**不得**置
+   * `imageQualityUserSelected` —— 否则会把自动选的档位当成用户选择下发给后端。
+   */
+  React.useEffect(() => {
+    if (!lensQualityOptions.length) {
+      if (imageQuality) {
+        setImageQuality('')
+        updateNodeData(id, { imageQuality: '' })
+      }
+      return
+    }
+    if (lensQualityOptions.some((option) => option.value === imageQuality)) return
+    const next = lensQualityOptions[0].value
+    setImageQuality(next)
+    updateNodeData(id, { imageQuality: next })
+  }, [id, imageQuality, lensQualityOptions, updateNodeData])
+
+  const handleToolbarQualityChange = React.useCallback(
+    (value: string) => {
+      const next = String(value || '').trim()
+      setImageQuality(next)
+      updateNodeData(id, {
+        imageQuality: next,
+        // 标记用户显式选择质量：lens 模式下据此决定是否把 quality 下发给后端
+        imageQualityUserSelected: true,
+      })
+    },
+    [id, updateNodeData],
+  )
   const findVendorForModel = React.useCallback(
     (value: string | null | undefined) => {
       if (!value) return null
@@ -3195,52 +3442,21 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
             let nextUrl = ''
 
             if (!nextUrl) {
-              const taskRes = await runPublicTask(apiKey, {
-                request: {
-                  kind: 'image_edit',
-                  prompt: internalImageEditPrompt,
-                  ...nextImageEditDimensions,
-                  extras: {
-                    nodeKind: kind,
-                    nodeId: id,
-                    modelKey,
-                    aspectRatio,
-                    imageEditSize: nextImageEditSize,
-                    size: nextImageEditSize,
-                    resolution: nextImageEditSize,
-                    image_size: nextImageEditSize,
-                    referenceImages: effectiveEditReferenceImages,
-                    ...(effectiveEditAssetInputs.length ? { assetInputs: effectiveEditAssetInputs } : {}),
-                    ...(referenceSheetMeta ? { referenceSheet: referenceSheetMeta } : {}),
-                    persistAssets: persist,
-                  },
-                },
+              nextUrl = await runPoseImageEditTask({
+                apiKey,
+                id,
+                kind,
+                prompt: internalImageEditPrompt,
+                dimensions: nextImageEditDimensions,
+                imageEditSize: nextImageEditSize,
+                aspectRatio,
+                modelKey,
+                referenceImages: effectiveEditReferenceImages,
+                assetInputs: effectiveEditAssetInputs,
+                referenceSheetMeta,
+                persist,
+                nodeData: data as Record<string, unknown>,
               })
-
-              let result = taskRes.result
-              const taskId = String(result?.id || '').trim()
-              if ((result.status === 'queued' || result.status === 'running') && taskId) {
-                for (let i = 0; i < 24; i += 1) {
-                  await new Promise((r) => window.setTimeout(r, 1500))
-                  const polled = await fetchPublicTaskResult(apiKey, {
-                    taskId,
-                    vendor: taskRes.vendor,
-                    taskKind: 'image_edit',
-                    prompt: internalImageEditPrompt,
-                  })
-                  result = polled.result
-                  if (result.status === 'succeeded' || result.status === 'failed') break
-                }
-              }
-
-              if (result.status !== 'succeeded') {
-                throw new Error('单镜头微调失败：任务未成功完成')
-              }
-              const imageAsset =
-                (Array.isArray(result.assets) ? result.assets.find((a) => a.type === 'image' && a.url) : null) ||
-                (Array.isArray(result.assets) ? result.assets.find((a) => !!a?.url) : null) ||
-                null
-              nextUrl = typeof imageAsset?.url === 'string' ? imageAsset.url.trim() : ''
             }
             if (!nextUrl) {
               throw new Error('单镜头微调失败：未返回图片地址')
@@ -3487,6 +3703,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         imageEditSize: normalized,
         size: normalized,
         aspect: toAspectRatioFromImageEditSize(normalized),
+        // 标记用户显式选择尺寸：lens 模式下据此决定是否把宽高下发给后端。
+        // 注意：imageEditSize 另有自动兜底写入链路（effect 默认补全），那里不得置本标记，
+        // 否则会把系统默认值误当用户选择、覆盖后端从剧配置推导的分辨率。
+        imageSizeUserSelected: true,
       })
     },
     canvasResizeSize,
@@ -4274,6 +4494,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       modelVendor: option?.vendor || null,
       imageModelVendor: null,
       videoModelVendor: option?.vendor || null,
+      // 标记用户显式选择：lens 模式下据此决定是否把 appId 下发给后端
+      imageModelUserSelected: true,
     })
   }, [findModelOptionByIdentifier, id, modelMenuOptions, resolveRequestedModelIdentifier, updateNodeData])
 
@@ -4319,7 +4541,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     }
     const normalizedAspect = normalizeImageAspect(value)
     setAspect(normalizedAspect)
-    updateNodeData(id, { aspect: normalizedAspect })
+    updateNodeData(id, {
+      aspect: normalizedAspect,
+      // 标记用户显式选择比例：lens 模式下据此决定是否把 ratio 下发给后端
+      imageRatioUserSelected: true,
+    })
   }, [aspect, effectiveVideoResolution, id, isVideoNode, updateNodeData, videoDuration, videoModelConfig])
 
   const handleToolbarVideoResolutionChange = React.useCallback((value: string) => {
@@ -7625,7 +7851,11 @@ const rewritePromptWithCharacters = React.useCallback(
       imageSizeOptions={configuredImageSizeOptions.length ? configuredImageSizeOptions : undefined}
       onImageSizeChange={(value) => {
         setImageSize(value)
-        updateNodeData(id, { imageSize: value })
+        updateNodeData(id, {
+          imageSize: value,
+          // 标记用户显式选择尺寸：lens 模式下据此决定是否把宽高下发给后端
+          imageSizeUserSelected: true,
+        })
       }}
       showOrientationMenu={showOrientationMenu}
       orientation={orientation}
@@ -7662,9 +7892,9 @@ const rewritePromptWithCharacters = React.useCallback(
       showTimeMenu={false}
       durationOptions={durationOptions}
       onDurationChange={() => {}}
-      showQualityMenu={false}
-      qualityOptions={[]}
-      onQualityChange={() => {}}
+      showQualityMenu={lensQualityOptions.length > 0}
+      qualityOptions={lensQualityOptions}
+      onQualityChange={handleToolbarQualityChange}
       showResolutionMenu={showResolutionMenu}
       resolutionTitle={isVideoNode ? '画幅' : '比例'}
       resolutionOptions={isVideoNode
@@ -7678,7 +7908,11 @@ const rewritePromptWithCharacters = React.useCallback(
       imageSizeOptions={configuredImageSizeOptions.length ? configuredImageSizeOptions : undefined}
       onImageSizeChange={(value) => {
         setImageSize(value)
-        updateNodeData(id, { imageSize: value })
+        updateNodeData(id, {
+          imageSize: value,
+          // 标记用户显式选择尺寸：lens 模式下据此决定是否把宽高下发给后端
+          imageSizeUserSelected: true,
+        })
       }}
       showOrientationMenu={showOrientationMenu}
       orientation={orientation}

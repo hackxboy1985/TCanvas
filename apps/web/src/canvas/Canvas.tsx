@@ -408,7 +408,11 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
 
   // 左下工具条状态：小地图默认隐藏；连线默认显示
   const [miniMapVisible, setMiniMapVisible] = React.useState(false)
-  const [edgesVisible, setEdgesVisible] = React.useState(true)
+  // 连线显隐：本地记住用户习惯（默认显示）
+  const [edgesVisible, setEdgesVisible] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    return window.localStorage.getItem('tc_edges_visible') !== '0'
+  })
   // 画布缩放（工具栏百分比显示；zoom 变化才重渲染）
   const canvasZoom = useStore((s) => s.transform[2])
 
@@ -3467,7 +3471,11 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             miniMapVisible={miniMapVisible}
             onToggleMiniMap={() => setMiniMapVisible((v) => !v)}
             edgesVisible={edgesVisible}
-            onToggleEdges={() => setEdgesVisible((v) => !v)}
+            onToggleEdges={() => setEdgesVisible((v) => {
+              const next = !v
+              try { window.localStorage.setItem('tc_edges_visible', next ? '1' : '0') } catch { /* 忽略隐私模式写入失败 */ }
+              return next
+            })}
             onArrange={arrangeHandler}
             shotArrange={shotArrange}
             onShotArrangeChange={onShotArrangeChange}

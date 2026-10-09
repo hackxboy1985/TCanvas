@@ -135,12 +135,26 @@ function computeShotAreaOrigin(nodes: Node[], direction: 'column' | 'flow'): { x
   const contentX = scripts.length > 0 ? scriptsRight + ARRANGE_SECTION_GAP : ARRANGE_START
   if (direction === 'column') {
     let assetsRight = contentX - ARRANGE_SECTION_GAP
-    assets.forEach((n) => { assetsRight = Math.max(assetsRight, n.position.x + arrangeNodeSize(n).w) })
-    return { x: assetsRight + ARRANGE_SECTION_GAP, y: ARRANGE_START }
+    let maxAssetWidth = 0
+    assets.forEach((n) => {
+      const size = arrangeNodeSize(n)
+      assetsRight = Math.max(assetsRight, n.position.x + size.w)
+      maxAssetWidth = Math.max(maxAssetWidth, size.w)
+    })
+    // 垂直排列：分镜与图片之间空出一个图片宽度
+    const gapByImage = maxAssetWidth || 480
+    return { x: assetsRight + gapByImage + ARRANGE_SECTION_GAP, y: ARRANGE_START }
   }
   let assetsBottom = ARRANGE_START
-  assets.forEach((n) => { assetsBottom = Math.max(assetsBottom, n.position.y + arrangeNodeSize(n).h) })
-  return { x: contentX, y: assetsBottom + ARRANGE_SECTION_GAP }
+  let maxAssetWidth = 0
+  assets.forEach((n) => {
+    const size = arrangeNodeSize(n)
+    assetsBottom = Math.max(assetsBottom, n.position.y + size.h)
+    maxAssetWidth = Math.max(maxAssetWidth, size.w)
+  })
+  // 水平排列：分镜与图片之间同样空出一个图片宽度（上下方向）
+  const gapByImage = maxAssetWidth || 480
+  return { x: contentX, y: assetsBottom + gapByImage + ARRANGE_SECTION_GAP }
 }
 
 /** 预估单个分镜节点高度（媒体按 800 宽/竖屏 720 高 + 顶部栏 + 引用行） */
@@ -373,6 +387,8 @@ export default function LensCanvasApp(): JSX.Element {
     return window.localStorage.getItem('lens_shot_arrange') === 'flow' ? 'flow' : 'column'
   })
   const shotGroupIdRef = useRef<string | null>(null)
+  // 已保存 flow 里的布局设置（排列方向 + 分组开关）：与当前一致时沿用保存的位置，不重新排列
+  const loadedLayoutMetaRef = useRef<{ direction: 'column' | 'flow'; groupOn: boolean } | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadedForRef = useRef<string>('')
   // 最新 flow 版本（ref 同步，避免并发保存读到旧 version 触发「已被他人修改」）
@@ -436,11 +452,16 @@ export default function LensCanvasApp(): JSX.Element {
     })
     // 等节点渲染测量完成后再排列并适配组框尺寸（竖版节点更高时组框需要跟着变高）
     window.setTimeout(() => {
-      const store2 = useRFStore.getState()
       if (shotGroupIdRef.current !== groupId) return
-      store2.arrangeGroupChildren(groupId, direction)
-      useRFStore.getState().fitGroupToChildren(groupId)
+      useRFStore.getState().arrangeGroupChildren(groupId, direction)
     }, 120)
+    // 组框适配多时机重试：媒体（视频/图片）加载完成后节点高度变化，需再次适配
+    ;[200, 600, 1400].forEach((delay) => {
+      window.setTimeout(() => {
+        if (shotGroupIdRef.current !== groupId) return
+        useRFStore.getState().fitGroupToChildren(groupId)
+      }, delay)
+    })
   }, [])
 
   /** 解除分镜组：组合框消失、节点位置保持不变、恢复可拖动 */
@@ -518,11 +539,13 @@ export default function LensCanvasApp(): JSX.Element {
         sceneCursorY += sizeOf(n).h + GAP
         sceneColWidth = Math.max(sceneColWidth, sizeOf(n).w)
       })
-      // 4. 分镜：组关闭时在图片右侧纵向排列（组开启时交给 applyShotGroup 放到最右并编组）
+      // 4. 分镜：组关闭时在图片右侧纵向排列，与图片之间空出一个图片宽度
       if (!shotGroupOn) {
-        const assetRight = contentX + (roleAssets.length + scenePropAssets.length > 0
-          ? Math.max(roleColWidth, scenePropAssets.length > 0 ? roleColWidth + SECTION_GAP + sceneColWidth : 0) + SECTION_GAP
+        const assetsWidth = (roleAssets.length + scenePropAssets.length > 0
+          ? Math.max(roleColWidth, scenePropAssets.length > 0 ? roleColWidth + SECTION_GAP + sceneColWidth : 0)
           : 0)
+        const gapByImage = roleColWidth || sceneColWidth || 480
+        const assetRight = contentX + assetsWidth + gapByImage + SECTION_GAP
         let shotY = START
         shots.forEach((n) => {
           nextPos.set(n.id, { x: assetRight, y: shotY })
@@ -547,12 +570,13 @@ export default function LensCanvasApp(): JSX.Element {
         sceneCursorX += sizeOf(n).w + GAP
         sceneRowHeight = Math.max(sceneRowHeight, sizeOf(n).h)
       })
-      // 4. 分镜：组关闭时在图片下方横向排列（组开启时交给 applyShotGroup 放到最底并编组）
+      // 4. 分镜：组关闭时在图片下方横向排列，与图片之间同样空出一个图片宽度
       if (!shotGroupOn) {
         const assetsBottom = scenePropAssets.length > 0
           ? sceneRowY + sceneRowHeight
           : (roleAssets.length > 0 ? START + roleRowHeight : START - SECTION_GAP)
-        const shotY = assetsBottom + SECTION_GAP
+        const gapByImage = 480
+        const shotY = assetsBottom + gapByImage + SECTION_GAP
         let shotX = contentX
         shots.forEach((n) => {
           nextPos.set(n.id, { x: shotX, y: shotY })
@@ -582,7 +606,14 @@ export default function LensCanvasApp(): JSX.Element {
       const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
       const res = await saveFlow(dramaId, targetEpisode, {
         name: `第${targetEpisode}集`,
-        data: { nodes: snapshot.nodes, edges: snapshot.edges, viewport, layoutVersion: LAYOUT_VERSION },
+        data: {
+          nodes: snapshot.nodes,
+          edges: snapshot.edges,
+          viewport,
+          layoutVersion: LAYOUT_VERSION,
+          arrangeDirection: shotArrange,
+          shotGroupOn,
+        },
         version: flowVersionRef.current,
       })
       flowVersionRef.current = (res?.version ?? 0) + 1
@@ -600,7 +631,7 @@ export default function LensCanvasApp(): JSX.Element {
     } finally {
       savingRef.current = false
     }
-  }, [dramaId, setSavedAt])
+  }, [dramaId, setSavedAt, shotArrange, shotGroupOn])
 
   /** 切集：先自动保存当前集，再加载新集 */
   const switchEpisode = useCallback(async (next: number) => {
@@ -624,6 +655,7 @@ export default function LensCanvasApp(): JSX.Element {
     const key = `${dramaId}:${targetEpisode}`
     if (loadedForRef.current === key) return
     loadedForRef.current = key
+    loadedLayoutMetaRef.current = null
     setLoading(true)
     setError('')
     try {
@@ -643,10 +675,14 @@ export default function LensCanvasApp(): JSX.Element {
       setFlowVersion(flowVersionRef.current)
       if (flow?.data) {
         try {
-          const parsed = JSON.parse(flow.data) as { nodes?: Node[]; edges?: Edge[]; viewport?: { x: number; y: number; zoom: number }; layoutVersion?: number }
+          const parsed = JSON.parse(flow.data) as { nodes?: Node[]; edges?: Edge[]; viewport?: { x: number; y: number; zoom: number }; layoutVersion?: number; arrangeDirection?: 'column' | 'flow'; shotGroupOn?: boolean }
           if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
             // 布局版本不一致：旧 flow 的绝对位置作废，改用最新投影布局（业务字段仍以投影快照为准）
             const useFlowLayout = parsed.layoutVersion === LAYOUT_VERSION
+            // 记录保存时的排列方向与分组状态（与当前一致则沿用位置，不重排）
+            if (parsed.arrangeDirection && typeof parsed.shotGroupOn === 'boolean') {
+              loadedLayoutMetaRef.current = { direction: parsed.arrangeDirection, groupOn: parsed.shotGroupOn }
+            }
             // 引用模式：flow 里只有编排 + entityId；业务展示字段用最新投影快照覆盖
             const restored = parsed.nodes.map((n) => {
               const fresh = projected.nodes.find((p) => p.id === n.id)
@@ -704,9 +740,11 @@ export default function LensCanvasApp(): JSX.Element {
   useEffect(() => { void loadEpisode(episodeNum) }, [episodeNum, loadEpisode])
 
   // 集加载完成 / 开关 / 排列方向变化时：按当前方向整理整个画布（剧本台本最左、图片按类别行列、分镜按方向）
-  // 延迟到节点渲染测量后执行，保证布局尺寸正确；分镜组开关由 arrangeByDirection 内部处理
+  // 若保存的 flow 就是当前方向与分组状态，则沿用保存的位置（记住用户调整），不重新排列
   useEffect(() => {
     if (loading) return
+    const meta = loadedLayoutMetaRef.current
+    if (meta && meta.direction === shotArrange && meta.groupOn === shotGroupOn) return
     const timer = window.setTimeout(() => {
       arrangeByDirection(shotArrange)
     }, 120)

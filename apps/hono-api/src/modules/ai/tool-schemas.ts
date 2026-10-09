@@ -300,6 +300,16 @@ export const canvasNodeSpecs = {
 			imageModel: "string",
 			aspect: "string (e.g. 16:9 / 9:16 / 1:1)",
 			imageSize: "string (e.g. 2K/4K)",
+			imageModelUserSelected:
+				"boolean (optional). 用户是否显式选择过 imageModel。lens 模式下仅当为 true 时才把 imageModel 作为 appId 下发给后端，否则由后端按剧配置推导。",
+			imageRatioUserSelected:
+				"boolean (optional). 用户是否显式选择过 aspect。lens 模式下仅当为 true 时才把 aspect 作为 ratio 下发给后端。",
+			imageSizeUserSelected:
+				"boolean (optional). 用户是否显式选择过 imageSize。lens 模式下仅当为 true 时才把尺寸下发给后端。",
+			imageQualityUserSelected:
+				"boolean (optional). 用户是否显式选择过 imageQuality。lens 模式下仅当为 true 时才把 quality 下发给后端。",
+			imageQuality:
+				"string (optional). 生图质量档位（取值来自所选模型配置 others.qualities，如 medium/high/xhigh/max）。仅 lens 模式且当前模型配置了档位时可用。",
 			sampleCount: "number",
 			reversePrompt: "string (optional)",
 		},
@@ -360,6 +370,16 @@ export const canvasNodeSpecs = {
 			imageModel: "string",
 			aspect: "string (optional)",
 			imageSize: "string (optional)",
+			imageModelUserSelected:
+				"boolean (optional). 同 image 节点：lens 模式下仅当为 true 才下发模型（appId）。",
+			imageRatioUserSelected:
+				"boolean (optional). 同 image 节点：lens 模式下仅当为 true 才下发比例。",
+			imageSizeUserSelected:
+				"boolean (optional). 同 image 节点：lens 模式下仅当为 true 才下发尺寸。",
+			imageQualityUserSelected:
+				"boolean (optional). 同 image 节点：lens 模式下仅当为 true 才下发质量。",
+			imageQuality:
+				"string (optional). 生图质量档位（取值来自所选模型配置 others.qualities）。仅 lens 模式且模型配置了档位时可用。",
 			sampleCount: "number (optional)",
 		},
 	},

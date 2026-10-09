@@ -127,6 +127,64 @@ export interface LensAssetImage {
   hasHuman?: number
 }
 
+/**
+ * 画布生图任务提交结果（/api/application/runTaskByCanvas 的 data 字段）。
+ *
+ * 画布节点没有 lens 资产身份（无 assetType/assetId），因此模型、比例、分辨率
+ * 全部由后端从剧配置 style_config 推导，前端不下发 modelKey。
+ */
+export interface LensCanvasTaskSubmitResult {
+  /** lens task_queue 主键，后续用 getCanvasTaskResult 轮询 */
+  taskId: number
+  /** 后端实际使用的应用ID（便于排查，前端不参与推导） */
+  appId?: number
+  /** 后端实际使用的渠道 */
+  channel?: string
+  /** 后端推导出的比例 */
+  ratio?: string
+  /** 后端推导出的分辨率 */
+  resolution?: string
+  /** 后端拼接出的完整提示词（便于前端核对） */
+  fullPrompt?: string
+  /** 是否识别到参考图（决定图生图/文生图） */
+  hasReference?: boolean
+  /** 实际使用的参考图 URL */
+  refUrl?: string
+}
+
+/**
+ * 画布生图任务提交入参。
+ *
+ * <p><b>可选参数一律「用户显式选择才传」</b>：画布侧节点数据里的模型/比例/尺寸/质量
+ * 都有系统默认兜底写入，若不加区分地下发，会把默认值误当用户选择、覆盖后端从
+ * 剧配置 style_config 推导的结果。因此调用方必须先判断用户的显式选择标记，
+ * 未显式选择时不要传对应字段，交由后端推导。
+ */
+export interface LensCanvasTaskSubmitParams {
+  /** 已拼好的完整提示词（保留画布侧角色卡约束、@别名、focus guide 等能力） */
+  prompt: string
+  /** 剧ID */
+  dramaId: string
+  /** 集数（后端定位任务所属集） */
+  episodeNum?: number
+  /** 参考图 URL 列表（可为空数组；非空即图生图） */
+  refImages?: string[]
+  /** 用户显式选择的生图应用ID（lens_application.id，即模型下拉的 value）；未选则不下发 */
+  appId?: number
+  /** 用户显式选择的画幅比例（如 "16:9"）；未选则不下发 */
+  ratio?: string
+  /** 用户显式选择的输出宽度（像素）；未选则不下发 */
+  width?: number
+  /** 用户显式选择的输出高度（像素）；未选则不下发 */
+  height?: number
+  /** 用户显式选择的质量档位；未选/空串则不下发，由渠道兜底 */
+  quality?: string
+  /** 画布节点ID（仅用于后端日志排查） */
+  nodeId?: string
+  /** 画布节点类型（仅用于后端日志排查） */
+  nodeKind?: string
+}
+
 /** 任务记录（task/list 或 storyboardTask/list 返回） */
 export interface LensTaskRecord {
   id?: string
@@ -227,6 +285,24 @@ export interface LensModelOption {
   unitConsume?: number
   consumeType?: string
   resolutions?: string[]
+  /**
+   * 模型扩展参数（后端 toModelJson 下发，经 OthersFilterUtil 白名单过滤）。
+   * qualities 为该模型支持的质量档位（多选：medium/high/xhigh/max），
+   * 未配置或空数组表示该模型不支持质量选择。
+   */
+  others?: LensModelOthers
+}
+
+/** 模型扩展参数（qualities 为质量档位白名单，supportedRatios 为支持的画幅） */
+export interface LensModelOthers {
+  /** 支持的质量档位（多选）；空数组或未配置表示不支持质量选择 */
+  qualities?: string[]
+  /** 存量单值质量档位（兼容旧数据） */
+  quality?: string
+  /** 模型支持的画幅列表 */
+  supportedRatios?: string[]
+  /** 其余白名单字段保留为未知类型，避免误用未声明字段 */
+  [key: string]: unknown
 }
 
 /** 生图模型列表 */
@@ -287,4 +363,108 @@ export async function clearStoryboardSpeaker(id: string, dramaId: string): Promi
     method: 'POST',
     body: JSON.stringify({ id, dramaId }),
   })
+}
+
+// ============ 画布生图链路（lens 模式下 image / imageEdit 节点的唯一出口） ============
+
+/**
+ * 提交画布生图任务。
+ *
+ * <p>与角色/场景资产生图（{@link listImageTasks} 那套）的关键区别：<b>画布节点没有
+ * lens 资产身份</b>（无 assetType/assetId/storyboardIds）。因此调用方必须不传这三项，
+ * 否则后端会把画布产出回写到角色图或某个分镜的 selectedImageUrl 上，污染用户数据。
+ *
+ * <p>模型与分辨率由后端从剧配置推导，前端不下发 modelKey。
+ *
+ * @param params 提示词、剧ID 与参考图
+ * @returns 后端提交结果（含 taskId，用于后续轮询）
+ */
+export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promise<LensCanvasTaskSubmitResult> {
+  const payload: Record<string, unknown> = {
+    prompt: params.prompt,
+    dramaId: params.dramaId,
+  }
+  if (typeof params.episodeNum === 'number' && Number.isFinite(params.episodeNum)) {
+    payload.episodeNum = Math.trunc(params.episodeNum)
+  }
+  // 参考图：后端同时兼容 [{url}] 与 ["url"]，这里统一成对象数组（标准形态）
+  if (Array.isArray(params.refImages) && params.refImages.length) {
+    payload.refImages = params.refImages.map((url) => ({ url }))
+  }
+  // 以下字段只在用户显式选择时下发：未传即由后端从剧配置推导
+  if (typeof params.appId === 'number' && Number.isFinite(params.appId)) {
+    payload.appId = params.appId
+  }
+  if (typeof params.ratio === 'string' && params.ratio.trim()) {
+    payload.ratio = params.ratio.trim()
+  }
+  if (typeof params.width === 'number' && Number.isFinite(params.width)) {
+    payload.width = Math.trunc(params.width)
+  }
+  if (typeof params.height === 'number' && Number.isFinite(params.height)) {
+    payload.height = Math.trunc(params.height)
+  }
+  if (typeof params.quality === 'string' && params.quality.trim()) {
+    payload.quality = params.quality.trim()
+  }
+  if (params.nodeId) payload.nodeId = params.nodeId
+  if (params.nodeKind) payload.nodeKind = params.nodeKind
+
+  const data = await lensFetch<LensCanvasTaskSubmitResult>('/api/application/runTaskByCanvas?as=lens', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (typeof data?.taskId !== 'number' || !Number.isFinite(data.taskId)) {
+    throw new Error('lens 生图任务提交失败：响应未返回合法 taskId')
+  }
+  return data
+}
+
+/** lens task_queue 状态枚举的 name（对应后端 com.zsapps.api.enums.TaskQueueStatusEnum） */
+export type LensTaskQueueStatus = 'CREATE' | 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED'
+
+/** 画布任务状态查询结果（/api/taskQueue/status 的 data 字段） */
+export interface LensCanvasTaskStatus {
+  /** task_queue 主键 */
+  taskId: number
+  /** 任务状态（后端枚举 name） */
+  status: LensTaskQueueStatus
+  /** 成功时的产出文件 URL（图片），未成功时为空 */
+  fileUrl?: string | null
+  /** 失败原因 */
+  resMsg?: string | null
+  /** 备注（失败时后端会把失败原因放这里） */
+  remark?: string | null
+}
+
+/** 合法状态集合：用于对未知状态做显式拒绝，不做隐式兜底 */
+const LENS_TASK_QUEUE_STATUSES: readonly LensTaskQueueStatus[] = [
+  'CREATE',
+  'QUEUED',
+  'RUNNING',
+  'SUCCESS',
+  'FAILED',
+]
+
+/**
+ * 查询单个画布任务的执行状态与结果。
+ *
+ * <p>按 taskId 精确查询，**不使用** {@code getEpisodeTaskStatus}：后者取的是 Redis 里
+ * 「该集最新拆分镜任务」的 ID，会造成任务张冠李戴。
+ *
+ * @param taskId task_queue 主键
+ * @returns 任务状态与成功时的产出 URL
+ */
+export async function getCanvasTaskStatus(taskId: number): Promise<LensCanvasTaskStatus> {
+  const data = await lensFetch<LensCanvasTaskStatus>(
+    `/api/taskQueue/status?taskId=${encodeURIComponent(String(taskId))}`,
+  )
+  if (typeof data?.taskId !== 'number' || !Number.isFinite(data.taskId)) {
+    throw new Error('lens 任务状态查询失败：响应未返回合法 taskId')
+  }
+  // 显式拒绝未知状态，禁止兜底成「继续轮询」或「成功」
+  if (!LENS_TASK_QUEUE_STATUSES.includes(data.status)) {
+    throw new Error(`lens 任务状态查询失败：未知任务状态 ${String(data.status)}`)
+  }
+  return data
 }

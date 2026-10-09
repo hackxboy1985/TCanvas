@@ -369,7 +369,47 @@ server: {
 | 类别 | 节点 | 数据权威 | 执行 |
 |---|---|---|---|
 | Lens 业务节点 | 角色/场景/道具/分镜/剧本/台本 | Lens | 生图走 `/api/application/runTask`，分镜生视频走 `/api/storyboardTask/submit` |
-| 自由任务节点 | 生图(非角色/道具/场景)/生视频/生音频/文本 | lens 引擎（`/api/userTask/submit`，v2） | 画布原生新建，与 Lens 无关 |
+| 自由任务节点（生图/图像编辑） | image / imageEdit | Lens | **`POST /api/application/runTaskByCanvas`**（见 §5.1.1） |
+| 自由任务节点（生视频/文本） | video / text | — | 仍走 tapCanvas 原链路 |
+
+#### 5.1.1 自由任务节点生图链路（image / imageEdit）
+
+lens 模式（URL 带 `?dramaId=`）下，所有 **image / imageEdit** 节点的生图提交与轮询
+统一切到 lens，**不再调用 tapCanvas 的 `/public/tasks`**（lens 无该路由，此前会 302 到首页，
+表现为「点击应用无反应」）。
+
+| 环节 | 接口 | 说明 |
+|---|---|---|
+| 提交 | `POST /api/application/runTaskByCanvas?as=lens` | 返回 `taskId`（lens `task_queue` 主键） |
+| 轮询 | `GET /api/taskQueue/status?taskId={id}` | 按 taskId 精确查询；**不用** `getEpisodeTaskStatus`（后者取 Redis 中「该集最新拆分镜任务」，会张冠李戴） |
+
+**前端能力保留**：提示词仍由画布侧拼好后原样下发（角色卡约束、`@别名` 槽位绑定、
+focus guide、系统提示词前缀），后端只做模型/比例/分辨率的配置推导。
+
+**用户显式选择优先**：模型 / 比例 / 尺寸 / 质量四项遵循「**用户选了就用用户选的，
+没选才用剧配置**」。由于节点数据里这些字段都有系统默认兜底写入（模型列表加载后会写入
+首项），无法仅凭字段有值判断用户意图，因此在 `node.data` 上新增显式标记：
+
+| 标记字段 | 对应下发参数 | 用户选择入口 |
+|---|---|---|
+| `imageModelUserSelected` | `appId`（值即 `lens_application.id`） | 模型下拉 `onModelChange` |
+| `imageRatioUserSelected` | `ratio` | 比例下拉 |
+| `imageSizeUserSelected` | `width` / `height` | 尺寸下拉 |
+| `imageQualityUserSelected` | `quality` | 质量下拉 |
+
+只有标记为 `true` 才下发对应参数，否则由后端从 `style_config` 推导。这些标记属于用户意图，
+随 `flow.data` 持久化。
+
+**质量档位数据来源**：lens `/api/model/image` 的 `others.qualities`（多选，
+如 `["medium","high","xhigh","max"]`），前端透传到 `ModelOption.meta.others`。
+仅当当前模型配置了档位时才显示质量菜单（与分辨率菜单行为一致）；切换模型后若当前档位
+不在新模型档位内，回退到首档。非 lens 模式不显示质量菜单。
+
+**提交约束（防数据污染）**：画布生图任务必须满足
+- `postHandleParam` 为 null（非空且无已知前缀时会落到 `handleRoleCallback`，
+  误改 `lens_role` 的 `frontImg`/`threeImg`）
+- `storyboardIds` 为空（否则会把画布产出写进某分镜的 `selectedImageUrl`，并触发智能抽帧等后续流程）
+- 不传 `assetType`/`assetId`（画布节点无 lens 资产身份）
 
 **自由任务节点持久化方案（数据分离）**：
 

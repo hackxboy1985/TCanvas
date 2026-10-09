@@ -18,6 +18,7 @@ import {
   upsertProjectBookStoryboardChunk,
 } from '../api/server'
 import { getAuthToken } from '../auth/store'
+import { getCanvasTaskStatus, runTaskByCanvas } from '../api/lens'
 import { useUIStore } from '../ui/uiStore'
 import { toast } from '../ui/toast'
 import { notifyAssetRefresh } from '../ui/assetEvents'
@@ -1193,6 +1194,170 @@ async function runAutoTask(request: TaskRequestDto): Promise<TaskResultDto> {
   return res.result
 }
 
+/** lens 画布模式所需的 URL 参数（dramaId 必填，episode 缺省 1） */
+interface LensCanvasUrlParams {
+  dramaId: string
+  episodeNum: number
+}
+
+/**
+ * 读取 lens 画布模式的 URL 参数。
+ *
+ * <p>必须与 {@code projects/LensCanvasApp.tsx#readQueryParams} 保持完全一致：
+ * episode 缺省 1、非正数回退 1。不一致会导致提交与轮询落在不同的集上。
+ *
+ * @returns dramaId 与集数；非 lens 模式（无 dramaId）返回 null
+ */
+function readLensCanvasUrlParams(): LensCanvasUrlParams | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const dramaId = String(params.get('dramaId') || '').trim()
+  if (!dramaId) return null
+  const episodeRaw = Number(params.get('episode') || 1)
+  const episodeNum = Number.isFinite(episodeRaw) && episodeRaw > 0 ? Math.trunc(episodeRaw) : 1
+  return { dramaId, episodeNum }
+}
+
+/**
+ * 从节点数据读取用户显式选择的生图参数（模型/比例/尺寸/质量）。
+ *
+ * <p>只有用户在面板里显式选择过（对应 `*UserSelected` 标记为 true）才返回该字段，
+ * 避免把系统默认兜底值误当用户选择，从而覆盖后端从剧配置推导的结果。
+ */
+function readUserSelectedImageParams(
+  nodeData: Record<string, unknown> | undefined,
+): { appId?: number; ratio?: string; width?: number; height?: number; quality?: string } {
+  const data = nodeData || {}
+  const out: { appId?: number; ratio?: string; width?: number; height?: number; quality?: string } = {}
+
+  if (data.imageModelUserSelected === true) {
+    const rawModel = typeof data.imageModel === 'string' ? data.imageModel.trim() : ''
+    // lens 模型下拉的 value 即 lens_application.id，可直接作为 appId 下发
+    const parsed = Number(rawModel)
+    if (rawModel && Number.isFinite(parsed) && parsed > 0) {
+      out.appId = Math.trunc(parsed)
+    }
+  }
+
+  if (data.imageRatioUserSelected === true) {
+    const rawRatio = typeof data.aspect === 'string' ? data.aspect.trim() : ''
+    if (rawRatio) out.ratio = rawRatio
+  }
+
+  if (data.imageSizeUserSelected === true) {
+    const rawSize = typeof data.imageSize === 'string' ? data.imageSize.trim() : ''
+    if (rawSize) {
+      const dimensions = parseImageEditSizeDimensions(rawSize)
+      out.width = Math.trunc(dimensions.width)
+      out.height = Math.trunc(dimensions.height)
+    }
+  }
+
+  if (data.imageQualityUserSelected === true) {
+    const rawQuality = typeof data.imageQuality === 'string' ? data.imageQuality.trim() : ''
+    if (rawQuality) out.quality = rawQuality
+  }
+
+  return out
+}
+
+/**
+ * lens 模式提交图片任务：走 lens 后端接口。
+ *
+ * <p>画布侧已拼好的提示词（角色卡约束、@别名槽位、focus guide 等）原样下发；
+ * 模型/比例/尺寸/质量仅在用户显式选择时下发，否则由 lens 后端从剧配置推导。
+ * 画布节点没有 lens 资产身份，因此不传 assetType/assetId/storyboardIds。
+ */
+async function runLensCanvasImageTask(
+  request: TaskRequestDto,
+  urlParams: LensCanvasUrlParams,
+  nodeData?: Record<string, unknown>,
+): Promise<TaskResultDto> {
+  const extras = request.extras
+  const referenceImages = Array.isArray(extras?.referenceImages)
+    ? extras.referenceImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+    : []
+  const userSelected = readUserSelectedImageParams(nodeData)
+  const submitted = await runTaskByCanvas({
+    prompt: request.prompt,
+    dramaId: urlParams.dramaId,
+    episodeNum: urlParams.episodeNum,
+    refImages: referenceImages,
+    ...userSelected,
+    nodeId: typeof extras?.nodeId === 'string' ? extras.nodeId : undefined,
+    nodeKind: typeof extras?.nodeKind === 'string' ? extras.nodeKind : undefined,
+  })
+  // 不返回具体结果，让既有轮询分支按 queued 状态接续推进（与 /public/tasks 链路同构）
+  return {
+    id: String(submitted.taskId),
+    kind: request.kind,
+    status: 'queued',
+    assets: [],
+    raw: {
+      provider: `lens:${submitted.channel || 'unknown'}`,
+      ...submitted,
+    },
+  }
+}
+
+/**
+ * lens 模式轮询画布任务：按 taskId 查 lens task_queue 状态。
+ *
+ * @returns 归一化后的任务结果；状态未知或返回缺字段时显式抛错
+ */
+async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Promise<TaskResultDto> {
+  const numericTaskId = Number(taskId)
+  if (!Number.isFinite(numericTaskId) || numericTaskId <= 0) {
+    throw new Error(`lens 任务轮询失败：非法 taskId ${taskId}`)
+  }
+  const status = await getCanvasTaskStatus(numericTaskId)
+  if (status.status === 'FAILED') {
+    const message = status.resMsg?.trim() || status.remark?.trim() || 'lens 图像任务失败'
+    return { id: taskId, kind: taskKind, status: 'failed', assets: [], raw: { ...status, failureReason: message } }
+  }
+  if (status.status !== 'SUCCESS') {
+    // CREATE / QUEUED / RUNNING：保持排队或执行中，由外层继续轮询
+    return {
+      id: taskId,
+      kind: taskKind,
+      status: status.status === 'RUNNING' ? 'running' : 'queued',
+      assets: [],
+      raw: { ...status },
+    }
+  }
+  const fileUrl = typeof status.fileUrl === 'string' ? status.fileUrl.trim() : ''
+  if (!fileUrl) {
+    // SUCCESS 但无产出 URL：属于后端契约违约，显式失败，不静默兜底
+    throw new Error(`lens 图像任务已完成但未返回产出地址（taskId=${taskId}）`)
+  }
+  return {
+    id: taskId,
+    kind: taskKind,
+    status: 'succeeded',
+    // fileUrl 可能是逗号分隔的多图，逐个拆成资产，保持与 /public/tasks 的结果形态一致
+    assets: fileUrl
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .map((url) => ({ type: 'image' as const, url })),
+    raw: { ...status },
+  }
+}
+
+/**
+ * 提交图片任务：lens 模式走 lens 接口，非 lens 模式走原 /public/tasks 链路。
+ *
+ * @param nodeData 节点数据，用于读取用户显式选择的模型/比例/尺寸/质量
+ */
+async function runImageTaskByRuntime(
+  request: TaskRequestDto,
+  urlParams: LensCanvasUrlParams | null,
+  nodeData?: Record<string, unknown>,
+): Promise<TaskResultDto> {
+  if (urlParams) return runLensCanvasImageTask(request, urlParams, nodeData)
+  return runAutoTask(request)
+}
+
 function beginPendingRequestProgress(
   ctx: Pick<RunnerContext, 'id' | 'setNodeStatus' | 'isCanceled'>,
   options: {
@@ -1241,6 +1406,10 @@ async function runTaskByVendorWithPendingProgress(
     status?: 'queued' | 'running'
     statusPatch?: Record<string, unknown>
     stepMs?: number
+    /** lens 画布模式参数；非空时提交走 lens 接口，为空时走原 /public/tasks 链路 */
+    lensUrlParams?: LensCanvasUrlParams | null
+    /** 节点数据，用于读取用户显式选择的模型/比例/尺寸/质量 */
+    lensNodeData?: Record<string, unknown>
   },
 ): Promise<{ result: TaskResultDto; requestProgress: number }> {
   const stopProgress = beginPendingRequestProgress(ctx, {
@@ -1251,7 +1420,7 @@ async function runTaskByVendorWithPendingProgress(
     stepMs: options.stepMs,
   })
   try {
-    const result = await runAutoTask(options.request)
+    const result = await runImageTaskByRuntime(options.request, options.lensUrlParams ?? null, options.lensNodeData)
     return {
       result,
       requestProgress: stopProgress(),
@@ -1314,6 +1483,19 @@ async function fetchTaskResult(
   return res.result
 }
 
+/**
+ * 按运行模式查询任务结果：lens 模式查 lens，非 lens 模式查 /public/tasks。
+ */
+async function fetchTaskResultByRuntime(
+  taskId: string,
+  taskKind: TaskKind,
+  prompt: string,
+  lensEnabled: boolean,
+): Promise<TaskResultDto> {
+  if (lensEnabled) return fetchLensCanvasTaskResult(taskId, taskKind)
+  return fetchTaskResult(taskId, taskKind, prompt)
+}
+
 function extractTaskProgressPercent(snapshot: TaskResultDto): number | null {
   const raw = snapshot.raw as any
   const rawProgress =
@@ -1373,12 +1555,15 @@ async function pollTaskResultUntilDone(
     pollIntervalMs?: number
     pollTimeoutMs?: number
     statusPatch?: Record<string, any>
+    /** lens 画布模式参数；非空时轮询走 lens 任务状态接口 */
+    lensUrlParams?: LensCanvasUrlParams | null
   },
 ): Promise<TaskResultDto> {
   const { id, setNodeStatus, appendLog, isCanceled } = ctx
   const pollIntervalMs = options.pollIntervalMs ?? 2500
   const pollTimeoutMs = options.pollTimeoutMs ?? DEFAULT_TASK_POLL_TIMEOUT_MS
   const progressMin = options.progressRange?.min
+  const lensEnabled = Boolean(options.lensUrlParams)
   let lastProgress = typeof progressMin === 'number' ? progressMin : 10
   if (typeof options.initialProgress === 'number' && Number.isFinite(options.initialProgress)) {
     lastProgress = Math.max(lastProgress, Math.min(95, Math.round(options.initialProgress)))
@@ -1390,9 +1575,12 @@ async function pollTaskResultUntilDone(
 
     let snapshot: TaskResultDto
     try {
-      snapshot = await fetchTaskResult(options.taskId, options.taskKind, options.prompt)
+      snapshot = await fetchTaskResultByRuntime(options.taskId, options.taskKind, options.prompt, lensEnabled)
     } catch (err: any) {
       const msg = err?.message || '查询任务进度失败'
+      // lens 模式：任务查询失败多为确定性错误（任务不属于当前用户、契约违约、状态未知），
+      // 继续重试只会把错误拖到轮询超时才暴露，因此显式失败、如实上报
+      if (lensEnabled) throw new Error(msg)
       appendLog(id, `[${nowLabel()}] error: ${msg}`)
       await sleep(pollIntervalMs)
       continue
@@ -3331,6 +3519,8 @@ export async function syncGenericVideoNodeOnce(id: string, get: Getter) {
 
 async function runStoryboardImageTask(ctx: RunnerContext) {
   const { id, data, kind, setNodeStatus, appendLog, isCanceled, state } = ctx
+  // lens 画布模式：提交与轮询改走 lens 接口（非 lens 模式为 null，链路不变）
+  const lensUrlParams = readLensCanvasUrlParams()
 
   try {
     const projectId = String((useUIStore.getState() as any)?.currentProject?.id || '').trim()
@@ -3808,6 +3998,8 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
       maxProgress: 50,
       status: 'running',
       statusPatch: { lastError: undefined },
+      lensUrlParams,
+      lensNodeData: data as Record<string, unknown>,
     })
     let res = pendingTask.result
     const requestProgress = pendingTask.requestProgress
@@ -3847,6 +4039,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
         progressRange: { min: 10, max: 50 },
         initialProgress: Math.max(10, requestProgress),
         statusPatch: { imageTaskId: taskId, imageTaskKind: wantsImageEdit ? 'image_edit' : 'text_to_image' },
+        lensUrlParams,
       })
     }
 
@@ -4188,8 +4381,10 @@ async function runSingleFissionGrid(input: {
   assetInputs?: unknown
   promptForModel: string
   gridIdx: number
+  /** lens 画布模式参数；非空时提交与轮询走 lens 接口 */
+  lensUrlParams: LensCanvasUrlParams | null
 }): Promise<{ items: { url: string; title?: string }[]; firstUrl: string; res: any }> {
-  const { ctx, settings, referenceImages, assetInputs, promptForModel, gridIdx } = input
+  const { ctx, settings, referenceImages, assetInputs, promptForModel, gridIdx, lensUrlParams } = input
   const { id, kind, desiredGrids, selectedModel, imageSizeSetting, imageResolutionSetting, vendor, systemPromptOpt } = {
     id: ctx.id,
     kind: ctx.kind,
@@ -4227,6 +4422,8 @@ async function runSingleFissionGrid(input: {
     startProgress: progressBase,
     maxProgress: progressMax,
     status: 'running',
+    lensUrlParams,
+    lensNodeData: ctx.data as Record<string, unknown>,
   })
   let res = pendingTask.result
   const requestProgress = pendingTask.requestProgress
@@ -4250,6 +4447,7 @@ async function runSingleFissionGrid(input: {
       progressRange: { min: progressBase, max: progressMax },
       initialProgress: Math.max(progressBase, requestProgress),
       statusPatch: { imageTaskId: taskId, imageTaskKind: 'image_edit' },
+      lensUrlParams,
     })
   }
 
@@ -4292,6 +4490,8 @@ async function runSingleFissionGrid(input: {
 
 async function runImageFissionTask(ctx: RunnerContext) {
   const { id, kind, setNodeStatus, appendLog, isCanceled, data } = ctx
+  // lens 画布模式：提交与轮询改走 lens 接口（非 lens 模式为 null，链路不变）
+  const lensUrlParams = readLensCanvasUrlParams()
   try {
     const settings = resolveImageFissionSettings(ctx)
     const mentionRoleRefs = await resolveImageFissionRoleReferences(ctx)
@@ -4330,6 +4530,7 @@ async function runImageFissionTask(ctx: RunnerContext) {
         assetInputs: runtimeReferenceAssetInputs,
         promptForModel,
         gridIdx,
+        lensUrlParams,
       })
       if (!primaryUrl) primaryUrl = one.firstUrl
       newItems.push(...one.items)
@@ -4363,6 +4564,8 @@ async function runImageFissionTask(ctx: RunnerContext) {
 
 async function runStoryboardEditorTask(ctx: RunnerContext) {
   const { id, data, kind, setNodeStatus, appendLog, isCanceled, state } = ctx
+  // lens 画布模式：提交与轮询改走 lens 接口（非 lens 模式为 null，链路不变）
+  const lensUrlParams = readLensCanvasUrlParams()
 
   try {
     const patch = buildStoryboardEditorPatch({
@@ -4557,6 +4760,8 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
         startProgress: progressStart,
         maxProgress: Math.max(progressStart + 1, progressEnd - 3),
         status: 'running',
+        lensUrlParams,
+        lensNodeData: data as Record<string, unknown>,
       })
       let res = pendingTask.result
       const requestProgress = pendingTask.requestProgress
@@ -4596,6 +4801,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
             imageTaskId: taskId,
             imageTaskKind: effectiveTaskKind,
           },
+          lensUrlParams,
         })
       }
 
@@ -4697,6 +4903,9 @@ async function runGenericTask(ctx: RunnerContext) {
     prompt,
     state,
   } = ctx
+  // lens 画布模式：image / imageEdit 节点的提交与轮询改走 lens 接口
+  // （非 lens 模式为 null，原 /public/tasks 链路完全不变）
+  const lensUrlParams = readLensCanvasUrlParams()
 
   try {
     const storedImageModel =
@@ -5025,6 +5234,8 @@ async function runGenericTask(ctx: RunnerContext) {
             startProgress: progressBase,
             maxProgress: requestProgressCap,
             status: 'running',
+            lensUrlParams,
+            lensNodeData: data as Record<string, unknown>,
           })
         : null
       let res = imageRequest
@@ -5093,9 +5304,11 @@ async function runGenericTask(ctx: RunnerContext) {
 
           let snapshot: TaskResultDto
           try {
-            snapshot = await fetchTaskResult(taskId, effectiveTaskKind, effectivePromptForModel)
+            snapshot = await fetchTaskResultByRuntime(taskId, effectiveTaskKind, effectivePromptForModel, Boolean(lensUrlParams))
           } catch (err: any) {
             const msg = err?.message || '查询图像任务进度失败'
+            // lens 模式：查询失败多为确定性错误（越权/契约违约/未知状态），显式失败而非重试到超时
+            if (lensUrlParams) throw new Error(msg)
             appendLog(id, `[${nowLabel()}] error: ${msg}`)
             await sleep(pollIntervalMs)
             continue

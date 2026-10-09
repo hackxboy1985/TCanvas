@@ -71,7 +71,14 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await fetch(input, init)
+      const res = await fetch(input, init)
+      // 显式失败：接口返回 HTML（通常是路径不存在被 SPA/网关兜底，或调试页），
+      // 直接给出可定位的 URL 错误，避免下游 r.json() 抛 "Unexpected token '<'"
+      const contentType = String(res.headers.get('content-type') || '').toLowerCase()
+      if (contentType.includes('text/html')) {
+        throw new Error(`接口返回 HTML 而非 JSON（HTTP ${res.status}）：${String(input)}`)
+      }
+      return res
     } catch (error) {
       lastError = error
       const message = error instanceof Error ? error.message.trim().toLowerCase() : ''
