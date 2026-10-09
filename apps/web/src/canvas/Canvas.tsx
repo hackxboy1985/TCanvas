@@ -2060,6 +2060,37 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
   const onNodeDoubleClick = useCallback((_evt: React.MouseEvent, node: FlowNode) => {
     if (!node?.id) return
     if (node.type === 'groupNode') return
+    // 编辑弹窗（NodeToolbar）内的双击不触发节点聚焦：弹窗内开关/控件连点时不应被当作双击。
+    // 仅拦截弹窗内部，双击节点主体仍正常聚焦
+    const target = _evt?.target as HTMLElement | null
+    if (target && typeof target.closest === 'function'
+      && (target.closest('.react-flow__node-toolbar') || target.closest('[data-no-node-dblclick="1"]'))) return
+    // lens 节点（分镜/资产/剧本台本）双击：放大到该节点（不进入子图聚焦模式）；位置异常时回退原聚焦行为
+    const source = String((node.data as { source?: string })?.source ?? '')
+    if (node.type === 'lensShot' || source === 'lens_projection') {
+      const w = Number(node.measured?.width ?? node.width ?? 400)
+      const h = Number(node.measured?.height ?? node.height ?? 300)
+      // 组内节点 position 为相对坐标：累加父链得到绝对坐标
+      const allNodes = useRFStore.getState().nodes
+      const byId = new Map(allNodes.map((n) => [n.id, n] as const))
+      let absX = Number(node.position?.x ?? 0)
+      let absY = Number(node.position?.y ?? 0)
+      let parentId = (node as unknown as { parentId?: string }).parentId
+      while (parentId) {
+        const parent = byId.get(parentId)
+        if (!parent) break
+        absX += Number(parent.position?.x ?? 0)
+        absY += Number(parent.position?.y ?? 0)
+        parentId = (parent as unknown as { parentId?: string }).parentId
+      }
+      const cx = absX + (Number.isFinite(w) ? w / 2 : 200)
+      const cy = absY + (Number.isFinite(h) ? h / 2 : 150)
+      if (Number.isFinite(cx) && Number.isFinite(cy)) {
+        // 固定放大倍率，保证双击必有视图反馈
+        rf.setCenter(cx, cy, { zoom: 1.2, duration: 250 })
+        return
+      }
+    }
     focusNodeSubgraph(node.id)
     setTimeout(() => rf.fitView?.({ padding: 0.2 }), 50)
   }, [focusNodeSubgraph, rf])

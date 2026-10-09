@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
 import Canvas from '../canvas/Canvas'
+import PreviewModal from '../ui/PreviewModal'
 import type { CanvasHandle } from '../canvas/Canvas'
 import { useRFStore } from '../canvas/store'
 import type { LensShotRef } from '../canvas/nodes/LensShotNode'
@@ -98,6 +99,48 @@ async function loadShotAspects(storyboards: LensStoryboard[]): Promise<Map<strin
   })
   await Promise.all(jobs)
   return aspects
+}
+
+/** 整理布局常量 */
+const ARRANGE_START = 40
+const ARRANGE_GAP = 40
+const ARRANGE_SECTION_GAP = 120
+
+/** 节点布局尺寸（优先 React Flow 测量值） */
+function arrangeNodeSize(n: Node): { w: number; h: number } {
+  return {
+    w: Number(n.measured?.width ?? n.width ?? 400),
+    h: Number(n.measured?.height ?? n.height ?? 300),
+  }
+}
+
+/** lens 剧本/台本文本节点 */
+function isLensScriptNode(n: Node): boolean {
+  return n.type === 'taskNode'
+    && String((n.data as { kind?: string })?.kind) === 'text'
+    && (n.data as { source?: string })?.source === 'lens_projection'
+}
+
+/** lens 资产节点（角色/场景/道具，带 assetCategory） */
+function isLensAssetNode(n: Node): boolean {
+  return n.type === 'taskNode' && typeof (n.data as { assetCategory?: number })?.assetCategory === 'number'
+}
+
+/** 分镜组基准位置：垂直→图片右侧、水平→剧本列右侧且在图片下方（与组关闭时的分镜区域一致） */
+function computeShotAreaOrigin(nodes: Node[], direction: 'column' | 'flow'): { x: number; y: number } {
+  const scripts = nodes.filter(isLensScriptNode)
+  const assets = nodes.filter(isLensAssetNode)
+  let scriptsRight = 0
+  scripts.forEach((n) => { scriptsRight = Math.max(scriptsRight, n.position.x + arrangeNodeSize(n).w) })
+  const contentX = scripts.length > 0 ? scriptsRight + ARRANGE_SECTION_GAP : ARRANGE_START
+  if (direction === 'column') {
+    let assetsRight = contentX - ARRANGE_SECTION_GAP
+    assets.forEach((n) => { assetsRight = Math.max(assetsRight, n.position.x + arrangeNodeSize(n).w) })
+    return { x: assetsRight + ARRANGE_SECTION_GAP, y: ARRANGE_START }
+  }
+  let assetsBottom = ARRANGE_START
+  assets.forEach((n) => { assetsBottom = Math.max(assetsBottom, n.position.y + arrangeNodeSize(n).h) })
+  return { x: contentX, y: assetsBottom + ARRANGE_SECTION_GAP }
 }
 
 /** 预估单个分镜节点高度（媒体按 800 宽/竖屏 720 高 + 顶部栏 + 引用行） */
@@ -368,18 +411,10 @@ export default function LensCanvasApp(): JSX.Element {
     // 已有组先解除，避免重复编组
     const existing = shots.find((n) => n.parentId)?.parentId
     if (existing) store.ungroupGroupNode(existing)
-    // 计算目标区域基准：垂直排列→组放最右侧；水平排列→组放最底部
-    let maxRight = 0
-    let maxBottom = 0
-    for (const node of useRFStore.getState().nodes) {
-      if (node.type === 'lensShot' || node.type === 'groupNode') continue
-      const w = Number(node.measured?.width ?? node.width ?? 400)
-      const h = Number(node.measured?.height ?? node.height ?? 300)
-      maxRight = Math.max(maxRight, node.position.x + w)
-      maxBottom = Math.max(maxBottom, node.position.y + h)
-    }
-    const baseX = direction === 'column' ? Math.max(1300, maxRight + 120) : 40
-    const baseY = direction === 'flow' ? Math.max(40, maxBottom + 120) : 40
+    // 目标区域：与「分镜组关闭」时的分镜位置一致（垂直→图片右侧；水平→剧本列右侧、图片下方）
+    const origin = computeShotAreaOrigin(useRFStore.getState().nodes, direction)
+    const baseX = origin.x
+    const baseY = origin.y
     // 按分镜序号设置初始位置（排序基准为分镜序号，并落到目标区域）
     const ordered = [...shots].sort(
       (a, b) => Number((a.data as { storyboardOrder?: number })?.storyboardOrder ?? 0) - Number((b.data as { storyboardOrder?: number })?.storyboardOrder ?? 0),
@@ -420,6 +455,124 @@ export default function LensCanvasApp(): JSX.Element {
     })
     shotGroupIdRef.current = null
   }, [])
+
+  /**
+   * 按方向整理整个画布（点击左下「排列」触发）：
+   * - 垂直：剧本/台本最左纵排 → 图片（角色/场景/道具）纵排 → 分镜纵排（组开时为组框，位于最右）
+   * - 水平：剧本/台本最左纵排 → 图片横排（在上）→ 分镜横排（在下，组开时为组框位于最底）
+   */
+  const arrangeByDirection = useCallback((direction: 'column' | 'flow') => {
+    const store = useRFStore.getState()
+    const all = store.nodes
+    // 整理前先解除旧组合（节点位置统一按绝对坐标计算）
+    const existingGroup = all.find((n) => n.type === 'groupNode')
+    if (existingGroup) useRFStore.getState().ungroupGroupNode(existingGroup.id)
+
+    const sizeOf = arrangeNodeSize
+    const isScriptNode = isLensScriptNode
+    const isAssetNode = isLensAssetNode
+
+    const current = useRFStore.getState().nodes
+    const scripts = current.filter(isScriptNode)
+    const assets = current.filter(isAssetNode)
+    // 资产分两组：角色（第 1 组）与场景/道具（第 2 组，排在角色的下一列/下一排）
+    const roleAssets = assets.filter((n) => Number((n.data as { assetCategory?: number })?.assetCategory) === 1)
+    const scenePropAssets = assets.filter((n) => {
+      const cat = Number((n.data as { assetCategory?: number })?.assetCategory)
+      return cat === 2 || cat === 3
+    })
+    const shots = current.filter((n) => n.type === 'lensShot').sort(
+      (a, b) => Number((a.data as { storyboardOrder?: number })?.storyboardOrder ?? 0) - Number((b.data as { storyboardOrder?: number })?.storyboardOrder ?? 0),
+    )
+
+    const START = ARRANGE_START
+    const GAP = ARRANGE_GAP
+    const SECTION_GAP = ARRANGE_SECTION_GAP
+    const nextPos = new Map<string, { x: number; y: number }>()
+
+    // 1. 剧本/台本：无论哪种排列都放最左侧，纵向排列
+    let scriptCursorY = START
+    let scriptColWidth = 0
+    scripts.forEach((n) => {
+      nextPos.set(n.id, { x: START, y: scriptCursorY })
+      scriptCursorY += sizeOf(n).h + GAP
+      scriptColWidth = Math.max(scriptColWidth, sizeOf(n).w)
+    })
+    const contentX = START + (scripts.length > 0 ? scriptColWidth + SECTION_GAP : 0)
+
+    if (direction === 'column') {
+      // 2. 角色：第 1 列纵向排列
+      let roleCursorY = START
+      let roleColWidth = 0
+      roleAssets.forEach((n) => {
+        nextPos.set(n.id, { x: contentX, y: roleCursorY })
+        roleCursorY += sizeOf(n).h + GAP
+        roleColWidth = Math.max(roleColWidth, sizeOf(n).w)
+      })
+      // 3. 场景/道具：角色的下一列纵向排列
+      const sceneColX = contentX + (roleAssets.length > 0 ? roleColWidth + SECTION_GAP : 0)
+      let sceneCursorY = START
+      let sceneColWidth = 0
+      scenePropAssets.forEach((n) => {
+        nextPos.set(n.id, { x: sceneColX, y: sceneCursorY })
+        sceneCursorY += sizeOf(n).h + GAP
+        sceneColWidth = Math.max(sceneColWidth, sizeOf(n).w)
+      })
+      // 4. 分镜：组关闭时在图片右侧纵向排列（组开启时交给 applyShotGroup 放到最右并编组）
+      if (!shotGroupOn) {
+        const assetRight = contentX + (roleAssets.length + scenePropAssets.length > 0
+          ? Math.max(roleColWidth, scenePropAssets.length > 0 ? roleColWidth + SECTION_GAP + sceneColWidth : 0) + SECTION_GAP
+          : 0)
+        let shotY = START
+        shots.forEach((n) => {
+          nextPos.set(n.id, { x: assetRight, y: shotY })
+          shotY += sizeOf(n).h + GAP
+        })
+      }
+    } else {
+      // 2. 角色：第 1 行横向排列
+      let roleCursorX = contentX
+      let roleRowHeight = 0
+      roleAssets.forEach((n) => {
+        nextPos.set(n.id, { x: roleCursorX, y: START })
+        roleCursorX += sizeOf(n).w + GAP
+        roleRowHeight = Math.max(roleRowHeight, sizeOf(n).h)
+      })
+      // 3. 场景/道具：角色的下一排横向排列
+      const sceneRowY = START + (roleAssets.length > 0 ? roleRowHeight + SECTION_GAP : 0)
+      let sceneCursorX = contentX
+      let sceneRowHeight = 0
+      scenePropAssets.forEach((n) => {
+        nextPos.set(n.id, { x: sceneCursorX, y: sceneRowY })
+        sceneCursorX += sizeOf(n).w + GAP
+        sceneRowHeight = Math.max(sceneRowHeight, sizeOf(n).h)
+      })
+      // 4. 分镜：组关闭时在图片下方横向排列（组开启时交给 applyShotGroup 放到最底并编组）
+      if (!shotGroupOn) {
+        const assetsBottom = scenePropAssets.length > 0
+          ? sceneRowY + sceneRowHeight
+          : (roleAssets.length > 0 ? START + roleRowHeight : START - SECTION_GAP)
+        const shotY = assetsBottom + SECTION_GAP
+        let shotX = contentX
+        shots.forEach((n) => {
+          nextPos.set(n.id, { x: shotX, y: shotY })
+          shotX += sizeOf(n).w + GAP
+        })
+      }
+    }
+
+    useRFStore.setState({
+      nodes: useRFStore.getState().nodes.map((n) => {
+        const p = nextPos.get(n.id)
+        return p ? { ...n, position: p, parentId: undefined } : n
+      }),
+    })
+
+    // 4. 分镜组：开启时重新编组并按方向排列（垂直→最右、水平→最底）
+    if (shotGroupOn) {
+      window.setTimeout(() => applyShotGroup(direction), 80)
+    }
+  }, [shotGroupOn, applyShotGroup])
 
   /** 保存当前编排（立即，切集前用）。用 ref 记录最新版本，避免并发保存读到旧 version */
   const saveNow = useCallback(async (targetEpisode: number, snapshot: { nodes: Node[]; edges: Edge[] }): Promise<boolean> => {
@@ -550,15 +703,15 @@ export default function LensCanvasApp(): JSX.Element {
   // 选集加载
   useEffect(() => { void loadEpisode(episodeNum) }, [episodeNum, loadEpisode])
 
-  // 分镜组：集加载完成 / 开关 / 排列方向变化时应用（关闭时解除组合，节点位置不变）
+  // 集加载完成 / 开关 / 排列方向变化时：按当前方向整理整个画布（剧本台本最左、图片按类别行列、分镜按方向）
+  // 延迟到节点渲染测量后执行，保证布局尺寸正确；分镜组开关由 arrangeByDirection 内部处理
   useEffect(() => {
     if (loading) return
-    if (!shotGroupOn) {
-      clearShotGroup()
-      return
-    }
-    applyShotGroup(shotArrange)
-  }, [shotGroupOn, shotArrange, loading, applyShotGroup, clearShotGroup])
+    const timer = window.setTimeout(() => {
+      arrangeByDirection(shotArrange)
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [shotGroupOn, shotArrange, loading, arrangeByDirection])
 
   // 编排自动保存（debounce 3s）
   useEffect(() => {
@@ -637,9 +790,13 @@ export default function LensCanvasApp(): JSX.Element {
           onShotArrangeChange={(direction) => {
             setShotArrange(direction)
             window.localStorage.setItem('lens_shot_arrange', direction)
+            // 点击「排列」即按新方向整理整个画布（图片/分镜/剧本位置 + 分镜组）
+            arrangeByDirection(direction)
           }}
         />
       </div>
+      {/* 大图预览弹窗：lens 画布路由提前 return，需在此挂载（否则双击图片无预览） */}
+      <PreviewModal />
     </div>
   )
 }

@@ -733,3 +733,27 @@ try {
 5. 马赛克/拼图 mosaic
 6. 光照 rig
 7. 编排版本历史
+
+---
+
+## 附录 A：画布首轮联调改动记录（2026-08-28）
+
+联调中发现的问题与对应改动（均为 lens 画布侧，tapCanvas 原生页面不受影响或为增强）：
+
+| # | 问题 | 原因 | 改动 |
+|---|---|---|---|
+| 1 | 画布打开空白 + React Flow 报 001 | `LensCanvasApp` 顶层调用 `useReactFlow()`，但 Provider 在 `Canvas` 组件内部（是后代不是祖先） | `Canvas` 改 `forwardRef` 暴露 `CanvasHandle`（getViewport/setViewport/fitView），LensCanvasApp 改用 ref 调用 |
+| 2 | Mantine Select 报重复选项崩溃 | `/api/episode/getAllEpisode` 返回纯整数数组，前端按对象数组解析，value 全为 "undefined" | `listEpisodes` 适配整数数组 → `{episodeNumber}` |
+| 3 | 模型列表调错接口 | 画布节点模型下拉走 tapCanvas `/model-catalog/models` | `useModelOptions` 加 lens 模式分支：生图 `/api/model/image`、生视频 `/api/model/shot_video`；条目 `enabled=false` 灰显 |
+| 4 | 模型下拉显示数字 | 显示优先级 `modelAlias → modelKey → label`，lens 条目 modelKey=应用ID | lens 条目不设 modelKey，显示 label（应用名），提交用 value（应用ID） |
+| 5 | 剧本原文无内容 | 后端只有台本接口，`novel_episode.content` 无对外接口 | 新增 `GET /api/episode/novelContent`（只增不改，带 @CheckDrama） |
+| 6 | 分镜节点点击不弹编辑框 | 编辑区写在了无人引用的 `NodeInspector`（死代码） | 编辑面板挂到 `LensShotNode` 自身（NodeToolbar），并用 `tc-task-node__toolbar-frame--media` 对齐角色节点弹窗（含 `toolbar-controls--footer` 细线） |
+| 7 | 角色/场景/道具节点无标题 | image 类节点（`isCanvasMediaNode`）默认不渲染 header | TaskNode 对 `source==='lens_projection'` 节点渲染 header，显示名称 + 类型（lensTypeLabel） |
+| 8 | 节点无引用连线 | 投影只生成节点 | `buildCanvasNodes` 同时按 `asset.refId` 生成「资产 → 分镜」引用连线；新增 `LAYOUT_VERSION` 机制，布局规则变更时旧 flow 自动重排 |
+| 9 | 台本/剧本节点无法拖拽 | 文本区 `pointerdown` 被 preventDefault，React Flow 拿不到拖拽起点 | 移除 preventDefault；编辑态才加 `nodrag`，默认态可拖拽 |
+| 10 | 引用行遮挡脚本/视频 | 引用行 absolute 悬浮在媒体区上 | 引用行改为节点底部独立一行，节点高度动态 + 引用行高度（不遮挡不挤压） |
+| 11 | 引用图拉原图 | 引用行直接用原 URL | 小图统一 OSS 缩略图 `?x-oss-process=image/resize,w_100`；角色/场景/道具主图按画布缩放选档位（100/200/400/800/1600，`canvas/utils/ossResponsive.ts`） |
+| 12 | 弹窗随画布缩小到 34% 后停止 | `toolbarScale = max(220/baseWidth, canvasZoom)` 的最小缩放保护 | `toolbarScale` 固定 1，弹窗始终 100% 显示 |
+| 13 | 缩放菜单 50/100/800% 不生效 | React Flow v12 无 `setZoom`（已改名 `zoomTo`） | 改用 `rf.zoomTo`；菜单项 800% 改为 400%（对齐 maxZoom=4） |
+| 14 | 缺少画布工具条 | — | 新增左下工具条：资产管理（占位）/ 整理画布（⌥⌘F，恢复默认投影布局）/ 小地图（默认隐藏）/ 连线显隐 / 网格吸附（占位）/ 缩放菜单（放大·缩小·适合屏幕·50%·100%·400%） |
+| 15 | 分镜节点媒体被挤压/遮挡 | 固定 16:9 + 悬浮引用行 | 媒体短边基准（横屏宽/竖屏高），节点宽高与 header 高随内容动态；引用行独立一行 |

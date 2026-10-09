@@ -51,6 +51,8 @@ type ImageContentProps = {
   themeWhite: string
   /** 主图填充方式：cover 裁切铺满 / contain 按图片宽高比完整显示（lens 投影节点用 contain 自适应） */
   objectFit?: 'cover' | 'contain'
+  /** lens 模式：双击图片不打开预览、不阻止冒泡（交给画布做「放大到节点」） */
+  disableDoubleClickPreview?: boolean
   /** 无图时展示在图片位置的提示词文本（lens 投影节点） */
   emptyPromptText?: string | null
   /** 是否按画布缩放选 OSS 响应式图（lens 投影节点）：放大才拉大图，缩小用低分辨率档位 */
@@ -109,6 +111,7 @@ export function ImageContent(props: ImageContentProps) {
     objectFit,
     emptyPromptText,
     responsiveOss,
+    disableDoubleClickPreview,
   } = props
 
   const [imageError, setImageError] = React.useState(false)
@@ -259,6 +262,8 @@ export function ImageContent(props: ImageContentProps) {
       <div
         className="task-node-image__frame"
         onDoubleClick={(e) => {
+          // lens 投影节点：不拦截双击，让事件冒泡到画布（双击=放大到该节点）
+          if (disableDoubleClickPreview) return
           e.stopPropagation()
           const url = (activeImageUrl || '').trim()
           if (!url) return

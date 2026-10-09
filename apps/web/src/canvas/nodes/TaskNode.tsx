@@ -6070,6 +6070,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     objectFit: isLensProjectionNode ? 'contain' : 'cover',
     // lens 投影节点：无图时把提示词展示在图片位置（对齐分镜节点行为）
     emptyPromptText: isLensProjectionNode ? String((data as { prompt?: string })?.prompt ?? '').trim() || null : null,
+    // lens 投影节点：双击图片不打开大图预览（放大预览有专门按钮），事件冒泡给画布做「放大到该节点」
+    disableDoubleClickPreview: isLensProjectionNode,
     // lens 投影节点：按画布缩放选 OSS 响应式图档位
     responsiveOss: isLensProjectionNode,
     hasPrimaryImage,
