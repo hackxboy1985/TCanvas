@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
+import { Button, Group, Menu, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
 import Canvas from '../canvas/Canvas'
 import type { CanvasHandle } from '../canvas/Canvas'
 import { useRFStore } from '../canvas/store'
@@ -318,6 +318,18 @@ export default function LensCanvasApp(): JSX.Element {
   const [flowVersion, setFlowVersion] = useState<number>(0)
   const [savedAt, setSavedAt] = useState<string>('')
   const [showRefs, setShowRefs] = useState<boolean>(false)
+  // 分镜组：默认打开；打开时所有分镜节点编入一个组合框（组内位置固定、按分镜序号排列）
+  const [shotGroupOn, setShotGroupOn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    const raw = window.localStorage.getItem('lens_shot_group')
+    return raw === null ? true : raw === '1'
+  })
+  // 排列方向：column=垂直（默认）、flow=水平
+  const [shotArrange, setShotArrange] = useState<'column' | 'flow'>(() => {
+    if (typeof window === 'undefined') return 'column'
+    return window.localStorage.getItem('lens_shot_arrange') === 'flow' ? 'flow' : 'column'
+  })
+  const shotGroupIdRef = useRef<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadedForRef = useRef<string>('')
   // 最新 flow 版本（ref 同步，避免并发保存读到旧 version 触发「已被他人修改」）
@@ -344,6 +356,63 @@ export default function LensCanvasApp(): JSX.Element {
       ),
       edges: state.edges,
     })
+  }, [])
+
+  /**
+   * 应用分镜组：按分镜序号排序 → 放到目标区域（垂直=最右侧 / 水平=最底部）→ 编入组合框 → 按方向排列 → 组内固定不可拖动
+   */
+  const applyShotGroup = useCallback((direction: 'column' | 'flow') => {
+    const store = useRFStore.getState()
+    const shots = store.nodes.filter((n) => n.type === 'lensShot')
+    if (shots.length === 0) return
+    // 已有组先解除，避免重复编组
+    const existing = shots.find((n) => n.parentId)?.parentId
+    if (existing) store.ungroupGroupNode(existing)
+    // 计算目标区域基准：垂直排列→组放最右侧；水平排列→组放最底部
+    let maxRight = 0
+    let maxBottom = 0
+    for (const node of useRFStore.getState().nodes) {
+      if (node.type === 'lensShot' || node.type === 'groupNode') continue
+      const w = Number(node.measured?.width ?? node.width ?? 400)
+      const h = Number(node.measured?.height ?? node.height ?? 300)
+      maxRight = Math.max(maxRight, node.position.x + w)
+      maxBottom = Math.max(maxBottom, node.position.y + h)
+    }
+    const baseX = direction === 'column' ? Math.max(1300, maxRight + 120) : 40
+    const baseY = direction === 'flow' ? Math.max(40, maxBottom + 120) : 40
+    // 按分镜序号设置初始位置（排序基准为分镜序号，并落到目标区域）
+    const ordered = [...shots].sort(
+      (a, b) => Number((a.data as { storyboardOrder?: number })?.storyboardOrder ?? 0) - Number((b.data as { storyboardOrder?: number })?.storyboardOrder ?? 0),
+    )
+    const orderIndex = new Map(ordered.map((n, i) => [n.id, i] as const))
+    useRFStore.setState({
+      nodes: useRFStore.getState().nodes.map((n) => {
+        const idx = orderIndex.get(n.id)
+        if (idx === undefined) return n
+        return { ...n, position: { x: baseX + idx * 10, y: baseY + idx * 10 } }
+      }),
+    })
+    const groupId = useRFStore.getState().createGroupForNodeIds(ordered.map((n) => n.id), '分镜组')
+    if (!groupId) return
+    useRFStore.getState().arrangeGroupChildren(groupId, direction)
+    // 组内位置固定：禁止拖动
+    useRFStore.setState({
+      nodes: useRFStore.getState().nodes.map((n) => (n.parentId === groupId ? { ...n, draggable: false } : n)),
+    })
+    shotGroupIdRef.current = groupId
+  }, [])
+
+  /** 解除分镜组：组合框消失、节点位置保持不变、恢复可拖动 */
+  const clearShotGroup = useCallback(() => {
+    const store = useRFStore.getState()
+    const gid = shotGroupIdRef.current
+      ?? store.nodes.find((n) => n.type === 'lensShot' && n.parentId)?.parentId
+      ?? null
+    if (gid) store.ungroupGroupNode(gid)
+    useRFStore.setState({
+      nodes: useRFStore.getState().nodes.map((n) => (n.type === 'lensShot' ? { ...n, draggable: true } : n)),
+    })
+    shotGroupIdRef.current = null
   }, [])
 
   /** 保存当前编排（立即，切集前用）。用 ref 记录最新版本，避免并发保存读到旧 version */
@@ -475,6 +544,16 @@ export default function LensCanvasApp(): JSX.Element {
   // 选集加载
   useEffect(() => { void loadEpisode(episodeNum) }, [episodeNum, loadEpisode])
 
+  // 分镜组：集加载完成 / 开关 / 排列方向变化时应用（关闭时解除组合，节点位置不变）
+  useEffect(() => {
+    if (loading) return
+    if (!shotGroupOn) {
+      clearShotGroup()
+      return
+    }
+    applyShotGroup(shotArrange)
+  }, [shotGroupOn, shotArrange, loading, applyShotGroup, clearShotGroup])
+
   // 编排自动保存（debounce 3s）
   useEffect(() => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
@@ -513,6 +592,48 @@ export default function LensCanvasApp(): JSX.Element {
             checked={showRefs}
             onChange={(e) => toggleShowRefs(e.currentTarget.checked)}
           />
+          <Switch
+            className="lens-canvas-shot-group-switch"
+            size="xs"
+            label="分镜组"
+            checked={shotGroupOn}
+            onChange={(e) => {
+              const on = e.currentTarget.checked
+              setShotGroupOn(on)
+              window.localStorage.setItem('lens_shot_group', on ? '1' : '0')
+              if (!on) clearShotGroup()
+            }}
+          />
+          <Menu className="lens-canvas-shot-arrange-menu" withinPortal position="bottom-start">
+            <Menu.Target>
+              <Button
+                className="lens-canvas-shot-arrange-button"
+                size="xs"
+                variant="light"
+                disabled={!shotGroupOn}
+              >
+                排列：{shotArrange === 'column' ? '垂直' : '水平'}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                onClick={() => {
+                  setShotArrange('column')
+                  window.localStorage.setItem('lens_shot_arrange', 'column')
+                }}
+              >
+                垂直
+              </Menu.Item>
+              <Menu.Item
+                onClick={() => {
+                  setShotArrange('flow')
+                  window.localStorage.setItem('lens_shot_arrange', 'flow')
+                }}
+              >
+                水平
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
         <Group gap="xs">
           {savedAt && <Text size="xs" c="dimmed">已保存 {savedAt}</Text>}

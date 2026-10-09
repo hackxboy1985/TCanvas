@@ -269,11 +269,11 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       <Handle className="lens-shot-handle" type="source" position={Position.Right} />
 
       {/* 顶部栏：分镜号 + 时长（紧跟序号左侧）+ 状态圆点（不显示 timeOfDay，时长取分镜 time 字段或视频实际时长） */}
-      <div className="lens-shot-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid rgba(127,127,127,0.18)', fontSize: 12, fontWeight: 600 }}>
+      <div className="lens-shot-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderBottom: '1px solid rgba(127,127,127,0.18)', fontSize: 16, fontWeight: 600, lineHeight: 1.2 }}>
         <span className="lens-shot-order">
           分镜{data.storyboardOrder ?? '-'}
           {mediaSeconds != null && (
-            <span className="lens-shot-duration" style={{ fontWeight: 400, opacity: 0.72, marginLeft: 6 }}>
+            <span className="lens-shot-duration" style={{ fontWeight: 400, opacity: 0.72, marginLeft: 6, fontSize: 13 }}>
               {formatSeconds(mediaSeconds)}
             </span>
           )}
