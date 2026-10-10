@@ -8529,8 +8529,14 @@ const rewritePromptWithCharacters = React.useCallback(
           <div
             className={[
               'tc-task-node__toolbar-frame',
+              // nowheel：React Flow 原生约定，带该类名的元素内部滚轮不再被画布缩放/平移消费
+              'nowheel',
               useMediaFocusToolbar ? 'tc-task-node__toolbar-frame--media' : '',
             ].filter(Boolean).join(' ')}
+            onWheelCapture={(e) => {
+              // 工具栏区域内滚轮只滚动自身（overflowY: auto），不再触发画布缩放/平移
+              e.stopPropagation()
+            }}
             style={{
               position: 'relative',
               zIndex: 3001,
