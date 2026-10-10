@@ -38,6 +38,7 @@ import { useInsertMenuStore } from './insertMenuStore'
 import { getHandleTypeLabel } from './utils/handleLabels'
 import { subscribeTaskProgress, type TaskProgressEventMessage } from '../api/taskProgress'
 import { useAuth } from '../auth/store'
+import { isLensMode } from '../config/useModelOptions'
 import { createServerAsset, listProjectFlows, listProjects, recoverUploadedServerAssetFile, saveProjectFlow, updateProjectTemplate, upsertProject, uploadServerAssetFile, type ProjectDto } from '../api/server'
 import { genTaskNodeId } from './nodes/taskNodeHelpers'
 import { CANVAS_CONFIG } from './utils/constants'
@@ -876,6 +877,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
 
   useEffect(() => {
     if (!authToken) return
+    // lens 画布模式不订阅 TapCanvas 的任务进度 SSE：
+    // 该 SSE 端点是 TapCanvas 后端的能力，lens 后端没有该路由，
+    // 请求会被 Spring Security 302 到登录页（路径不以 /api/ 开头），
+    // 既拿不到任何事件，又会在网络面板产生一条误导性的 302。
+    // lens 的任务进度由 remoteRunner 轮询 /api/taskQueue/status 获取，此处订阅是死代码。
+    if (isLensMode()) return
     const unsubscribe = subscribeTaskProgress({
       token: authToken,
       onEvent: handleTaskProgress,

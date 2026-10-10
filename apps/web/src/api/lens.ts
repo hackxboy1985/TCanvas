@@ -13,22 +13,233 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
+/** 诊断时截取的最大响应体字符数（避免超长 body 灌进控制台与错误文案） */
+const LENS_DIAG_BODY_MAX_CHARS = 500
+
+/** 是否输出 lens 接口诊断日志（排查接口失败时保持开启；确认稳定后可置 false 关闭） */
+const LENS_API_DEBUG = true
+
+/**
+ * lens 接口诊断日志统一出口。
+ *
+ * <p>集中一处便于整体开关，避免日志散落在各调用点无法收敛。
+ *
+ * @param level  日志级别（log=普通，error=异常）
+ * @param message 日志标题
+ * @param detail  结构化明细（URL、状态码、耗时、响应体等）
+ */
+function lensLog(level: 'log' | 'error', message: string, detail?: Record<string, unknown>): void {
+  if (!LENS_API_DEBUG) return
+  if (level === 'error') {
+    console.error(message, detail === undefined ? '' : detail)
+  } else {
+    console.log(message, detail === undefined ? '' : detail)
+  }
+}
+
+/**
+ * 解析 lens 响应体并输出诊断日志。
+ *
+ * <p>原实现 `r.json().catch(() => ({}))` 有两个缺陷：
+ * <ol>
+ *   <li>响应不是 JSON（302 跳登录页返回 HTML、网关错误页、空 body）时被静默吞成 `{}`；</li>
+ *   <li>从不检查 HTTP 状态码，`code !== 200` 且 `msg` 为空时只抛出无信息的「lens 接口失败」。</li>
+ * </ol>
+ * 结果是 302 / 非 JSON / 空响应 / 业务码非 200 四种完全不同的故障退化成同一句文案，
+ * 无法定位是哪个接口、什么原因（违反「显式失败、禁止静默兜底」）。
+ *
+ * <p>这里改为先取原始文本再解析，异常时把 URL、HTTP 状态与响应体带进错误信息，
+ * 并打印到控制台，保证失败可诊断。
+ *
+ * @param r         原始响应
+ * @param url       请求地址（诊断用）
+ * @param startedAt 请求发起时刻（用于计算耗时）
+ * @returns 解析后的响应体
+ */
+async function parseLensResponse(r: Response, url: string, startedAt: number): Promise<Record<string, unknown>> {
+  const costMs = Date.now() - startedAt
+  const rawText = await r.text().catch(() => '')
+  let body: Record<string, unknown>
+  try {
+    body = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {}
+  } catch {
+    const detail = {
+      url,
+      httpStatus: r.status,
+      costMs,
+      rawText: rawText.slice(0, LENS_DIAG_BODY_MAX_CHARS),
+    }
+    lensLog('error', `[lens] ✗ 响应非 JSON  ${url}`, detail)
+    throw new Error(`lens 接口返回非 JSON：HTTP ${r.status} url=${url} body=${rawText.slice(0, 200)}`)
+  }
+  if (body.code !== 200) {
+    const msg = typeof body.msg === 'string' && body.msg.trim() ? body.msg : '(后端未返回 msg)'
+    const detail = { url, httpStatus: r.status, costMs, code: body.code, msg: body.msg, body }
+    lensLog('error', `[lens] ✗ 业务码非 200  ${url}`, detail)
+    throw new Error(`lens 接口失败：HTTP ${r.status} code=${String(body.code)} msg=${msg} url=${url}`)
+  }
+  lensLog('log', `[lens] ✓ ${r.status} ${costMs}ms  ${url}`)
+  return body
+}
+
+/**
+ * lens 接口统一请求入口：发请求 → 记录诊断日志 → 解析响应体。
+ *
+ * <p>所有 lens 接口（lensFetch / lensFetchPage）都经此发起，因此日志天然覆盖全部接口，
+ * 不需要在每个调用点单独埋点；调用方只负责把响应体解包成各自的返回结构。
+ *
+ * <p>额外覆盖网络层失败：CORS 被拒、连接被拒、断网时 fetch 会直接 reject，
+ * 此时没有状态码也没有响应体，原实现只会抛出一句无信息的错误，这里显式记录原因。
+ *
+ * @param url  接口地址
+ * @param opts fetch 选项
+ * @returns 解析后的响应体（已确认 HTTP 可达且业务码为 200）
+ */
+async function lensRequest(url: string, opts?: RequestInit): Promise<Record<string, unknown>> {
+  const startedAt = Date.now()
+  const method = String(opts?.method || 'GET').toUpperCase()
+  lensLog('log', `[lens] → ${method} ${url}`)
+
+  const token = readCookie('Admin-Token')
+  let r: Response
+  try {
+    r = await fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(opts?.headers || {}),
+      },
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    lensLog('error', `[lens] ✗ 请求未到达  ${method} ${url}`, {
+      url,
+      method,
+      costMs: Date.now() - startedAt,
+      hasToken: Boolean(token),
+      reason,
+    })
+    throw new Error(`lens 接口请求失败：${method} url=${url} 原因=${reason}`)
+  }
+  return parseLensResponse(r, url, startedAt)
+}
+
+/**
+ * 分页请求封装：保留 RuoYi TableDataInfo 的 total。
+ *
+ * <p>不能用 {@link lensFetch}：它在 `body.rows` 是数组时**直接返回 rows 数组**，
+ * 会丢掉 total（分页就没了）。这里显式返回 `{ rows, total }`。
+ *
+ * @param url 接口地址
+ * @param opts fetch 选项
+ * @returns 列表 + 总数（字段缺失时归一为空数组 / 0，避免调用方读 .length 崩溃）
+ */
+async function lensFetchPage<T>(url: string, opts?: RequestInit): Promise<{ rows: T[]; total: number }> {
+  const body = (await lensRequest(url, opts)) as {
+    code?: number
+    msg?: string
+    total?: number
+    rows?: unknown
+  }
+  return {
+    rows: Array.isArray(body.rows) ? (body.rows as T[]) : [],
+    total: typeof body.total === 'number' ? body.total : 0,
+  }
+}
+
 /** 统一请求封装：带 lens token，解包 RuoYi 结构 */
 async function lensFetch<T>(url: string, opts?: RequestInit): Promise<T> {
-  const token = readCookie('Admin-Token')
-  const r = await fetch(url, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(opts?.headers || {}),
-    },
-  })
-  const body = await r.json().catch(() => ({})) as { code?: number; msg?: string; data?: unknown; rows?: unknown }
-  if (body.code !== 200) throw new Error(body.msg || 'lens 接口失败')
+  const body = await lensRequest(url, opts) as { code?: number; msg?: string; data?: unknown; rows?: unknown }
   // TableDataInfo 返回 rows；AjaxResult 返回 data
   if (Array.isArray(body.rows)) return body.rows as T
   return (body.data ?? body) as T
+}
+
+/**
+ * 请求返回「裸业务体」的 lens 接口（响应体无 RuoYi AjaxResult 包装）。
+ *
+ * <p>节点预设接口按画布契约直接返回业务体：GET 返回数组、POST 返回单个对象，
+ * 均**不含 `code` 字段**。这类响应不能走 {@link lensFetch}
+ * —— 它强制校验 `body.code === 200`，对裸数组/裸对象必然判定失败
+ * （数组的 `code` 是 `undefined`，`undefined !== 200` 成立，于是抛出「lens 接口失败」）。
+ *
+ * <p>认证失败等异常路径仍由后端返回 AjaxResult（含 `code`），因此这里显式区分两种形态：
+ * 有 `code` 就按业务码校验并取 `data`；没有 `code` 的才是成功的裸业务体。
+ * 这是对两种已定义契约的显式分支，不是静默兜底 —— 既非数组也非带 `code` 的对象一律报错。
+ *
+ * @param url  接口地址
+ * @param opts fetch 选项
+ * @returns 裸业务体（数组或对象）
+ */
+async function lensFetchBare(url: string, opts?: RequestInit): Promise<unknown> {
+  const startedAt = Date.now()
+  const method = String(opts?.method || 'GET').toUpperCase()
+  lensLog('log', `[lens] → ${method} ${url}`)
+
+  const token = readCookie('Admin-Token')
+  let r: Response
+  try {
+    r = await fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(opts?.headers || {}),
+      },
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    lensLog('error', `[lens] ✗ 请求未到达  ${method} ${url}`, {
+      url,
+      method,
+      costMs: Date.now() - startedAt,
+      hasToken: Boolean(token),
+      reason,
+    })
+    throw new Error(`lens 接口请求失败：${method} url=${url} 原因=${reason}`)
+  }
+
+  const costMs = Date.now() - startedAt
+  const rawText = await r.text().catch(() => '')
+  let parsed: unknown
+  try {
+    parsed = rawText ? JSON.parse(rawText) : null
+  } catch {
+    lensLog('error', `[lens] ✗ 响应非 JSON  ${url}`, {
+      url,
+      httpStatus: r.status,
+      costMs,
+      rawText: rawText.slice(0, LENS_DIAG_BODY_MAX_CHARS),
+    })
+    throw new Error(`lens 接口返回非 JSON：HTTP ${r.status} url=${url} body=${rawText.slice(0, 200)}`)
+  }
+
+  // 形态一：AjaxResult 包装（认证失败 / 业务异常走这条）
+  if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && 'code' in parsed) {
+    const envelope = parsed as { code?: unknown; msg?: unknown; data?: unknown }
+    if (envelope.code !== 200) {
+      const msg = typeof envelope.msg === 'string' && envelope.msg.trim() ? envelope.msg : '(后端未返回 msg)'
+      lensLog('error', `[lens] ✗ 业务码非 200  ${url}`, {
+        url,
+        httpStatus: r.status,
+        costMs,
+        code: envelope.code,
+        msg: envelope.msg,
+      })
+      throw new Error(`lens 接口失败：HTTP ${r.status} code=${String(envelope.code)} msg=${msg} url=${url}`)
+    }
+    lensLog('log', `[lens] ✓ ${r.status} ${costMs}ms  ${url} (AjaxResult 包装)`)
+    return envelope.data ?? envelope
+  }
+
+  // 形态二：裸业务体（数组 / 对象），没有 code 字段属正常契约
+  if (parsed === null) {
+    lensLog('error', `[lens] ✗ 响应体为空  ${url}`, { url, httpStatus: r.status, costMs })
+    throw new Error(`lens 接口响应体为空：HTTP ${r.status} url=${url}`)
+  }
+  lensLog('log', `[lens] ✓ ${r.status} ${costMs}ms  ${url}`)
+  return parsed
 }
 
 // ============ 类型定义（lens 实体 → 画布投影所需字段） ============

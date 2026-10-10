@@ -49,11 +49,23 @@ export function subscribeTaskProgress({ url, token, onEvent, onOpen, onError }: 
       signal: controller.signal,
     })
 
+    // 错误信息必须带实际请求 URL：该链路曾被配置成打向不存在该路由的后端，
+    // 只报状态码无法定位是哪个地址失败。
     if (!response.ok) {
-      throw new Error(`task progress stream failed: ${response.status}`)
+      throw new Error(`task progress stream failed: ${response.status} url=${resolvedUrl}`)
     }
     if (!response.body) {
-      throw new Error('task progress stream missing body')
+      throw new Error(`task progress stream missing body url=${resolvedUrl}`)
+    }
+    // 显式校验响应确实是 SSE。
+    // 服务端无此路由时会被安全框架 302 到登录页，fetch 默认跟随重定向拿到 HTML，
+    // 此时 response.ok 为 true，若不校验 content-type 会把 HTML 当事件流静默空转，
+    // 既不报错也收不到任何事件（禁止静默兜底：非 SSE 响应直接失败）。
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+    if (!contentType.includes('text/event-stream')) {
+      throw new Error(
+        `task progress stream returned non-SSE response: content-type=${contentType || '(empty)'} url=${resolvedUrl}`,
+      )
     }
 
     onOpen?.()
