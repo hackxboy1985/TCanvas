@@ -9,14 +9,23 @@
  * 与 tapCanvas 现有 storyboard 节点（分镜图生视频）区分：本节点是「参考图 + 提示词生视频」，
  * 现有 storyboard 节点保留不动。
  */
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Handle, Position, NodeToolbar, useReactFlow, type Node, type NodeProps } from '@xyflow/react'
-import { Button, Group, Select, Switch, Text, Textarea, Tooltip } from '@mantine/core'
-import { IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react'
+import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip } from '@mantine/core'
+import { IconListSearch, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react'
 import { useRFStore } from '../../canvas/store'
 import { useMantineColorScheme } from '@mantine/core'
 import { useModelOptions } from '../../config/useModelOptions'
+import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { editStoryboard, clearStoryboardSpeaker, submitShotVideo } from '../../api/lens'
+import {
+  buildDurationOptions,
+  clampDuration,
+  convergeToOptions,
+  resolveModelAspectOptions,
+  resolveModelDurationRange,
+  resolveModelResolutionOptions,
+} from '../utils/lensShotModelParams'
 
 /** 分镜引用（底部引用行）：场景/道具/角色/站位 */
 export interface LensShotRef {
@@ -150,6 +159,8 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
 }
 
 function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
+  // 任务结果抽屉的入口回调（由 LensCanvasApp 注入；未注入则不显示按钮）
+  const { onOpenTaskResult } = useCanvasRenderContext()
   const { colorScheme } = useMantineColorScheme()
   const isDark = colorScheme === 'dark'
   const rf = useReactFlow()
@@ -178,6 +189,30 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   // 所选模型的单次积分消耗（lens 模型接口 unitConsume）
   const selectedModel = models.find((m) => m.value === modelValue)
   const consumePoints = (selectedModel?.meta as { lensUnitConsume?: number } | undefined)?.lensUnitConsume ?? '—'
+  // 生成时长 / 画幅 / 分辨率：全部随所选模型的能力配置联动（解析逻辑见 lensShotModelParams）
+  const [durationValue, setDurationValue] = useState<number | null>(
+    typeof data.time === 'number' && data.time > 0 ? Math.trunc(data.time) : null,
+  )
+  const { min: minDuration, max: maxDuration } = resolveModelDurationRange(selectedModel?.meta)
+  const durationOptions = useMemo(() => buildDurationOptions(minDuration, maxDuration), [minDuration, maxDuration])
+  const aspectOptions = useMemo(() => resolveModelAspectOptions(selectedModel?.meta), [selectedModel])
+  const resolutionOptions = useMemo(() => resolveModelResolutionOptions(selectedModel?.meta), [selectedModel])
+  // 换模型后若当前时长超出该模型区间，收敛到边界值（避免下发超限时长被渠道拒绝）
+  useEffect(() => {
+    setDurationValue((prev) => clampDuration(prev, minDuration, maxDuration))
+  }, [minDuration, maxDuration])
+
+  // 换模型后若当前画幅/分辨率不在该模型支持范围内，收敛到该模型允许的值
+  // （避免下发模型不支持的画幅/分辨率，被渠道直接拒绝或按默认值静默改写）
+  // 依赖里同时带上节点持久化值：切集/刷新后 data.aspectRatio 变化时重新按当前模型收敛
+  useEffect(() => {
+    const persisted = typeof data.aspectRatio === 'string' && data.aspectRatio ? data.aspectRatio : null
+    setAspectValue((prev) => convergeToOptions(persisted ?? prev, aspectOptions) ?? prev)
+  }, [aspectOptions, data.aspectRatio])
+  useEffect(() => {
+    const persisted = typeof data.resolution === 'string' && data.resolution ? data.resolution : null
+    setResolutionValue((prev) => convergeToOptions(persisted ?? prev, resolutionOptions) ?? prev)
+  }, [resolutionOptions, data.resolution])
 
   // 媒体实际宽高比（用于节点高度随视频比例：宽度恒 384 填满，高度按比例）
   const [mediaAspect, setMediaAspect] = useState<number | null>(null)
@@ -189,14 +224,14 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   }, [data.selectedImageUrl, data.time])
 
   // 节点数据变化时回填编辑草稿（如切集/刷新后）
+  // 注意：画幅/分辨率/时长不在此回填 —— 它们必须跟随所选模型的可用范围（见上方收敛 effect），
+  // 若在这里按 data.* 覆盖，会在切模型时把已收敛到模型范围内的值又改回越界值。
   useEffect(() => {
     setScriptDraft(String(data.scriptContent ?? ''))
     setTimeDraft(String(data.timeOfDay ?? ''))
     setModelValue(typeof data.model === 'string' && data.model ? data.model : null)
     setPromptDraft(String(data.prompt ?? ''))
-    setAspectValue(String(data.aspectRatio ?? '16:9'))
-    setResolutionValue(String(data.resolution ?? '1080p'))
-  }, [data.scriptContent, data.timeOfDay, data.model, data.prompt, data.aspectRatio, data.resolution])
+  }, [data.scriptContent, data.timeOfDay, data.model, data.prompt])
 
   /** 放大到本节点（双击触发：视频/图片都不进入全屏或大图预览） */
   const zoomToSelf = useCallback((e?: React.MouseEvent) => {
@@ -266,6 +301,14 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       setSaveState('请先选择生视频模型')
       return
     }
+    // 时长：按秒/按时长计费模型的必填参数，缺失时后端 /api/storyboardTask/submit
+    // 会在余额预检抛「参数错误，缺少时长」，任务根本无法落库。
+    // 取节点上显式选择的时长（默认回填分镜自身时长），并夹到所选模型的 min~max 区间内。
+    const duration = clampDuration(durationValue, minDuration, maxDuration)
+    if (duration === null) {
+      setSaveState('请先选择生成时长')
+      return
+    }
     setSaveState('任务提交中…')
     try {
       await submitShotVideo({
@@ -277,13 +320,14 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         prompt: promptDraft || scriptDraft,
         aspectRatio: aspectValue,
         resolution: resolutionValue,
+        duration,
         refImages: JSON.stringify(refs.map((r) => r.imgUrl).filter(Boolean)),
       })
       setSaveState('已提交生视频任务')
     } catch (err) {
       setSaveState(`提交失败：${err instanceof Error ? err.message : '未知错误'}`)
     }
-  }, [data.entityId, data.sourceProjectId, data.episodeNum, data.prompt, scriptDraft, modelValue, refs, aspectValue, resolutionValue])
+  }, [data.entityId, data.sourceProjectId, data.episodeNum, data.prompt, scriptDraft, modelValue, refs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
 
   // 横屏：宽 800、高按比例（16:9→450）；竖屏：高度限制 720、宽度随高度收窄（9:16→720×405），视频完整不裁切
   const HEADER_HEIGHT = 44
@@ -336,7 +380,26 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
             </span>
           )}
         </span>
-        <StatusDot data={data} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {/* 任务结果入口：只读查看该分镜的历史生视频任务（懒加载，点开才查） */}
+          {onOpenTaskResult && (
+            <Tooltip label="任务结果" position="top" withArrow>
+              <ActionIcon
+                className="lens-shot-task-result-btn"
+                variant="subtle"
+                size="sm"
+                aria-label="任务结果"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenTaskResult(id)
+                }}
+              >
+                <IconListSearch size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <StatusDot data={data} />
+        </span>
       </div>
 
       {/* 中间区：图/视频 或 脚本（占满剩余空间，媒体按实际宽高比自适应节点宽度） */}
@@ -517,9 +580,34 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 </Tooltip>
               </div>
 
-              {/* 编辑区：剧本 / 提示词 切换（默认剧本；提示词为分镜生视频提示词 data.prompt） */}
+              {/* 编辑区：时间/模型 参数行 + 剧本 / 提示词 切换（默认剧本；提示词为分镜生视频提示词 data.prompt） */}
               <Group justify="space-between" align="center" mb={6} style={{ marginTop: 10 }}>
-                <Text size="sm" fw={600}>{promptMode === 'prompt' ? '分镜提示词' : '分镜剧本'}</Text>
+                <Group gap={8} align="center" wrap="nowrap">
+                  <Text size="sm" fw={600}>{promptMode === 'prompt' ? '分镜提示词' : '分镜剧本'}</Text>
+                  {/* 时长：选项范围随所选模型配置（minDuration~maxDuration），与分镜板分镜任务面板一致 */}
+                  <Select
+                    size="xs"
+                    w={78}
+                    data={durationOptions}
+                    value={durationValue === null ? null : String(durationValue)}
+                    onChange={(v) => {
+                      const next = v === null ? null : Number(v)
+                      const durationNext = next !== null && Number.isFinite(next) ? Math.trunc(next) : null
+                      setDurationValue(durationNext)
+                      // 同步写回节点数据 + 分镜板（/api/storyboard/edit，与分镜板面板 saveStoryboardTime 同一出口）
+                      useRFStore.getState().updateNodeData(id, { time: durationNext })
+                      const storyboardId = String(data.entityId ?? '')
+                      const dramaId = String(data.sourceProjectId ?? '')
+                      if (durationNext !== null && storyboardId && dramaId) {
+                        void editStoryboard({ id: storyboardId, dramaId, time: durationNext }).catch((err: unknown) => {
+                          setSaveState(`时长同步失败：${err instanceof Error ? err.message : '未知错误'}`)
+                        })
+                      }
+                    }}
+                    placeholder="时长"
+                    aria-label="生成时长"
+                  />
+                </Group>
                 <Switch
                   size="xs"
                   label="提示词"
@@ -555,19 +643,23 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                     onChange={(v) => setModelValue(v)}
                     placeholder={models.length ? '选择生视频模型' : '暂无可用模型'}
                   />
+                  {/* 画幅：选项来自所选模型 others.supportedRatios，未配置时用通用兜底 */}
                   <Select
                     size="xs"
                     w={92}
-                    data={[{ value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }]}
+                    data={aspectOptions.map((v) => ({ value: v, label: v }))}
                     value={aspectValue}
-                    onChange={(v) => setAspectValue(v ?? '16:9')}
+                    onChange={(v) => setAspectValue(v ?? aspectValue)}
+                    aria-label="画幅"
                   />
+                  {/* 分辨率：选项来自所选模型 resolutions，未配置时用通用兜底 */}
                   <Select
                     size="xs"
                     w={92}
-                    data={[{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }, { value: '2K', label: '2K' }]}
+                    data={resolutionOptions.map((v) => ({ value: v, label: v }))}
                     value={resolutionValue}
-                    onChange={(v) => setResolutionValue(v ?? '1080p')}
+                    onChange={(v) => setResolutionValue(v ?? resolutionValue)}
+                    aria-label="分辨率"
                   />
                   <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints} 积分</Text>
                   <Button size="xs" variant="filled" onClick={() => void handleGenerate()}>生成</Button>
