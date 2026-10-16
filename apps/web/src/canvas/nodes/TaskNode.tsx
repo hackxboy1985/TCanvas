@@ -183,6 +183,9 @@ import { ChapterGroundedBadge } from './taskNode/components/ChapterGroundedBadge
 import { resolveCompiledImagePrompt, resolveImagePromptExecution } from './taskNode/imagePromptSpec'
 import { refineStructuredImagePrompt } from './taskNode/structuredPromptRefine'
 import imageViewControlsModule from '@tapcanvas/image-view-controls'
+import { PromptEditorActions } from './taskNode/components/PromptEditorActions'
+import { usePromptEditorAdmin } from '../../auth/usePromptEditorAdmin'
+import type { LensPromptPolishBilling } from '../../api/lens'
 import {
   resolvePrimarySemanticAnchorBinding,
   resolveSemanticNodeRoleBinding,
@@ -1321,7 +1324,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     }
   }, [data, rawPrompt])
   const canUseStructuredPromptEditor = coreKind === 'image'
-  const isStructuredPromptMode = canUseStructuredPromptEditor && imagePromptExecutionState.execution.mode === 'structured'
+  const isPromptEditorAdmin = usePromptEditorAdmin()
+  const isStructuredPromptMode = isPromptEditorAdmin && canUseStructuredPromptEditor && imagePromptExecutionState.execution.mode === 'structured'
   const structuredPromptValue = imagePromptExecutionState.execution.structuredPrompt
   const structuredPromptErrorMessage = imagePromptExecutionState.errorMessage
   const [prompt, setPrompt] = React.useState<string>(rawPrompt || '')
@@ -4074,7 +4078,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const firstTextModel = rewriteModelOptions.find((opt) => typeof opt?.value === 'string' && opt.value.trim())
     return getModelOptionRequestAlias(rewriteModelOptions, firstTextModel?.value) || ''
   }, [data, modelKey, rewriteModelOptions])
-  const refineStructuredPromptFromText = React.useCallback(async (basePrompt?: string) => {
+  const refineStructuredPromptFromText = React.useCallback(async (
+    basePrompt?: string,
+    onBilling?: (billing: LensPromptPolishBilling | null) => void,
+  ) => {
     const nextPrompt = typeof basePrompt === 'string' ? basePrompt.trim() : prompt.trim()
     if (!nextPrompt) {
       throw new Error('请先输入提示词，再切到 JSON 模式')
@@ -4093,54 +4100,28 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     prompt: string
   }) => {
     setPrompt(patch.prompt)
+      onBilling,
     updateNodeData(id, {
       structuredPrompt: patch.structuredPrompt,
       prompt: patch.prompt,
       promptEditorMode: 'structured',
     })
   }, [id, updateNodeData])
-  const handleEnableStructuredPromptMode = React.useCallback(async () => {
-    if (!canUseStructuredPromptEditor || structuredPromptRefineLoading) return
+  const handleRefineImagePrompt = React.useCallback(async () => {
+    if (!canUseStructuredPromptEditor || viewOnly || structuredPromptRefineLoading) return
 
     const currentPrompt = prompt.trim()
-    const existingCompiledPrompt = structuredPromptValue
-      ? resolveCompiledImagePrompt({
-        structuredPrompt: structuredPromptValue,
-        promptEditorMode: 'structured',
-      }).trim()
-      : ''
-
-    if (!currentPrompt && existingCompiledPrompt) {
-      setPrompt(existingCompiledPrompt)
-      updateNodeData(id, {
-        structuredPrompt: structuredPromptValue,
-        prompt: existingCompiledPrompt,
-        promptEditorMode: 'structured',
-      })
-      return
-    }
-
     if (!currentPrompt) {
-      toast('请先输入提示词，再切到 JSON 模式', 'warning')
-      return
-    }
-
-    if (
-      structuredPromptValue &&
-      existingCompiledPrompt &&
-      existingCompiledPrompt === currentPrompt
-    ) {
-      updateNodeData(id, {
-        structuredPrompt: structuredPromptValue,
-        prompt: existingCompiledPrompt,
-        promptEditorMode: 'structured',
-      })
+      toast('请先输入提示词，再进行 AI 润色', 'warning')
       return
     }
 
     try {
       setStructuredPromptRefineLoading(true)
-      const nextStructuredPrompt = await refineStructuredPromptFromText(currentPrompt)
+      const billingResult: { value: LensPromptPolishBilling | null } = { value: null }
+      const nextStructuredPrompt = await refineStructuredPromptFromText(currentPrompt, (billing) => {
+        billingResult.value = billing
+      })
       const nextCompiledPrompt = resolveCompiledImagePrompt({
         structuredPrompt: nextStructuredPrompt,
         promptEditorMode: 'structured',
@@ -4149,9 +4130,20 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       updateNodeData(id, {
         structuredPrompt: nextStructuredPrompt,
         prompt: nextCompiledPrompt,
-        promptEditorMode: 'structured',
+        promptEditorMode: isStructuredPromptMode ? 'structured' : 'text',
       })
-      toast('已切换为 JSON 提示词模式', 'success')
+      // lens 模式下润色走 lens 后端并计费，把免费/扣分事实如实告知用户（拿不到计费信息时不编造）
+      const polishBilling = billingResult.value
+      if (polishBilling) {
+        toast(
+          polishBilling.free
+            ? `AI 润色完成（本次免费，今日剩余 ${polishBilling.freeRemain} 次）`
+            : `AI 润色完成（已扣 ${polishBilling.charged} 积分）`,
+          'success',
+        )
+      } else {
+        toast('AI 润色完成', 'success')
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '生成结构化 JSON 失败'
       toast(message, 'error')
@@ -4164,16 +4156,19 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     prompt,
     refineStructuredPromptFromText,
     structuredPromptRefineLoading,
-    structuredPromptValue,
+    isStructuredPromptMode,
     updateNodeData,
   ])
+    viewOnly,
   const handleStructuredPromptModeChange = React.useCallback((next: boolean) => {
-    if (next) {
-      void handleEnableStructuredPromptMode()
+    if (!isPromptEditorAdmin || !structuredPromptValue || viewOnly || structuredPromptRefineLoading) return
+    if (next && resolveCompiledImagePrompt({ structuredPrompt: structuredPromptValue, promptEditorMode: 'structured' }).trim() !== prompt.trim()) {
+      toast('提示词已修改，请先点击 AI 润色更新结构化内容', 'warning')
       return
     }
-    updateNodeData(id, { promptEditorMode: 'text' })
-  }, [handleEnableStructuredPromptMode, id, updateNodeData])
+    updateNodeData(id, { promptEditorMode: next ? 'structured' : 'text' })
+  }, [isPromptEditorAdmin, structuredPromptValue, prompt, viewOnly, structuredPromptRefineLoading, id, updateNodeData])
+  // JSON 只切换已有结构化结果的展示，绝不调用润色接口或触发计费。
   const baseShowTimeMenu = hasDuration
   const baseShowResolutionMenu = isVideoNode
     ? configuredSizeOptions.length > 0 || hasAspect
@@ -8673,24 +8668,15 @@ const rewritePromptWithCharacters = React.useCallback(
                 )}
 
                 {canUseStructuredPromptEditor && !isPlainTextNode && (
-                  <Group className="tc-task-node__prompt-mode-switch" justify="space-between" gap={8}>
-                    <Text className="tc-task-node__prompt-mode-switch-label" size="xs" c="dimmed">
-                      提示词编辑模式
-                    </Text>
-                    <Group className="tc-task-node__prompt-mode-switch-control" gap={8}>
-                      {structuredPromptRefineLoading ? (
-                        <Loader className="tc-task-node__prompt-mode-switch-loader" size="xs" />
-                      ) : null}
-                      <Switch
-                        className="tc-task-node__prompt-mode-switch-input"
-                        size="xs"
-                        checked={isStructuredPromptMode}
-                        disabled={viewOnly || structuredPromptRefineLoading}
-                        label="JSON"
-                        onChange={(event) => handleStructuredPromptModeChange(event.currentTarget.checked)}
-                      />
-                    </Group>
-                  </Group>
+                  <PromptEditorActions
+                    isAdmin={isPromptEditorAdmin}
+                    structured={isStructuredPromptMode}
+                    hasStructuredPrompt={Boolean(structuredPromptValue)}
+                    loading={structuredPromptRefineLoading}
+                    readOnly={viewOnly}
+                    onRefine={() => { void handleRefineImagePrompt() }}
+                    onModeChange={handleStructuredPromptModeChange}
+                  />
                 )}
 
                 {isPlainTextNode ? null : isStructuredPromptMode ? (
@@ -8699,13 +8685,6 @@ const rewritePromptWithCharacters = React.useCallback(
                     loading={structuredPromptRefineLoading}
                     externalError={structuredPromptErrorMessage}
                     onCommit={handleCommitStructuredPrompt}
-                    onRefine={
-                      viewOnly
-                        ? undefined
-                        : () => {
-                            void handleEnableStructuredPromptMode()
-                          }
-                    }
                   />
                 ) : (
                   <PromptSection
@@ -8718,7 +8697,9 @@ const rewritePromptWithCharacters = React.useCallback(
                     isStoryboardNode={isStoryboardNode}
                     prompt={prompt}
                     setPrompt={setPrompt}
-                    onUpdateNodeData={(patch) => updateNodeData(id, patch)}
+                    onUpdateNodeData={(patch) => updateNodeData(id,
+                      'prompt' in patch ? { ...patch, promptEditorMode: 'text' } : patch,
+                    )}
                     placeholder={
                       isVideoNode
                         ? '描述这条视频要生成的画面、动作和情绪'

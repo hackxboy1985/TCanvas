@@ -679,3 +679,101 @@ export async function getCanvasTaskStatus(taskId: number): Promise<LensCanvasTas
   }
   return data
 }
+
+/** 从 lens 已有身份接口读取真实管理员角色，不使用 TapCanvas 开发环境权限。 */
+export async function getLensCurrentUserIsAdmin(): Promise<boolean> {
+  const info = await lensFetch<{ roles?: unknown }>('/api/getInfo')
+  if (!Array.isArray(info.roles)) throw new Error('身份接口未返回角色列表')
+  return info.roles.includes('admin')
+}
+
+/** lens 提示词润色的计费结果（后端 chargePromptPolish 返回体）。 */
+export interface LensPromptPolishBilling {
+  /** 本次是否走免费额度（true 表示未扣积分） */
+  free: boolean
+  /** 今日已使用次数（含本次） */
+  freeUsed: number
+  /** 每日免费次数上限（后台可配，最大 10） */
+  freeLimit: number
+  /** 今日剩余免费次数 */
+  freeRemain: number
+  /** 本次实际扣减的积分数（免费时为 0） */
+  charged: number
+}
+
+/** lens 提示词润色结果。 */
+export interface LensPromptPolishResult {
+  /** 润色后的文本 */
+  polishedText: string
+  /** 计费信息；后端未返回时为 null（不阻断润色结果的使用） */
+  billing: LensPromptPolishBilling | null
+}
+
+/** 提示词润色入参。 */
+export interface LensPromptPolishParams {
+  /** 待润色的文本，必填 */
+  prompt: string
+  /** 调用方补充的系统提示词（可选） */
+  systemPrompt?: string
+  /** 模型别名（可选；后端数据源池已配 model 时以池为准） */
+  modelAlias?: string
+}
+
+/**
+ * 提示词润色（lens 后端同步接口）。
+ *
+ * <p>背景：画布原先直连 TapCanvas 的 `POST /public/tasks`（kind=prompt_refine），
+ * 但 lens 部署下 `VITE_API_BASE` 指向 9096，而 lens 没有该路由 —— 请求被 302 到 `/`
+ * 后返回 HTML 200，前端 content-type 守卫抛「接口返回 HTML 而非 JSON」。
+ * 本函数改为调用 lens 自己的润色接口，由后端按「提示词设置 → 智能分析」配置的数据源池
+ * （主 → 备1 → 备2）执行润色，成功后才扣积分。
+ *
+ * @param params 润色入参（prompt / systemPrompt / modelAlias）
+ * @returns 润色文本与计费信息
+ */
+export async function polishPrompt(params: LensPromptPolishParams): Promise<LensPromptPolishResult> {
+  const prompt = typeof params.prompt === 'string' ? params.prompt.trim() : ''
+  if (!prompt) {
+    throw new Error('缺少待润色的提示词')
+  }
+  const body: Record<string, unknown> = { prompt }
+  if (params.systemPrompt) body.systemPrompt = params.systemPrompt
+  if (params.modelAlias) body.modelAlias = params.modelAlias
+
+  const data = await lensFetch<{ polishedText?: unknown; billing?: unknown }>('/api/canvas/promptPolish', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  // 显式失败：后端必须返回非空 polishedText，拿不到就直接报错，不做任何兜底
+  const polishedText = typeof data?.polishedText === 'string' ? data.polishedText.trim() : ''
+  if (!polishedText) {
+    throw new Error('提示词润色失败：接口未返回有效内容')
+  }
+  return { polishedText, billing: normalizeLensPromptPolishBilling(data?.billing) }
+}
+
+/**
+ * 归一化润色计费信息：字段缺失或类型不符时整块返回 null（由调用方决定是否展示），
+ * 不做逐字段补默认值 —— 避免把「后端没返回」伪装成「免费 0 次」误导用户。
+ *
+ * @param raw 后端返回的 billing 字段
+ * @returns 计费信息，形状不合法时返回 null
+ */
+function normalizeLensPromptPolishBilling(raw: unknown): LensPromptPolishBilling | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  const toNumber = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null
+  const freeUsed = toNumber(record.freeUsed)
+  const freeLimit = toNumber(record.freeLimit)
+  const freeRemain = toNumber(record.freeRemain)
+  const charged = toNumber(record.charged)
+  if (freeUsed === null || freeLimit === null || freeRemain === null || charged === null) return null
+  return {
+    free: record.free === true,
+    freeUsed,
+    freeLimit,
+    freeRemain,
+    charged,
+  }
+}

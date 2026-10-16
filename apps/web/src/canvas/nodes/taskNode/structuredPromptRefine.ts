@@ -1,6 +1,8 @@
 import { parseImagePromptSpecV2, type ImagePromptSpecV2 } from '@tapcanvas/image-prompt-spec'
 import { runPublicTask } from '../../../api/server'
+import { polishPrompt, type LensPromptPolishBilling } from '../../../api/lens'
 import { getAuthToken } from '../../../auth/store'
+import { isLensMode } from '../../../config/useModelOptions'
 import { useUIStore } from '../../../ui/uiStore'
 import { extractTextFromTaskResult } from '../taskNodeHelpers'
 
@@ -10,6 +12,8 @@ type RefineStructuredPromptInput = {
   systemPrompt?: string
   modelAlias?: string
   productionMetadata?: unknown
+  /** 计费结果跟随本次请求回传，避免不同节点并发串用。 */
+  onBilling?: (billing: LensPromptPolishBilling | null) => void
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -72,7 +76,7 @@ export async function refineStructuredImagePrompt(
   const ui = useUIStore.getState()
   const apiKey = (ui.publicApiKey || '').trim()
   const token = getAuthToken()
-  if (!apiKey && !token) {
+  if (!isLensMode() && !apiKey && !token) {
     throw new Error('请先登录后再试')
   }
 
@@ -114,19 +118,13 @@ export async function refineStructuredImagePrompt(
     .filter(Boolean)
     .join('\n\n')
 
-  const taskRes = await runPublicTask(apiKey, {
-    request: {
-      kind: 'prompt_refine',
-      prompt: promptText,
-      extras: {
-        systemPrompt,
-        ...(input.modelAlias ? { modelAlias: input.modelAlias } : {}),
-        persistAssets: false,
-      },
-    },
+  const rawText = await requestRefinedPrompt({
+    apiKey,
+    promptText,
+    systemPrompt,
+    modelAlias: input.modelAlias,
+    onBilling: input.onBilling,
   })
-
-  const rawText = extractTextFromTaskResult(taskRes.result).trim()
   const parsedPayload = extractJsonPayload(rawText)
   const parsedSpec = parseImagePromptSpecV2(parsedPayload)
   if (!parsedSpec.ok || !parsedSpec.value) {
@@ -135,4 +133,55 @@ export async function refineStructuredImagePrompt(
   }
 
   return parsedSpec.value
+}
+
+/** 润色请求入参。 */
+type RefinePromptRequest = {
+  /** 公共 API Key（非 lens 模式使用） */
+  apiKey: string
+  /** 组装好的完整提示词 */
+  promptText: string
+  /** 系统提示词 */
+  systemPrompt: string
+  /** 模型别名（可选） */
+  modelAlias?: string
+  onBilling?: (billing: LensPromptPolishBilling | null) => void
+}
+
+/**
+ * 请求润色文本 —— lens / 非 lens 的**单点分流**。
+ *
+ * <p>lens 模式走 lens 后端同步润色接口 {@link polishPrompt}：画布部署下 `VITE_API_BASE`
+ * 指向 lens（9096），lens 没有 TapCanvas 的 `POST /public/tasks` 路由，继续直连会拿到
+ * HTML 200 并抛「接口返回 HTML 而非 JSON」。
+ *
+ * <p>非 lens 模式保持原链路（`runPublicTask` + kind=prompt_refine）零改动。
+ *
+ * @param input 润色请求
+ * @returns 润色后的原始文本（可能是 JSON 或 JSON 代码块）
+ */
+async function requestRefinedPrompt(input: RefinePromptRequest): Promise<string> {
+  if (isLensMode()) {
+    const result = await polishPrompt({
+      prompt: input.promptText,
+      systemPrompt: input.systemPrompt,
+      modelAlias: input.modelAlias,
+    })
+    input.onBilling?.(result.billing)
+    return result.polishedText
+  }
+
+  input.onBilling?.(null)
+  const taskRes = await runPublicTask(input.apiKey, {
+    request: {
+      kind: 'prompt_refine',
+      prompt: input.promptText,
+      extras: {
+        systemPrompt: input.systemPrompt,
+        ...(input.modelAlias ? { modelAlias: input.modelAlias } : {}),
+        persistAssets: false,
+      },
+    },
+  })
+  return extractTextFromTaskResult(taskRes.result).trim()
 }
