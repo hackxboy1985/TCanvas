@@ -347,6 +347,7 @@ export interface LensAssetImage {
   type?: number
   parentId?: string
   variantName?: string
+  subType?: string
   hasHuman?: number
 }
 

@@ -4,6 +4,7 @@ import { listReferenceAssets } from '../../api/lens'
 import { groupReferenceAssets, ReferenceCategory, referenceKey, type ReferenceAsset, type ReferenceGroup } from '../nodes/lensShotReferences'
 import './lensReferencePicker.css'
 
+const SCENE_SUBTYPE_LABELS: Record<string, string> = { time: '日夜', weather: '天气', inout: '内外', area: '区域', position: '位置', furniture: '家具', facility: '设施' }
 const TABS = [{ value: ReferenceCategory.Role, label: '角色' }, { value: ReferenceCategory.Scene, label: '场景' }, { value: ReferenceCategory.Prop, label: '道具' }]
 interface Props { opened: boolean; dramaId: string; existingKeys: string[]; onClose: () => void; onConfirm: (assets: ReferenceAsset[]) => Promise<void> }
 /** 与分镜板同构的资产列表，保留父子分组、批量选择与直接添加。 */
@@ -60,7 +61,7 @@ export function LensReferencePicker({ opened, dramaId, existingKeys, onClose, on
             return <article className={'lens-reference-picker__card' + (checked ? ' is-selected' : '')} key={key}>
               <div className={'lens-reference-picker__thumb' + (tab === ReferenceCategory.Role ? ' lens-reference-picker__thumb--role' : '')}>
                 {asset.imgUrl ? <img className="lens-reference-picker__image" src={asset.imgUrl} alt={asset.variantName || asset.name} loading="lazy" /> : <Text className="lens-reference-picker__no-image" size="xs">暂无图片</Text>}
-                {asset.parentId && <span className="lens-reference-picker__badge">{asset.variantName || (tab === ReferenceCategory.Role ? '其他造型' : '子场景')}</span>}
+                {asset.parentId && <span className="lens-reference-picker__badge">{tab === ReferenceCategory.Role ? '其他造型' : asset.variantName || '子场景'}{asset.subType && SCENE_SUBTYPE_LABELS[asset.subType] ? ' · ' + SCENE_SUBTYPE_LABELS[asset.subType] : ''}</span>}
                 {checked && <span className="lens-reference-picker__check">{linked ? '已关联' : '✓'}</span>}
                 <div className="lens-reference-picker__hover">
                   <button className="lens-reference-picker__action" type="button" disabled={disabled} onClick={() => { void confirm([asset]) }}>直接添加</button>

@@ -9365,6 +9365,12 @@ body {
   font-family: inherit;
   position: relative;
 }
+
+/* 提示词与剧本切换时保持编辑框高度，长内容只在输入框内滚动。 */
+.lens-shot-prompt-editor textarea {
+  resize: none;
+  overflow-y: auto;
+}
 .lens-shot-handle {
   width: 8px;
   height: 8px;
