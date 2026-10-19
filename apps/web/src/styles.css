@@ -9412,9 +9412,9 @@ body {
 
 /* 提示词与剧本切换时保持编辑框高度，长内容只在输入框内滚动。 */
 .lens-shot-prompt-editor .mantine-Textarea-input {
-  /* 与生图节点底部工具栏编辑框的 6 行、154px 基准保持一致。 */
-  height: 154px;
-  max-height: 154px;
+  /* 与生图节点底部工具栏编辑框（最高 6 行）保持一致并多 1 行；高度固定避免整体工具栏出现滚动条。 */
+  height: 176px;
+  max-height: 176px;
   resize: none;
   overflow-y: auto;
   scrollbar-gutter: stable;

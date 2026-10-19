@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import { addShotReferenceRelations, type LensAssetImage, type LensRole } from '../../api/lens'
+import { addShotReferenceRelations, removeShotReferenceRelations, type LensAssetImage, type LensRole } from '../../api/lens'
 import { useRFStore } from '../store'
 import { pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import type { LensShotRef } from './LensShotNode'
@@ -39,6 +39,32 @@ export function referenceFromNode(node: Node): ReferenceAsset {
 }
 
 const savingTargets = new Set<string>()
+
+/** 先删除业务关联，再同步移除本地引用及该资产指向分镜的连线。 */
+export async function disconnectShotReference(targetId: string, ref: LensShotRef): Promise<void> {
+  if (savingTargets.has(targetId)) throw new Error('参考正在保存，请稍候')
+  const state = useRFStore.getState()
+  const target = state.nodes.find((node) => node.id === targetId)
+  if (!target) throw new Error('目标分镜已不存在')
+  const dramaId = String(target.data.sourceProjectId || '')
+  const storyboardId = String(target.data.entityId || '')
+  if (!dramaId || !storyboardId) throw new Error('缺少剧集或分镜身份，无法删除参考')
+  savingTargets.add(targetId)
+  try {
+    await removeShotReferenceRelations(dramaId, storyboardId, [{ assetId: ref.id, assetCategory: ref.category }])
+    const latest = useRFStore.getState()
+    const latestTarget = latest.nodes.find((node) => node.id === targetId && String(node.data.entityId) === storyboardId && String(node.data.sourceProjectId) === dramaId)
+    if (!latestTarget) return
+    const refs = (Array.isArray(latestTarget.data.refs) ? latestTarget.data.refs : []) as LensShotRef[]
+    const remaining = refs.filter((item) => referenceKey(item) !== referenceKey(ref))
+    // 后端删除角色引用会清理说话者，本地同步清理，避免留下说话者标记。
+    const speakerName = String(latestTarget.data.speakerName || '').split(',').filter((name) => name.trim() && (ref.category !== ReferenceCategory.Role || name.trim() !== ref.name)).join(',')
+    latest.updateNodeData(targetId, { refs: remaining, speakerName })
+    const sourceIds = new Set(latest.nodes.filter((node) => Number(node.data.assetCategory) === ref.category && String(node.data.entityId) === ref.id).map((node) => node.id))
+    latest.edges.filter((edge) => edge.target === targetId && sourceIds.has(edge.source)).forEach((edge) => latest.deleteEdge(edge.id))
+  } finally { savingTargets.delete(targetId) }
+}
+
 /** 业务关联成功后再补节点和连线，禁止把业务资产副本持久化到 flow。 */
 export async function connectShotReferences(targetId: string, assets: ReferenceAsset[], sourceNodeId?: string): Promise<void> {
   if (savingTargets.has(targetId)) throw new Error('参考正在保存，请稍候')

@@ -70,6 +70,22 @@ describe('分镜节点底部视频积分联动', () => {
     expect(video.paused).toBe(false)
     expect(setCenter).toHaveBeenCalledWith(500, 425, { zoom: 1.2, duration: 250 })
   })
+  it('选中节点时工具栏不滚动，长提示词留在固定行数编辑框中', () => {
+    const props = { id: 'shot-scroll', data: { prompt: '长提示词'.repeat(100), scriptContent: '短剧本' }, selected: true } as React.ComponentProps<typeof LensShotNode>
+    const { container } = render(<MantineProvider><LensShotNode {...props} /></MantineProvider>)
+    const frame = container.querySelector<HTMLElement>('.test-shot-toolbar .tc-task-node__toolbar-frame')
+    const editor = container.querySelector<HTMLTextAreaElement>('.lens-shot-prompt-editor textarea')
+    expect(frame?.style.overflow).toBe('visible')
+    expect(frame?.style.maxHeight).toBe('')
+    expect(editor?.rows).toBe(7)
+    expect(editor?.value).toBe('长提示词'.repeat(100))
+    fireEvent.click(screen.getByLabelText('提示词'))
+    expect(editor?.value).toBe('短剧本')
+    expect(frame?.style.overflow).toBe('visible')
+    fireEvent.click(screen.getByLabelText('提示词'))
+    expect(editor?.value).toBe('长提示词'.repeat(100))
+    expect(frame?.style.overflow).toBe('visible')
+  })
   it('工具栏任务结果入口复用当前分镜的抽屉回调', () => {
     openTaskResult.mockClear()
     const props = { id: 'shot-42', data: { model: '201', time: 5 }, selected: true } as React.ComponentProps<typeof LensShotNode>

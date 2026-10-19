@@ -12,11 +12,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Handle, Position, NodeToolbar, useReactFlow, type Node, type NodeProps } from '@xyflow/react'
 import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip, Menu } from '@mantine/core'
-import { IconListSearch, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react'
+import { IconListSearch, IconPlayerPause, IconPlayerPlay, IconX } from '@tabler/icons-react'
 import { useRFStore } from '../../canvas/store'
 import { useMantineColorScheme } from '@mantine/core'
 import { LensReferencePicker } from '../components/LensReferencePicker'
-import { connectShotReferences, referenceFromNode, referenceKey } from './lensShotReferences'
+import { connectShotReferences, disconnectShotReference, referenceFromNode, referenceKey } from './lensShotReferences'
 import { useUIStore } from '../../ui/uiStore'
 import { collectOrderedUpstreamReferenceItems } from './taskNode/upstreamReferences'
 import { useModelOptions } from '../../config/useModelOptions'
@@ -591,9 +591,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               position: 'relative',
               zIndex: 3001,
               width: 'min(800px, calc((100vw - 48px)))',
-              maxHeight: '60vh',
-              overflowY: 'auto',
-              overflowX: 'visible',
+              // 面板随内容完整展开；只有下方编辑框承载长文本滚动。
+              overflow: 'visible',
               transformOrigin: 'top center',
               transform: 'scale(1)',
             }}
@@ -621,13 +620,14 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
                 {refs.length > 0 ? refs.map((ref) => (
                   <Tooltip key={`${ref.category}-${ref.id}`} label={`${REF_LABEL[ref.category] ?? '引用'} · ${ref.name}`} position="top" withArrow>
-                    <span style={{ position: 'relative', display: 'inline-flex', cursor: 'grab' }}>
+                    <span className="lens-shot-toolbar-reference" style={{ position: 'relative', display: 'inline-flex', cursor: 'grab' }}>
                       {ref.imgUrl ? (
                         <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)' }} />
                       ) : (
                         <span style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
                       )}
                       <span style={{ position: 'absolute', left: 3, bottom: 3, fontSize: 9, lineHeight: 1, padding: '2px 5px', borderRadius: 999, background: 'rgba(10,14,20,0.72)', color: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)' }}>{REF_LABEL[ref.category] ?? '引'}</span>
+                      <ActionIcon className="lens-shot-toolbar-reference-remove nodrag nopan" size={18} variant="filled" color="dark" aria-label={`删除 ${ref.name} 引用及连线`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); void disconnectShotReference(id, ref).catch((error: unknown) => setSaveState(`删除参考失败：${error instanceof Error ? error.message : String(error)}`)) }}><IconX size={12} stroke={2.5} /></ActionIcon>
                     </span>
                   </Tooltip>
                 )) : (
@@ -685,7 +685,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               <Textarea
                 className="lens-shot-prompt-editor"
                 size="sm"
-                rows={4}
+                rows={7}
                 value={promptMode === 'prompt' ? promptDraft : scriptDraft}
                 onChange={(e) => {
                   const next = e.currentTarget.value

@@ -5457,7 +5457,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const isResizableVisualNode = isCanvasMediaNode || isStoryboardEditorNode
   const useMediaFocusToolbar = isCanvasMediaNode
   const showBottomToolbar = isSingleSelectionActive && !isCameraRefNode && !isPlainTextNode && !isStoryboardEditorNode
-  const showUpstreamReferenceStrip = Boolean(useMediaFocusToolbar && isImageNode && isSingleSelectionActive)
+  const showUpstreamReferenceStrip = Boolean(useMediaFocusToolbar && isSingleSelectionActive)
   const serializedUpstreamReferenceItems = useRFStore(
     React.useCallback((state) => {
       if (!showUpstreamReferenceStrip) return ''

@@ -1,6 +1,6 @@
 import React from 'react'
 import { ActionIcon, Text, Tooltip } from '@mantine/core'
-import { IconGripVertical, IconLinkOff, IconPlus } from '@tabler/icons-react'
+import { IconGripVertical, IconPlus, IconX } from '@tabler/icons-react'
 import type { OrderedUpstreamReferenceItem } from '../upstreamReferences'
 import { ManagedImage } from '../../../../domain/resource-runtime'
 
@@ -89,14 +89,16 @@ export function UpstreamReferenceStrip({
                 size="xs"
                 variant="filled"
                 color="dark"
-                aria-label={`断开 ${item.label} 连线`}
+                aria-label={`删除 ${item.label} 引用及连线`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onDragStart={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
                   onRemove(item.edgeId)
                 }}
               >
-                <IconLinkOff size={9} stroke={1.8} />
+                <IconX size={10} stroke={2.3} />
               </ActionIcon>
             </div>
           </Tooltip>
