@@ -16,6 +16,7 @@ import { IconListSearch, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-r
 import { useRFStore } from '../../canvas/store'
 import { useMantineColorScheme } from '@mantine/core'
 import { useModelOptions } from '../../config/useModelOptions'
+import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { editStoryboard, clearStoryboardSpeaker, submitShotVideo } from '../../api/lens'
 import {
@@ -186,9 +187,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   // 画幅 / 分辨率（生成参数，随节点持久化）
   const [aspectValue, setAspectValue] = useState<string>(String(data.aspectRatio ?? '16:9'))
   const [resolutionValue, setResolutionValue] = useState<string>(String(data.resolution ?? '1080p'))
-  // 所选模型的单次积分消耗（lens 模型接口 unitConsume）
   const selectedModel = models.find((m) => m.value === modelValue)
-  const consumePoints = (selectedModel?.meta as { lensUnitConsume?: number } | undefined)?.lensUnitConsume ?? '—'
   // 生成时长 / 画幅 / 分辨率：全部随所选模型的能力配置联动（解析逻辑见 lensShotModelParams）
   const [durationValue, setDurationValue] = useState<number | null>(
     typeof data.time === 'number' && data.time > 0 ? Math.trunc(data.time) : null,
@@ -197,6 +196,15 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   const durationOptions = useMemo(() => buildDurationOptions(minDuration, maxDuration), [minDuration, maxDuration])
   const aspectOptions = useMemo(() => resolveModelAspectOptions(selectedModel?.meta), [selectedModel])
   const resolutionOptions = useMemo(() => resolveModelResolutionOptions(selectedModel?.meta), [selectedModel])
+  // 与提交使用相同的生成时长，报价来自后端计费器；不把价格保存到 flow。
+  const consumePoints = useMemo(() => selectedModel
+    ? resolveModelGenerationCredits({
+        kind: 'video',
+        modelOption: selectedModel,
+        specValues: { resolution: resolutionValue },
+        durationSeconds: clampDuration(durationValue, minDuration, maxDuration),
+      })
+    : null, [selectedModel, resolutionValue, durationValue, minDuration, maxDuration])
   // 换模型后若当前时长超出该模型区间，收敛到边界值（避免下发超限时长被渠道拒绝）
   useEffect(() => {
     setDurationValue((prev) => clampDuration(prev, minDuration, maxDuration))
@@ -233,12 +241,23 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     setPromptDraft(String(data.prompt ?? ''))
   }, [data.scriptContent, data.timeOfDay, data.model, data.prompt])
 
+  /** 聚焦或播放当前视频时，暂停同一画布的其他视频，保留其播放进度。 */
+  const pauseOtherVideos = useCallback(() => {
+    const current = videoRef.current
+    const canvas = current?.closest('.react-flow')
+    if (!current || !canvas) return
+    canvas.querySelectorAll<HTMLVideoElement>('video').forEach((video) => {
+      if (video !== current && !video.paused) video.pause()
+    })
+  }, [])
+
   /** 放大到本节点（双击触发：视频/图片都不进入全屏或大图预览） */
   const zoomToSelf = useCallback((e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault()
       e.stopPropagation()
     }
+    pauseOtherVideos()
     const node = rf.getNode(id)
     if (!node) return
     const w = Number(node?.measured?.width ?? node?.width ?? 400)
@@ -257,7 +276,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       parentId = (parent as unknown as { parentId?: string }).parentId
     }
     rf.setCenter(absX + w / 2, absY + h / 2, { zoom: 1.2, duration: 250 })
-  }, [rf, id])
+  }, [rf, id, pauseOtherVideos])
 
   /** 播放/暂停切换 */
   const togglePlay = useCallback(() => {
@@ -417,7 +436,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                   // 双击视频：放大到该节点（无原生 controls，不会触发浏览器全屏）
                   zoomToSelf(e)
                 }}
-                onPlay={() => setIsPlaying(true)}
+                onPlay={() => { pauseOtherVideos(); setIsPlaying(true) }}
                 onPause={() => setIsPlaying(false)}
                 onTimeUpdate={(e) => setCurrentSec(e.currentTarget.currentTime)}
                 onLoadedMetadata={(e) => {
@@ -608,12 +627,16 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                     aria-label="生成时长"
                   />
                 </Group>
-                <Switch
-                  size="xs"
-                  label="提示词"
-                  checked={promptMode === 'prompt'}
-                  onChange={(e) => setPromptMode(e.currentTarget.checked ? 'prompt' : 'script')}
-                />
+                <Group className="lens-shot-prompt-header-actions" gap={8} align="center" justify="flex-end" wrap="nowrap">
+                  <Button className="lens-shot-save-storyboard" size="xs" variant="outline" onClick={() => void handleSave()}>保存到分镜板</Button>
+                  <Switch
+                    className="lens-shot-prompt-mode-switch"
+                    size="xs"
+                    label="提示词"
+                    checked={promptMode === 'prompt'}
+                    onChange={(e) => setPromptMode(e.currentTarget.checked ? 'prompt' : 'script')}
+                  />
+                </Group>
               </Group>
               <Textarea
                 size="sm"
@@ -630,7 +653,19 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 mb={12}
               />
 
-              {/* 底部控制栏：模型 + 画幅 + 分辨率 + 积分 + 生成 + 保存（同一行；顶部细线与提示词区隔开，完全对齐角色节点 toolbar-controls--footer） */}
+              {/* 工具栏右上角入口与节点标题共用任务抽屉，按当前分镜查询。 */}
+              {onOpenTaskResult && (
+                <Group className="lens-shot-task-toolbar-actions" justify="flex-end" mb={4}>
+                  <Button
+                    className="lens-shot-task-results nodrag nopan"
+                    size="compact-xs" variant="subtle" color="gray"
+                    leftSection={<IconListSearch className="lens-shot-task-results-icon" size={14} />}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => { event.stopPropagation(); onOpenTaskResult(id) }}
+                  >任务结果</Button>
+                </Group>
+              )}
+              {/* 底部控制栏：模型 + 画幅 + 分辨率 + 积分 + 生成；保存位于上方提示词开关前。 */}
               <div className="tc-task-node__toolbar-controls--footer tc-task-node__toolbar-controls--media-footer">
                 <Group gap={8} align="flex-end" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
                   <Select
@@ -661,9 +696,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                     onChange={(v) => setResolutionValue(v ?? resolutionValue)}
                     aria-label="分辨率"
                   />
-                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints} 积分</Text>
+                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints === null ? '积分未配置' : `${consumePoints} 积分`}</Text>
                   <Button size="xs" variant="filled" onClick={() => void handleGenerate()}>生成</Button>
-                  <Button size="xs" variant="outline" onClick={() => void handleSave()}>保存到分镜板</Button>
                 </Group>
               </div>
               {saveState && <Text size="xs" c="dimmed" mt={8} style={{ textAlign: 'right' }}>{saveState}</Text>}

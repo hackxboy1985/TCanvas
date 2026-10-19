@@ -89,11 +89,30 @@ function resolveUnitCostFromPricing(
 
 export function resolveModelGenerationCredits(input: {
   kind: NodeKind | null | undefined
-  modelOption?: Pick<ModelOption, 'pricing'> | null
+  modelOption?: Pick<ModelOption, 'pricing' | 'meta'> | null
+  /** 当前视频秒数，仅后端报价声明按秒计费时参与计算。 */
+  durationSeconds?: number | null
   specKey?: string | null
   specValues?: Record<string, string> | null
   quantity?: number | null
-}): number {
+}): number | null {
+  // Lens 视频使用后端实际计费器报价，避免只匹配复合规格而漏掉分辨率单价。
+  const meta = input.modelOption?.meta
+  if (input.kind === 'video' && meta && typeof meta === 'object' && 'lensCreditPricing' in meta) {
+    const quote = meta.lensCreditPricing
+    if (quote && typeof quote === 'object' && 'cost' in quote && typeof quote.cost === 'number' &&
+        'perSecond' in quote && typeof quote.perSecond === 'boolean' &&
+        'resolutionPrices' in quote && quote.resolutionPrices && typeof quote.resolutionPrices === 'object') {
+      const resolution = input.specValues?.resolution?.trim().toLowerCase()
+      const matched = Object.entries(quote.resolutionPrices).find(([key]) => key.trim().toLowerCase() === resolution)
+      const cost = matched && typeof matched[1] === 'number' ? matched[1] : quote.cost
+      if (quote.perSecond && !(typeof input.durationSeconds === 'number' && Number.isFinite(input.durationSeconds) && input.durationSeconds > 0)) {
+        return null
+      }
+      return normalizeNonNegativeInteger(cost) * (quote.perSecond ? Math.floor(input.durationSeconds!) : 1) * normalizeQuantity(input.quantity)
+    }
+    return null
+  }
   const pricing = input.modelOption?.pricing
   let unitCost: number | null = null
   // 1. 字段条件匹配（specKey 形如 resolution:2K&&quality:medium）

@@ -65,6 +65,8 @@ type ControlChipsProps = {
   requiredCreditsLabel?: string | null
   onCancelRun: () => void
   onRun: () => void
+  /** 提交按钮前的提示词操作，不与执行节点混为一个动作。 */
+  promptActions?: React.ReactNode
 }
 
 export function ControlChips({
@@ -107,6 +109,7 @@ export function ControlChips({
   requiredCreditsLabel = null,
   onCancelRun,
   onRun,
+  promptActions,
 }: ControlChipsProps) {
   const resolvedResolutionOptions = resolutionOptions || DEFAULT_IMAGE_ASPECT_RATIO_OPTIONS
   const resolvedImageSizeOptions = imageSizeOptions || DEFAULT_IMAGE_SIZE_OPTIONS
@@ -395,6 +398,7 @@ export function ControlChips({
               <IconPlayerStop className="control-chips-stop-icon" size={16} />
             </ActionIcon>
           )}
+          {promptActions}
           <ActionIcon
             className="control-chips-run"
             size="md"

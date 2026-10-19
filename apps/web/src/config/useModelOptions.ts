@@ -303,7 +303,7 @@ export function readLensModelQualities(meta: unknown): string[] {
 }
 
 /** lens 模型条目 → 画布模型选项（value/label 对齐 ModelOption；enabled=false 的条目灰显禁用） */
-function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
+export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
   if (!Array.isArray(items)) return []
   const seen = new Set<string>()
   const out: ModelOption[] = []
@@ -319,16 +319,30 @@ function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
       // 不设 modelKey：显示优先 label（应用名），任务提交时用 value（应用 ID）
       modelKey: undefined,
       modelAlias: null,
-      pricing: undefined,
+      pricing: typeof item.unitConsume === 'number' ? {
+        enabled: true,
+        cost: item.unitConsume,
+        specCosts: item.unitConsume > 0 ? Object.entries(item.resolutionPrices || {}).filter(([, cost]) => typeof cost === 'number' && Number.isFinite(cost) && cost > 0).map(([resolution, cost]) => ({ specKey: `resolution:${resolution}`, cost, enabled: true })) : [],
+      } : undefined,
       // 透传 lens 单次消耗（unitConsume）、模型扩展参数（others，含 qualities 质量档位）
       // 以及模型能力配置（resolutions → 分辨率/尺寸选项）：选择模型后右侧参数跟随变化
       meta: {
         lensUnitConsume: typeof item?.unitConsume === 'number' ? item.unitConsume : undefined,
+        lensCreditPricing: item.creditPricing,
+        // 视频分辨率与报价均来自同一模型接口，不能借用生图配置或通用候选。
+        videoOptions: { resolutionOptions: item.resolutions || [] },
         others: item?.others,
         imageOptions: {
-          aspectRatioOptions: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+          // 画幅只来自该模型的配置；未配置保持空列表，不伪造通用比例。
+          aspectRatioOptions: Array.isArray(item.others?.supportedRatios)
+            ? item.others.supportedRatios.filter((ratio): ratio is string => typeof ratio === 'string' && ratio.trim().length > 0).map((ratio) => ratio.trim())
+            : [],
           ...(Array.isArray(item?.resolutions) && item.resolutions.length > 0
-            ? { resolutionOptions: item.resolutions, imageSizeOptions: item.resolutions }
+            ? {
+                resolutionOptions: item.resolutions,
+                // 分辨率必须有对应控件映射；否则尺寸去重后两种菜单都会被隐藏。
+                controls: [{ key: 'resolution', label: '分辨率', binding: 'resolution', optionSource: 'resolutionOptions' }],
+              }
             : {}),
         },
       },

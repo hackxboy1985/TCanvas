@@ -1226,9 +1226,9 @@ function readLensCanvasUrlParams(): LensCanvasUrlParams | null {
  */
 function readUserSelectedImageParams(
   nodeData: Record<string, unknown> | undefined,
-): { appId?: number; ratio?: string; width?: number; height?: number; quality?: string } {
+): { appId?: number; ratio?: string; width?: number; height?: number; quality?: string; resolution?: string } {
   const data = nodeData || {}
-  const out: { appId?: number; ratio?: string; width?: number; height?: number; quality?: string } = {}
+  const out: { appId?: number; ratio?: string; width?: number; height?: number; quality?: string; resolution?: string } = {}
 
   if (data.imageModelUserSelected === true) {
     const rawModel = typeof data.imageModel === 'string' ? data.imageModel.trim() : ''
@@ -1251,6 +1251,10 @@ function readUserSelectedImageParams(
       out.width = Math.trunc(dimensions.width)
       out.height = Math.trunc(dimensions.height)
     }
+  }
+
+  if (data.imageResolutionUserSelected === true && typeof data.imageResolution === 'string' && data.imageResolution.trim()) {
+    out.resolution = data.imageResolution.trim()
   }
 
   if (data.imageQualityUserSelected === true) {

@@ -1,4 +1,5 @@
-import { Button, Group, Switch, Tooltip } from '@mantine/core'
+import type { ReactNode } from 'react'
+import { Group, Switch, Text, Tooltip } from '@mantine/core'
 
 type PromptEditorActionsProps = {
   isAdmin: boolean
@@ -6,7 +7,8 @@ type PromptEditorActionsProps = {
   hasStructuredPrompt: boolean
   loading: boolean
   readOnly: boolean
-  onRefine: () => void
+  /** 润色与撤销操作对所有用户展示，JSON 开关单独受管理员权限限制。 */
+  actions?: ReactNode
   onModeChange: (structured: boolean) => void
 }
 
@@ -14,16 +16,9 @@ type PromptEditorActionsProps = {
 export function PromptEditorActions(props: PromptEditorActionsProps) {
   return (
     <Group className="tc-task-node__prompt-actions" justify="space-between" gap={8}>
-      <Button
-        className="tc-task-node__prompt-refine"
-        size="compact-xs"
-        variant="light"
-        loading={props.loading}
-        disabled={props.readOnly}
-        onClick={props.onRefine}
-      >
-        AI 润色
-      </Button>
+      <Text className="tc-task-node__prompt-mode-switch-label" size="xs">提示词编辑模式</Text>
+      <Group className="tc-task-node__prompt-actions-right" gap={8}>
+      {props.actions}
       {props.isAdmin ? (
         <Tooltip className="tc-task-node__prompt-json-help" label="仅切换展示，不调用 AI；请先润色以生成结构化内容">
           <Switch
@@ -36,6 +31,7 @@ export function PromptEditorActions(props: PromptEditorActionsProps) {
           />
         </Tooltip>
       ) : null}
+      </Group>
     </Group>
   )
 }
