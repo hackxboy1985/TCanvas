@@ -1,28 +1,50 @@
 /**
- * Lens 分镜节点（参考生视频）
+ * Lens 分镜视频节点（参考生视频）
  *
- * 展示结构（从上到下）：
- * 1. 顶部栏：分镜号（storyboardOrder）+ 时间（timeOfDay）+ 状态圆点（videoStatus/analyzeState/lineArtStatus）
- * 2. 中间区：selectedImageUrl 为空 → 分镜脚本 scriptContent；有值 → 分镜图/视频
- * 3. 底部引用行（showRefs 开关控制）：从左至右 场景、道具、角色、站位；角色带说话者图标（点击切换）
+ * <p>视觉与交互复用画布视频节点（TaskNode 的 video 类型）：
+ * <ol>
+ *   <li>视频区复用视频节点同款视觉：标题行（剪辑 / 查看历史）+ 抽帧预览（公共组件 VideoFramePreview）+ 播放器；</li>
+ *   <li>顶部保留分镜号「分镜N」+ 时长、右侧状态圆点（生成中呼吸态）；</li>
+ *   <li>选中后底部工具栏保持分镜视频节点原有布局（上游参考 + 分镜提示词 + 模型/画幅/分辨率/积分/生成）；</li>
+ *   <li>视频节点底部的「智能提示词」迁移到本节点工具栏。</li>
+ * </ol>
  *
- * 与 tapCanvas 现有 storyboard 节点（分镜图生视频）区分：本节点是「参考图 + 提示词生视频」，
+ * <p>与 tapCanvas 现有 storyboard 节点（分镜图生视频）区分：本节点是「参考图 + 提示词生视频」，
  * 现有 storyboard 节点保留不动。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Handle, Position, NodeToolbar, useReactFlow, type Node, type NodeProps } from '@xyflow/react'
 import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip, Menu } from '@mantine/core'
-import { IconListSearch, IconPlayerPause, IconPlayerPlay, IconX } from '@tabler/icons-react'
+import {
+  IconBrain,
+  IconClock,
+  IconListSearch,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconScissors,
+  IconX,
+} from '@tabler/icons-react'
 import { useRFStore } from '../../canvas/store'
 import { useMantineColorScheme } from '@mantine/core'
 import { LensReferencePicker } from '../components/LensReferencePicker'
 import { connectShotReferences, disconnectShotReference, referenceFromNode, referenceKey } from './lensShotReferences'
 import { useUIStore } from '../../ui/uiStore'
 import { collectOrderedUpstreamReferenceItems } from './taskNode/upstreamReferences'
-import { useModelOptions } from '../../config/useModelOptions'
+import { VideoFramePreview } from './taskNode/components/VideoFramePreview'
+import { collectUpstreamVideoTextContext } from './taskNode/videoPromptGeneration'
+import {
+  findModelOptionByIdentifier,
+  getModelOptionRequestAlias,
+  readLensModelIsDefault,
+  useModelOptions,
+} from '../../config/useModelOptions'
 import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { editStoryboard, clearStoryboardSpeaker, submitShotVideo, type LensAssetEnriched } from '../../api/lens'
+import { runPublicTask } from '../../api/server'
+import { extractTextFromTaskResult, genTaskNodeId } from './taskNodeHelpers'
+import { getAuthToken } from '../../auth/store'
+import { toast } from '../../ui/toast'
 import {
   buildDurationOptions,
   clampDuration,
@@ -31,7 +53,6 @@ import {
   resolveModelDurationRange,
   resolveModelResolutionOptions,
 } from '../utils/lensShotModelParams'
-
 /** 分镜引用（底部引用行）：场景/道具/角色/站位 */
 export interface LensShotRef {
   /** 1=角色 2=场景 3=道具 4=站位 */
@@ -49,6 +70,22 @@ export interface LensShotRef {
   baseName?: string
   /** 是否说话者（speakerName 匹配） */
   isSpeaker?: boolean
+  /** 父级资产ID（子角色/子场景才有）：用于角标区分「子角色」「子场景」 */
+  parentId?: string
+}
+
+/**
+ * 引用角标文案：子角色/子场景按 parentId 区分，主资产仍显示角色/场景。
+ *
+ * @param ref 分镜引用（只需 category 与 parentId）
+ * @returns 角标中文文案
+ */
+export function refBadgeLabel(ref: { category: number; parentId?: string }): string {
+  if (ref.category === 1) return ref.parentId ? '子角色' : '角色'
+  if (ref.category === 2) return ref.parentId ? '子场景' : '场景'
+  if (ref.category === 3) return '道具'
+  if (ref.category === 4) return '站位'
+  return '引用'
 }
 
 /** 分镜节点数据 */
@@ -88,7 +125,7 @@ const ANALYZE_STATE_FAILED = 3
 const LINE_ART_STATUS_PROCESSING = 1
 const LINE_ART_STATUS_FAILED = 3
 
-/** 秒数格式化：<60 显示 "8s"，>=60 显示 "1分12s" */
+/** 秒数格式化：小于 60 秒显示 8s，超过 1 分钟显示 1分12s */
 function formatSeconds(sec: number): string {
   const s = Math.max(0, Math.round(sec))
   if (s < 60) return `${s}s`
@@ -108,7 +145,6 @@ function ossThumb(url: string | undefined, width = 100): string {
   const sep = url.includes('?') ? '&' : '?'
   return `${url}${sep}x-oss-process=image/resize,w_${width}`
 }
-
 /** 状态圆点（对齐 lens 分镜板：淡黄呼吸=生成中、绿点=成功、红点=失败、呼吸光圈=分析/线稿中） */
 function StatusDot({ data }: { data: LensShotNodeData }): JSX.Element {
   const videoStatus = data.videoStatus ?? 0
@@ -145,6 +181,11 @@ function StatusDot({ data }: { data: LensShotNodeData }): JSX.Element {
  * 快照里的 characterName/imgName 已由后端拼好子角色「方怡静（连衣裙）」、
  * 子场景「街道（夜晚）」等完整名称，这里直接作为 name 展示；
  * 说话者必须使用基础名，与分镜板 toggleSpeaker 写入的口径一致。
+ *
+ * @param assets 分镜引用资产快照
+ * @param shotId 分镜ID（只保留 refId 匹配该分镜的资产）
+ * @param speakerList 当前说话者基础名列表
+ * @returns 分镜引用列表
  */
 export function buildShotRefsFromAssets(
   assets: LensAssetEnriched[],
@@ -165,6 +206,8 @@ export function buildShotRefsFromAssets(
         name: displayName,
         imgUrl: asset.threeImg || asset.roleImg || asset.imgUrl || '',
         ...(roleBaseName ? { baseName: roleBaseName } : null),
+        // 子角色/子场景角标需要 parentId 区分（refBadgeLabel 按它判断是否子资产）
+        ...(asset.parentId ? { parentId: String(asset.parentId) } : null),
         isSpeaker: asset.assetCategory === 1 && Boolean(roleBaseName) && speakerList.includes(roleBaseName),
       }
     })
@@ -200,9 +243,7 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
   } else {
     clearStoryboardSpeaker(shotId, dramaId).catch(() => undefined)
   }
-}
-
-function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
+}function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
   // 任务结果抽屉的入口回调（由 LensCanvasApp 注入；未注入则不显示按钮）
   const { onOpenTaskResult } = useCanvasRenderContext()
   const { colorScheme } = useMantineColorScheme()
@@ -242,6 +283,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   // 编辑模式：prompt=分镜提示词（默认展示），script=分镜剧本
   const [promptMode, setPromptMode] = useState<'script' | 'prompt'>('prompt')
   const [promptDraft, setPromptDraft] = useState<string>(String(data.prompt ?? ''))
+  // 智能提示词生成中（能力迁移自视频节点底部的智能提示词按钮）
+  const [smartPromptLoading, setSmartPromptLoading] = useState<boolean>(false)
   // 画幅 / 分辨率（生成参数，随节点持久化）
   const [aspectValue, setAspectValue] = useState<string>(String(data.aspectRatio ?? '16:9'))
   const [resolutionValue, setResolutionValue] = useState<string>(String(data.resolution ?? '1080p'))
@@ -280,6 +323,23 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     setResolutionValue((prev) => convergeToOptions(persisted ?? prev, resolutionOptions) ?? prev)
   }, [resolutionOptions, data.resolution])
 
+  // 模型默认值：节点未存模型时取剧配置页配置的默认生视频模型（后端 /api/model/shot_video 的 markDefault → isDefault），
+  // 未配置默认模型才回退到列表第一个模型，避免「模型默认为空」导致无法直接生成。
+  //
+  // 注意必须用「渲染期派生」而不是 effect：模型列表首帧为空（异步加载），
+  // 若依赖 effect 会出现「下拉框先显示列表第一项、随后被改回默认模型」的闪烁。
+  useEffect(() => {
+    const current = typeof modelValue === 'string' ? modelValue.trim() : ''
+    if (current) return
+    if (models.length === 0) return
+    const configuredDefault = models.find((option) => readLensModelIsDefault(option.meta) && !option.disabled)
+    const fallback = configuredDefault || models[0]
+    if (!fallback) return
+    setModelValue(fallback.value)
+    // 持久化到节点数据：flow 只存模型 id（模型能力/报价仍在 lens_application，不复制到 flow）
+    useRFStore.getState().updateNodeData(id, { model: fallback.value })
+  }, [id, models, modelValue])
+
   // 媒体实际宽高比（用于节点高度随视频比例：宽度恒 384 填满，高度按比例）
   const [mediaAspect, setMediaAspect] = useState<number | null>(null)
 
@@ -295,9 +355,17 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   useEffect(() => {
     setScriptDraft(String(data.scriptContent ?? ''))
     setTimeDraft(String(data.timeOfDay ?? ''))
-    setModelValue(typeof data.model === 'string' && data.model ? data.model : null)
     setPromptDraft(String(data.prompt ?? ''))
-  }, [data.scriptContent, data.timeOfDay, data.model, data.prompt])
+  }, [data.scriptContent, data.timeOfDay, data.prompt])
+
+  // 模型回填：只跟随「节点数据里真实的模型变化」（如切集/刷新后后端投影了新模型）。
+  // 不能在 data.model 为空时把本地已选模型清掉 —— 那会把默认模型/用户选择打回空值，
+  // 表现为「下拉框短暂显示默认模型后又变回列表第一项」。
+  useEffect(() => {
+    const persisted = typeof data.model === 'string' && data.model ? data.model : ''
+    if (!persisted) return
+    setModelValue((prev) => (prev === persisted ? prev : persisted))
+  }, [data.model])
 
   /** 聚焦或播放当前视频时，暂停同一画布的其他视频，保留其播放进度。 */
   const pauseOtherVideos = useCallback(() => {
@@ -358,7 +426,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   const formatClock = useCallback((sec: number): string => {
     const s = Math.max(0, Math.floor(sec))
     const m = Math.floor(s / 60)
-    return `${m}:${String(s % 60).padStart(2, '0')}`
+    return `${m}:` + String(s % 60).padStart(2, '0')
   }, [])
 
   // 引用行：按 场景→道具→角色→站位 排序（定义在 handleGenerate 之前，避免 TDZ）
@@ -366,6 +434,12 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     (a, b) => (REF_ORDER[a.category] ?? 9) - (REF_ORDER[b.category] ?? 9),
   )
 
+  /** 提交生成用的提示词：优先分镜提示词草稿，为空回退分镜剧本 */
+  const effectivePrompt = useCallback((): string => {
+    const promptText = String(promptDraft || '').trim()
+    if (promptText) return promptText
+    return String(scriptDraft || '').trim()
+  }, [promptDraft, scriptDraft])  /** 保存到分镜板：写回节点数据 + /api/storyboard/edit */
   const handleSave = useCallback(async () => {
     useRFStore.getState().updateNodeData(id, { scriptContent: scriptDraft, timeOfDay: timeDraft, model: modelValue })
     const storyboardId = String(data.entityId ?? '')
@@ -375,10 +449,118 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         await editStoryboard({ id: storyboardId, dramaId, scriptContent: scriptDraft, timeOfDay: timeDraft })
         setSaveState('已同步到分镜板')
       } catch (err) {
-        setSaveState(`同步失败：${err instanceof Error ? err.message : '未知错误'}`)
+        const msg = err instanceof Error ? err.message : '未知错误'
+        setSaveState('同步失败：' + msg)
       }
     }
   }, [id, data.entityId, data.sourceProjectId, scriptDraft, timeDraft, modelValue])
+
+  /**
+   * 智能提示词：生成当前分镜的生视频提示词。
+   *
+   * <p>能力迁移自视频节点底部工具栏的「智能提示词」（TaskNode.handleSmartGenerateVideoPrompt），
+   * 差异只有三处：
+   * 1. 上游文本上下文取画布连线上的上游文本节点（与视频节点同一采集函数）；
+   * 2. 分镜没有上游文本连线时，用分镜自身剧本作为上下文；
+   * 3. 结果写回节点提示词草稿与 node data.prompt，提交生成时直接使用。
+   */
+  const handleSmartGeneratePrompt = useCallback(async () => {
+    if (smartPromptLoading) return
+    const state = useRFStore.getState()
+    const upstreamContext = collectUpstreamVideoTextContext(state.nodes, state.edges, id)
+    const ownScript = String(scriptDraft || data.scriptContent || '').trim()
+    const contextText = upstreamContext.combinedText.trim() || ownScript
+    if (!contextText) {
+      toast('请先填写分镜剧本或连接上游文本节点，再智能生成分镜提示词', 'warning')
+      return
+    }
+
+    const systemPrompt = [
+      '你是 TapCanvas 的视频提示词生成助手。',
+      '你的唯一任务是根据上游文本上下文，输出当前视频节点唯一的最终执行 prompt。',
+      '只输出最终 prompt 正文，不要解释、不要标题、不要 Markdown、不要 JSON。',
+      '若上游文本冲突严重或信息不足以生成稳定 prompt，必须只输出一行：ERROR: 具体原因。',
+    ].join('\n')
+
+    const durationForPrompt = clampDuration(durationValue, minDuration, maxDuration)
+    const durationText = durationForPrompt === null
+      ? (typeof data.time === 'number' ? String(data.time) : '')
+      : String(durationForPrompt)
+    const refsText = refs.length
+      ? '本分镜引用资产：' + refs.map((ref) => (REF_LABEL[ref.category] || '引') + '·' + ref.name).join('、')
+      : null
+    const currentDraft = String(promptDraft || '').trim()
+    const promptText = [
+      '请基于以下上下文，生成当前分镜视频的最终执行 prompt。',
+      '视频参数：时长=' + durationText + 's；画幅=' + (aspectValue || '16:9'),
+      refsText,
+      currentDraft ? '当前节点已有 prompt 草稿（可参考但不要机械复述）：\n' + currentDraft : null,
+      '上游文本上下文（按画布连接顺序拼接）：',
+      contextText,
+      '输出要求：',
+      '- 只输出最终视频 prompt 正文。',
+      '- 把明确的镜头顺序、动作、场景、节奏、台词线索和连续性约束压缩进一条连贯 prompt。',
+      '- 不要返回“Shot 1/镜头 1/分点列表/说明文字”。',
+      '- 如果证据冲突或不足，请输出 ERROR。',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+
+    try {
+      setSmartPromptLoading(true)
+      const ui = useUIStore.getState()
+      const apiKey = (ui.publicApiKey || '').trim()
+      const token = getAuthToken()
+      if (!apiKey && !token) {
+        toast('请先登录后再试', 'error')
+        return
+      }
+      // 精修模型沿用节点当前选择的模型（lens 模型 value 即应用ID，接口接受该标识）
+      const candidateModel = String(data.model || modelValue || '').trim()
+      const matchedModel = candidateModel ? findModelOptionByIdentifier(models, candidateModel) : null
+      const promptRefineModelAlias = matchedModel ? getModelOptionRequestAlias(models, matchedModel.value) : ''
+      const taskRes = await runPublicTask(apiKey, {
+        request: {
+          kind: 'prompt_refine',
+          prompt: promptText,
+          extras: {
+            systemPrompt,
+            ...(promptRefineModelAlias ? { modelAlias: promptRefineModelAlias } : {}),
+            persistAssets: false,
+          },
+        },
+      })
+      const nextPrompt = extractTextFromTaskResult(taskRes.result).trim()
+      if (!nextPrompt) throw new Error('模型未返回视频提示词')
+      if (nextPrompt.indexOf('ERROR') === 0 || nextPrompt.indexOf('ERROR:') === 0) {
+        throw new Error(nextPrompt.replace(/^ERROR\s*:\s*/i, '').trim() || '上游文本不足，无法生成视频提示词')
+      }
+      setPromptDraft(nextPrompt)
+      // 写回 node data.prompt（与 lens 分镜 prompt 同口径，生成时直接下发）
+      useRFStore.getState().updateNodeData(id, { prompt: nextPrompt })
+      toast('已根据上下文生成分镜提示词', 'success')
+    } catch (error: unknown) {
+      const message = error instanceof Error && error.message ? error.message : '生成视频提示词失败'
+      toast(message, 'error')
+    } finally {
+      setSmartPromptLoading(false)
+    }
+  }, [
+    aspectValue,
+    data.model,
+    data.scriptContent,
+    data.time,
+    durationValue,
+    id,
+    maxDuration,
+    minDuration,
+    modelValue,
+    models,
+    promptDraft,
+    refs,
+    scriptDraft,
+    smartPromptLoading,
+  ])
 
   /** 提交分镜生视频任务（走 lens /api/storyboardTask/submit，与分镜板一致） */
   const handleGenerate = useCallback(async () => {
@@ -405,7 +587,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         storyboardId,
         model: modelValue,
         appid: Number(modelValue) || undefined,
-        prompt: promptDraft || scriptDraft,
+        prompt: effectivePrompt(),
         aspectRatio: aspectValue,
         resolution: resolutionValue,
         duration,
@@ -416,13 +598,83 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       })
       setSaveState('已提交生视频任务')
     } catch (err) {
-      setSaveState(`提交失败：${err instanceof Error ? err.message : '未知错误'}`)
+      const msg = err instanceof Error ? err.message : '未知错误'
+      setSaveState('提交失败：' + msg)
     }
-  }, [data.entityId, data.sourceProjectId, data.episodeNum, data.prompt, scriptDraft, modelValue, refs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
+  }, [data.entityId, data.sourceProjectId, data.episodeNum, effectivePrompt, modelValue, refs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
+
+  /**
+   * 剪辑：复用画布视频节点的 WebCut 剪辑入口。
+   *
+   * <p>剪辑结果落成新的画布视频节点（与视频节点行为一致），不覆盖分镜当前视频；
+   * 分镜要采用新视频仍走「任务结果 → 采纳」，避免剪辑动作隐式改写业务表。
+   */
+  const handleClip = useCallback(() => {
+    const src = String(data.selectedImageUrl || '').trim()
+    if (!src || data.selectFileType !== 1) {
+      toast('当前分镜没有可剪辑的视频', 'error')
+      return
+    }
+    const baseTitle = '分镜' + String(data.storyboardOrder ?? '-')
+    const sourceNode = useRFStore.getState().nodes.find((node) => node.id === id)
+    const basePosition = sourceNode?.position ?? { x: 0, y: 0 }
+    useUIStore.getState().openWebCutVideoEditModal({
+      nodeId: id,
+      videoUrl: src,
+      videoTitle: baseTitle,
+      onApply: async (result) => {
+        // 剪辑结果落成新的视频节点，与来源节点右侧对齐，不覆盖分镜当前视频
+        const newNodeId = genTaskNodeId()
+        useRFStore.setState((state) => ({
+          nodes: [...state.nodes.map((node) => ({ ...node, selected: false })), {
+            id: newNodeId,
+            type: 'taskNode' as const,
+            position: { x: Number(basePosition.x) + 520, y: Number(basePosition.y) },
+            data: {
+              label: baseTitle + '-剪辑',
+              kind: 'video',
+              videoUrl: result.url,
+              videoResults: [{ url: result.url, thumbnailUrl: result.thumbnailUrl || null, title: baseTitle }],
+              videoPrimaryIndex: 0,
+              videoThumbnailUrl: result.thumbnailUrl || null,
+              videoTitle: baseTitle,
+              serverAssetId: result.assetId,
+            },
+            selected: true,
+          }],
+        }))
+        const created = useRFStore.getState().nodes.some((node) => node.id === newNodeId)
+        if (!created) {
+          toast('剪辑已上传，但未能创建新视频节点', 'error')
+          return
+        }
+        toast('剪辑结果已生成新视频节点', 'success')
+      },
+    })
+  }, [data.selectFileType, data.selectedImageUrl, data.storyboardOrder, id])
+
+  /** 抽帧预览的提示出口：抽帧逻辑在公共组件 VideoFramePreview 内，回调统一走节点 toast */
+  const handleFramePreviewNotify = useCallback((message: string, level: 'success' | 'error') => {
+    toast(message, level)
+  }, [])
+
+  /**
+   * 查看历史：分镜节点的历史生视频任务由画布宿主的任务结果抽屉承载
+   * （与视频节点「查看历史」等价：只读展示该分镜历史生成结果并可采纳）。
+   */
+  const handleViewHistory = useCallback(() => {
+    if (!onOpenTaskResult) {
+      toast('当前画布未提供任务结果入口', 'error')
+      return
+    }
+    onOpenTaskResult(id)
+  }, [id, onOpenTaskResult])
 
   // 横屏：宽 800、高按比例（16:9→450）；竖屏：高度限制 720、宽度随高度收窄（9:16→720×405），视频完整不裁切
   const HEADER_HEIGHT = 44
   const REFS_BAR_HEIGHT = 38
+  // 视频内容区在媒体上方还有「标题行 + 抽帧操作行」，计入节点高度避免内容溢出
+  const VIDEO_CONTENT_CHROME_HEIGHT = 76
   const VERTICAL_MAX_HEIGHT = 720
   const mediaHeight = mediaAspect
     ? Math.max(96, mediaAspect >= 1 ? Math.round(800 / mediaAspect) : Math.min(VERTICAL_MAX_HEIGHT, Math.round(800 / mediaAspect)))
@@ -439,7 +691,10 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     const timers = [160, 500, 1200].map((delay) => window.setTimeout(fitParentGroup, delay))
     return () => timers.forEach((t) => window.clearTimeout(t))
   }, [id, mediaHeight, mediaAspect])
-  const shellHeight = mediaHeight + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
+  // 有视频结果时内容区为视频节点同款 VideoContent（含抽帧操作行），高度需把其内部占位计入
+  const isVideoResult = hasResult && data.selectFileType === 1
+  const contentChromeHeight = isVideoResult ? VIDEO_CONTENT_CHROME_HEIGHT : 0
+  const shellHeight = mediaHeight + contentChromeHeight + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
 
   const shell = {
     background: isDark ? 'rgba(15,20,28,0.96)' : 'rgba(255,255,255,0.98)',
@@ -447,7 +702,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     boxShadow: selected ? '0 0 0 3px rgba(91,141,239,0.25), 0 8px 24px rgba(0,0,0,0.12)' : '0 4px 16px rgba(0,0,0,0.08)',
     color: isDark ? '#f0f0f0' : '#1d2129',
     borderRadius: 12,
-    // 宽度固定 384、高度随视频比例（+顶部栏/引用行高）；relative 供底部悬浮引用行定位
+    // 宽度随视频比例、高度随视频比例（+顶部栏/引用行高）
     width: shellWidth,
     height: shellHeight,
     position: 'relative' as const,
@@ -461,7 +716,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       <Handle className="lens-shot-handle" type="target" position={Position.Left} />
       <Handle className="lens-shot-handle" type="source" position={Position.Right} />
 
-      {/* 顶部栏：分镜号 + 时长（紧跟序号左侧）+ 状态圆点（不显示 timeOfDay，时长取分镜 time 字段或视频实际时长） */}
+      {/* 顶部栏：分镜号 + 时长（紧跟序号左侧）+ 状态圆点（时长取分镜 time 字段或视频实际时长） */}
       <div className="lens-shot-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 44, padding: '0 12px', borderBottom: '1px solid rgba(127,127,127,0.18)', fontSize: 30, fontWeight: 600, lineHeight: 1 }}>
         <span className="lens-shot-order" style={{ display: 'inline-flex', alignItems: 'baseline' }}>
           分镜{data.storyboardOrder ?? '-'}
@@ -493,70 +748,126 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         </span>
       </div>
 
-      {/* 中间区：图/视频 或 脚本（占满剩余空间，媒体按实际宽高比自适应节点宽度） */}
+      {/* 中间区：视频（复用视频节点 VideoContent）/ 图片 / 脚本 */}
       <div className="lens-shot-body" style={{ flex: 1, minHeight: 0, padding: 8, overflow: 'hidden' }}>
         {hasResult ? (
-          data.selectFileType === 1 ? (
-            <div className="lens-shot-video-wrap" style={{ position: 'relative', width: '100%', height: '100%' }}>
-              <video
-                ref={videoRef}
-                className="lens-shot-media"
-                src={data.selectedImageUrl}
-                preload="metadata"
-                onClick={togglePlay}
-                onDoubleClickCapture={(e) => {
-                  // 双击视频：放大到该节点（无原生 controls，不会触发浏览器全屏）
-                  zoomToSelf(e)
-                }}
-                onPlay={() => { pauseOtherVideos(); setIsPlaying(true) }}
-                onPause={() => setIsPlaying(false)}
-                onTimeUpdate={(e) => setCurrentSec(e.currentTarget.currentTime)}
-                onLoadedMetadata={(e) => {
-                  const v = e.currentTarget
-                  if (v.videoWidth > 0 && v.videoHeight > 0) {
-                    setMediaAspect(v.videoWidth / v.videoHeight)
-                  }
-                  if (Number.isFinite(v.duration) && v.duration > 0) {
-                    setMediaSeconds(Math.round(v.duration))
-                    setDurationSec(v.duration)
-                  }
-                }}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6, display: 'block', background: 'rgba(0,0,0,0.35)' }}
-              />
-              {/* 自绘视频控制条：播放/暂停 + 进度 + 时间（替代原生 controls，避免双击全屏） */}
-              <div
-                className="lens-shot-video-controls"
-                style={{ position: 'absolute', left: 6, right: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 8, background: 'rgba(10,14,20,0.66)', backdropFilter: 'blur(8px)', zIndex: 2 }}
-                onDoubleClick={(e) => { e.stopPropagation(); zoomToSelf(e) }}
-              >
-                <Tooltip label={isPlaying ? '暂停' : '播放'} position="top" withArrow>
-                  <span
-                    className="lens-shot-video-toggle"
-                    onClick={(e) => { e.stopPropagation(); togglePlay() }}
-                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 999, background: 'rgba(255,255,255,0.14)', color: '#fff', cursor: 'pointer', flexShrink: 0 }}
-                  >
-                    {isPlaying ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
-                  </span>
-                </Tooltip>
-                <input
-                  className="lens-shot-video-progress"
-                  type="range"
-                  min={0}
-                  max={durationSec || 0}
-                  step={0.1}
-                  value={currentSec}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const v = videoRef.current
-                    const next = Number(e.currentTarget.value)
-                    if (v) { v.currentTime = next }
-                    setCurrentSec(next)
-                  }}
-                  style={{ flex: 1, minWidth: 0, accentColor: '#60a5fa' }}
-                />
-                <Text size="xs" style={{ color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatClock(currentSec)} / {formatClock(durationSec || mediaSeconds || 0)}
+          isVideoResult ? (
+            /* 视频区复用视频节点同款视觉：标题行（共 N 个视频 / 剪辑 / 查看历史）+ 抽帧预览 + 播放器 */
+            <div
+              className="video-content lens-shot-video-content"
+              style={{
+                width: '100%',
+                height: '100%',
+                minHeight: 0,
+                borderRadius: 10,
+                background: isDark ? 'rgba(15,20,28,0.96)' : 'rgba(255,255,255,0.98)',
+                padding: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                gap: 6,
+                color: isDark ? '#f0f0f0' : '#1d2129',
+              }}
+            >
+              <Group className="video-content-header" justify="space-between" gap={4}>
+                <Text className="video-content-header-text" size="xs" c="dimmed">
+                  共 1 个视频（主视频：第 1 个）
                 </Text>
+                <Group className="video-content-header-actions" gap={2}>
+                  {/* 剪辑：复用视频节点的 WebCut 剪辑入口，结果落到新的画布视频节点 */}
+                  <Button
+                    className="video-content-clip-button"
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={handleClip}
+                    leftSection={<IconScissors className="video-content-clip-icon" size={12} />}
+                  >
+                    剪辑
+                  </Button>
+                  {/* 查看历史：打开该分镜的历史生视频任务（与视频节点「查看历史」等价） */}
+                  <Button
+                    className="video-content-history-button"
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={handleViewHistory}
+                    leftSection={<IconClock className="video-content-history-icon" size={12} />}
+                  >
+                    查看历史
+                  </Button>
+                </Group>
+              </Group>
+
+              {/* 抽帧预览：与视频节点共用同一组件（抽出的帧可拖到画布生成图片节点） */}
+              <VideoFramePreview
+                className="video-content-actions-row"
+                videoUrl={String(data.selectedImageUrl || '')}
+                durationSeconds={mediaSeconds}
+                onNotify={handleFramePreviewNotify}
+              />
+
+              {/* 播放器：自绘控制条（去掉原生 controls，双击放大到该节点而不是浏览器全屏） */}
+              <div className="lens-shot-video-wrap" style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+                <video
+                  ref={videoRef}
+                  className="lens-shot-media video-content-player"
+                  src={String(data.selectedImageUrl || '')}
+                  preload="metadata"
+                  playsInline
+                  onClick={togglePlay}
+                  onDoubleClickCapture={(evt) => {
+                    // 双击视频：放大到该节点（无原生 controls，不会触发浏览器全屏）
+                    zoomToSelf(evt)
+                  }}
+                  onPlay={() => { pauseOtherVideos(); setIsPlaying(true) }}
+                  onPause={() => setIsPlaying(false)}
+                  onTimeUpdate={(evt) => setCurrentSec(evt.currentTarget.currentTime)}
+                  onLoadedMetadata={(evt) => {
+                    const video = evt.currentTarget
+                    if (video.videoWidth > 0 && video.videoHeight > 0) {
+                      setMediaAspect(video.videoWidth / video.videoHeight)
+                    }
+                    if (Number.isFinite(video.duration) && video.duration > 0) {
+                      setMediaSeconds(Math.round(video.duration))
+                      setDurationSec(video.duration)
+                    }
+                  }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, display: 'block', background: isDark ? 'rgba(0,0,0,0.45)' : 'rgba(15,23,42,0.06)' }}
+                />
+                {/* 自绘视频控制条：播放/暂停 + 进度 + 时间 */}
+                <div
+                  className="lens-shot-video-controls"
+                  style={{ position: 'absolute', left: 6, right: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 8, background: 'rgba(10,14,20,0.66)', backdropFilter: 'blur(8px)', zIndex: 2 }}
+                  onDoubleClick={(evt) => { evt.stopPropagation(); zoomToSelf(evt) }}
+                >
+                  <Tooltip label={isPlaying ? '暂停' : '播放'} position="top" withArrow>
+                    <span
+                      className="lens-shot-video-toggle"
+                      onClick={(evt) => { evt.stopPropagation(); togglePlay() }}
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 999, background: 'rgba(255,255,255,0.14)', color: '#fff', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      {isPlaying ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+                    </span>
+                  </Tooltip>
+                  <input
+                    className="lens-shot-video-progress"
+                    type="range"
+                    min={0}
+                    max={durationSec || 0}
+                    step={0.1}
+                    value={currentSec}
+                    onClick={(evt) => evt.stopPropagation()}
+                    onChange={(evt) => {
+                      const video = videoRef.current
+                      const next = Number(evt.currentTarget.value)
+                      if (video) { video.currentTime = next }
+                      setCurrentSec(next)
+                    }}
+                    style={{ flex: 1, minWidth: 0, accentColor: '#60a5fa' }}
+                  />
+                  <Text size="xs" style={{ color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatClock(currentSec)} / {formatClock(durationSec || mediaSeconds || 0)}
+                  </Text>
+                </div>
               </div>
             </div>
           ) : (
@@ -564,7 +875,6 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               className="lens-shot-media"
               src={data.selectedImageUrl}
               alt="分镜图"
-
               style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6, display: 'block' }}
               onLoad={(e) => {
                 const img = e.currentTarget
@@ -579,13 +889,13 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
             {data.scriptContent || '（暂无脚本）'}
           </div>
         )}
-
       </div>
+
       {/* 底部引用行：场景/道具/角色/站位（画布顶部「引用」开关控制，作为节点底部独立一行，不悬浮不遮挡媒体内容） */}
       {showRefs && refs.length > 0 && (
         <div className="lens-shot-refs" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderTop: '1px solid rgba(127,127,127,0.16)', flexWrap: 'wrap', flexShrink: 0 }}>
           {refs.map((ref) => (
-            <Tooltip key={`${ref.category}-${ref.id}`} label={ref.name} position="top" withArrow>
+            <Tooltip key={String(ref.category) + '-' + String(ref.id)} label={ref.name} position="top" withArrow>
               <span className="lens-shot-ref" style={{ position: 'relative', display: 'inline-flex', cursor: ref.category === 1 ? 'pointer' : 'default' }}>
                 {ref.imgUrl ? (
                   <img className="lens-shot-ref-img" src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid rgba(127,127,127,0.2)' }} />
@@ -594,7 +904,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 )}
                 {ref.category === 1 && (
                   <span
-                    className={`lens-shot-speaker ${ref.isSpeaker ? 'is-speaker' : ''}`}
+                    className={['lens-shot-speaker', ref.isSpeaker ? 'is-speaker' : ''].filter(Boolean).join(' ')}
                     onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref.baseName || ref.name) }}
                     title={ref.isSpeaker ? '取消说话者' : '设为说话者'}
                     style={{
@@ -612,7 +922,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
           ))}
         </div>
       )}
-      {/* 选中时节点下方浮出编辑面板（框架对齐角色节点原生弹窗：tc-task-node__toolbar-frame，固定 100% 不随画布缩放） */}
+
+      {/* 选中时节点下方浮出编辑面板（底部工具栏保持分镜视频节点原有布局） */}
       {selected && (
         <NodeToolbar className="lens-shot-edit-toolbar" position={Position.Bottom} align="center">
           <div
@@ -658,7 +969,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，右上角类型胶囊） */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
                 {refs.length > 0 ? refs.map((ref) => (
-                  <Tooltip key={`${ref.category}-${ref.id}`} label={ref.name} position="top" withArrow>
+                  <Tooltip key={String(ref.category) + '-' + String(ref.id)} label={ref.name} position="top" withArrow>
                     <span className="lens-shot-toolbar-reference" style={{ position: 'relative', display: 'inline-flex', cursor: 'grab' }}>
                       {ref.imgUrl ? (
                         <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)' }} />
@@ -666,7 +977,21 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                         <span style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
                       )}
                       <span style={{ position: 'absolute', left: 3, bottom: 3, fontSize: 9, lineHeight: 1, padding: '2px 5px', borderRadius: 999, background: 'rgba(10,14,20,0.72)', color: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)' }}>{REF_LABEL[ref.category] ?? '引'}</span>
-                      <ActionIcon className="lens-shot-toolbar-reference-remove nodrag nopan" size={18} variant="filled" color="dark" aria-label={`删除 ${ref.name} 引用及连线`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); void disconnectShotReference(id, ref).catch((error: unknown) => setSaveState(`删除参考失败：${error instanceof Error ? error.message : String(error)}`)) }}><IconX size={12} stroke={2.5} /></ActionIcon>
+                      <ActionIcon
+                        className="lens-shot-toolbar-reference-remove nodrag nopan"
+                        size={18} variant="filled" color="dark"
+                        aria-label={'删除 ' + ref.name + ' 引用及连线'}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void disconnectShotReference(id, ref).catch((error: unknown) => {
+                            const msg = error instanceof Error ? error.message : String(error)
+                            setSaveState('删除参考失败：' + msg)
+                          })
+                        }}
+                      >
+                        <IconX size={12} stroke={2.5} />
+                      </ActionIcon>
                     </span>
                   </Tooltip>
                 )) : (
@@ -680,8 +1005,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                   </Menu.Dropdown>
                 </Menu>
               </div>
-
-              {/* 编辑区：时间/模型 参数行 + 剧本 / 提示词 切换（默认剧本；提示词为分镜生视频提示词 data.prompt） */}
+              {/* 编辑区：时长 + 分镜提示词/剧本 切换 + 智能提示词 + 保存；提示词为分镜生视频提示词 data.prompt */}
               <Group justify="space-between" align="center" mb={6} style={{ marginTop: 10 }}>
                 <Group gap={8} align="center" wrap="nowrap">
                   <Text size="sm" fw={600}>{promptMode === 'prompt' ? '分镜提示词' : '分镜剧本'}</Text>
@@ -701,7 +1025,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                       const dramaId = String(data.sourceProjectId ?? '')
                       if (durationNext !== null && storyboardId && dramaId) {
                         void editStoryboard({ id: storyboardId, dramaId, time: durationNext }).catch((err: unknown) => {
-                          setSaveState(`时长同步失败：${err instanceof Error ? err.message : '未知错误'}`)
+                          const msg = err instanceof Error ? err.message : '未知错误'
+                          setSaveState('时长同步失败：' + msg)
                         })
                       }
                     }}
@@ -710,6 +1035,21 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                   />
                 </Group>
                 <Group className="lens-shot-prompt-header-actions" gap={8} align="center" justify="flex-end" wrap="nowrap">
+                  {/* 智能提示词：迁移自视频节点底部的智能提示词，按画布上下文生成分镜生视频提示词 */}
+                  <Tooltip label="智能提示词（依据上游文本/分镜剧本生成）" position="top" withArrow>
+                    <ActionIcon
+                      className="lens-shot-smart-prompt nodrag nopan"
+                      variant="light"
+                      color="blue"
+                      size="md"
+                      aria-label="智能提示词"
+                      loading={smartPromptLoading}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => { event.stopPropagation(); void handleSmartGeneratePrompt() }}
+                    >
+                      <IconBrain size={16} />
+                    </ActionIcon>
+                  </Tooltip>
                   <Button className="lens-shot-save-storyboard" size="xs" variant="outline" onClick={() => void handleSave()}>保存到分镜板</Button>
                   <Switch
                     className="lens-shot-prompt-mode-switch"
@@ -766,7 +1106,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                     onChange={(v) => setResolutionValue(v ?? resolutionValue)}
                     aria-label="分辨率"
                   />
-                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints === null ? '积分未配置' : `${consumePoints} 积分`}</Text>
+                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints === null ? '积分未配置' : String(consumePoints) + ' 积分'}</Text>
                   <Button size="xs" variant="filled" onClick={() => void handleGenerate()}>生成</Button>
                 </Group>
               </div>
@@ -776,7 +1116,13 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         </NodeToolbar>
       )}
 
-      <LensReferencePicker opened={assetPickerOpened} dramaId={String(data.sourceProjectId || '')} existingKeys={(data.refs || []).map(referenceKey)} onClose={() => setAssetPickerOpened(false)} onConfirm={(assets) => connectShotReferences(id, assets)} />
+      <LensReferencePicker
+        opened={assetPickerOpened}
+        dramaId={String(data.sourceProjectId || '')}
+        existingKeys={(data.refs || []).map(referenceKey)}
+        onClose={() => setAssetPickerOpened(false)}
+        onConfirm={(assets) => connectShotReferences(id, assets)}
+      />
     </div>
   )
 }

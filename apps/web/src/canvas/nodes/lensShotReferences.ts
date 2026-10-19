@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import { addShotReferenceRelations, removeShotReferenceRelations, type LensAssetImage, type LensRole } from '../../api/lens'
+import { addShotReferenceRelations, listReferenceAssets, removeShotReferenceRelations, type LensAssetImage, type LensRole } from '../../api/lens'
 import { useRFStore } from '../store'
 import { pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import type { LensShotRef } from './LensShotNode'
@@ -45,6 +45,147 @@ export function referenceFromNode(node: Node): ReferenceAsset {
 }
 
 const savingTargets = new Set<string>()
+
+/**
+ * 找出「被引用的子资产，其父资产不在画布中」的孤儿父级。
+ *
+ * <p><b>为什么需要</b>：在分镜节点里添加某个角色的子造型（分身）/子场景时，
+ * 其主角色/主场景可能还不在画布上（本集分镜没引用过它）。此时画布不会生成
+ * 「父→子派生连线」，子节点的底部参考区就没有父图可展示。
+ *
+ * <p><b>只为连线服务</b>：按方案 A，仅补建被孤儿引用到的父级，不做全量资产投影。
+ *
+ * @param nodes 画布现有节点
+ * @param assets 本次要添加的参考资产（含 parentId）
+ * @param dramaId 剧ID，用于过滤属于本剧的父级
+ * @returns 缺失的父级标识（category + parentId 去重）
+ */
+function collectMissingParents(
+  nodes: Node[],
+  assets: ReferenceAsset[],
+  dramaId: string,
+): Array<{ category: ReferenceCategory; parentId: string; onCanvas: boolean }> {
+  const out: Array<{ category: ReferenceCategory; parentId: string; onCanvas: boolean }> = []
+  const seen = new Set<string>()
+  for (const asset of assets) {
+    const parentId = String(asset.parentId ?? '').trim()
+    // 道具没有父子层级；无 parentId 表示资产本身就是主身份
+    if (!parentId || asset.category === ReferenceCategory.Prop) continue
+    const key = asset.category + ':' + parentId
+    if (seen.has(key)) continue
+    seen.add(key)
+    // onCanvas=true 表示主身份已在画布上：不新建节点，但仍需补连接线与子节点
+    const onCanvas = nodes.some(
+      (node) => Number(node.data.assetCategory) === asset.category
+        && String(node.data.entityId || '') === parentId
+        // 补建节点必须属于当前剧，避免把别的剧的资产挂到本画布
+        && (!node.data.sourceProjectId || String(node.data.sourceProjectId) === dramaId),
+    )
+    out.push({ category: asset.category, parentId, onCanvas })
+  }
+  return out
+}
+
+/**
+ * 补建「被孤立引用的父级」节点，并建立父→子连线。
+ *
+ * <p><b>场景</b>：在分镜节点里添加某角色的子造型（分身）/ 某场景的子场景时，
+ * 其主角色 / 主场景可能不在画布上（本集分镜没引用过它）。此时子节点与父节点之间
+ * 没有连线，子节点底部参考区展示不出父图，也无法把父图带进生成任务。
+ *
+ * <p><b>做法（方案 A：只补孤儿父级）</b>：只针对本次添加的子资产查询其父级信息，
+ * 补建父节点并连一条 父→子 的派生连线，与投影阶段的 `edge-derived-*` 语义一致。
+ * 不做全量资产投影，避免把本集未涉及的资产都铺到画布上。
+ *
+ * <p><b>父图只用于参考，不进 refs</b>：父级并未被分镜引用，因此不写 refs、
+ * 不建「父→分镜」连线，避免凭空给分镜增加业务关联。
+ *
+ * @param dramaId 剧ID
+ * @param targetPosition 当前分镜节点位置，父节点参考此位置摆放在其左上方
+ * @param assets 本次添加的参考资产（含 parentId）
+ * @returns 本次补建的「父节点ID → 子节点ID」连线列表（子节点此时可能尚未创建，由调用方创建后再连）
+ */
+async function ensureMissingParentsOnCanvas(
+  dramaId: string,
+  targetPosition: { x: number; y: number },
+  assets: ReferenceAsset[],
+): Promise<Array<{ parentNodeId: string; childNodeId: string }>> {
+  const parents = collectMissingParents(useRFStore.getState().nodes, assets, dramaId)
+  if (!parents.length) return []
+  const pendingEdges: Array<{ parentNodeId: string; childNodeId: string }> = []
+  // 只有「父级不在画布上」的才需要查库补建；已在画布的直接补连线
+  const needFetch = parents.filter((item) => !item.onCanvas)
+  const byCategory = new Map<ReferenceCategory, string[]>()
+  for (const item of needFetch) {
+    const list = byCategory.get(item.category) ?? []
+    list.push(item.parentId)
+    byCategory.set(item.category, list)
+  }
+  // 跨类别累计竖直偏移：角色与场景的父节点都补在分镜左侧，
+  // 若各自从 0 计数会叠在同一个位置。
+  let placedCount = 0
+  for (const [category, parentIds] of byCategory) {
+    const rows = await listReferenceAssets<LensRole & LensAssetImage>(dramaId, category)
+    parentIds.forEach((parentId) => {
+      const row = rows.find((candidate) => String(candidate.id) === parentId)
+      if (!row) return
+      // 角色取三视图、场景/道具取 url，与投影节点的取图口径保持一致
+      const imgUrl = category === ReferenceCategory.Role
+        ? String((row as LensRole).threeImg || '')
+        : String((row as LensAssetImage).url || '')
+      // 没有图的父级补出来也是个空节点，不制造无效节点
+      if (!imgUrl) return
+      const name = String((row as LensRole).roleName || (row as LensAssetImage).name || '')
+      const prefix = category === ReferenceCategory.Role ? 'role' : 'scene'
+      const parentNodeId = prefix + '-' + parentId
+      if (!useRFStore.getState().nodes.some((node) => node.id === parentNodeId)) {
+        const offsetIndex = placedCount
+        placedCount += 1
+        // ID 与投影节点保持一致，重新打开画布时可由业务快照直接复用同一条节点
+        useRFStore.setState((current) => ({
+          nodes: [...current.nodes, {
+            id: parentNodeId,
+            type: 'taskNode',
+            position: {
+              x: targetPosition.x - NEW_ASSET_NODE_OFFSET_X,
+              y: targetPosition.y - NEW_ASSET_NODE_GAP_Y * (offsetIndex + 1),
+            },
+            data: {
+              label: name, kind: 'image', source: 'lens_projection', sourceProjectId: dramaId,
+              entityId: parentId, assetCategory: category, imageUrl: imgUrl,
+              nodeWidth: LENS_ASSET_NODE_WIDTH, nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
+            },
+          }],
+        }))
+      }
+    })
+  }
+  // 统一登记待建连线：父级可能是本次新建的，也可能是画布上早就有的。
+  // 后者以前会被直接跳过，导致「主角色已在画布但和子角色没连线」的问题。
+  for (const item of parents) {
+    const child = assets.find((candidate) => candidate.category === item.category && String(candidate.parentId ?? '') === item.parentId)
+    if (!child) continue
+    const prefix = item.category === ReferenceCategory.Role ? 'role' : 'scene'
+    pendingEdges.push({ parentNodeId: prefix + '-' + item.parentId, childNodeId: prefix + '-' + child.id })
+  }
+  return pendingEdges
+}
+
+/**
+ * 建立「父→子派生连线」，让子节点参考区能显示父图。
+ *
+ * @param pendingEdges 需要建立的父子连线
+ */
+function connectParentChildEdges(pendingEdges: Array<{ parentNodeId: string; childNodeId: string }>): void {
+  if (!pendingEdges.length) return
+  for (const item of pendingEdges) {
+    const store = useRFStore.getState()
+    // 子节点尚未落地（如业务关联失败）时跳过，不留无效连线
+    if (!store.nodes.some((node) => node.id === item.childNodeId)) continue
+    if (store.edges.some((edge) => edge.source === item.parentNodeId && edge.target === item.childNodeId)) continue
+    store.onConnect({ source: item.parentNodeId, sourceHandle: 'out-image', target: item.childNodeId, targetHandle: null })
+  }
+}
 
 /** 先删除业务关联，再同步移除本地引用及该资产指向分镜的连线。 */
 export async function disconnectShotReference(targetId: string, ref: LensShotRef): Promise<void> {
@@ -103,6 +244,10 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
     if (additions.length) await addShotReferenceRelations(dramaId, storyboardId, additions.map((asset) => ({ assetId: asset.id, assetCategory: asset.category })))
     // 等待期间目标可能卸载/切集：不把旧响应写到新画布。
     if (!useRFStore.getState().nodes.some((node) => node.id === targetId && node.data.entityId === target.data.entityId)) return
+    // 补建孤儿父级：添加子造型/子场景时，其主身份可能还不在画布上。
+    // 不补的话，父→子派生连线无从建立，子节点参考区就没有父图可显示。
+    // 连线必须等子节点创建后再建，因此先暂存。
+    const pendingParentEdges = await ensureMissingParentsOnCanvas(dramaId, target.position, unique)
     unique.forEach((asset, index) => {
       let source = useRFStore.getState().nodes.find((node) => sourceNodeId ? node.id === sourceNodeId : Number(node.data.assetCategory) === asset.category && String(node.data.entityId) === asset.id)
       if (!source) {
@@ -121,6 +266,8 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
         store.onConnect({ source: source.id, sourceHandle: 'out-image', target: targetId, targetHandle: null })
       }
     })
+    // 子节点已创建，补建「父→子」派生连线
+    connectParentChildEdges(pendingParentEdges)
     const latest = useRFStore.getState().nodes.find((node) => node.id === targetId)
     const refs = (Array.isArray(latest?.data.refs) ? latest.data.refs : []) as LensShotRef[]
     const merged = new Map(refs.map((ref) => [referenceKey(ref), ref]))

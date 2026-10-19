@@ -20,6 +20,30 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks() })
 describe('工具栏右侧资产任务列表', () => {
+  it('头部按刷新、数量、扩展排序，扩展调用页面抽屉入口', async () => {
+    const expand = vi.fn(), close = vi.fn()
+    render(wrap(<AssetTaskPanel data={data} onClose={close} onExpand={expand} />))
+    await screen.findByText('当前资产任务')
+    const header = document.querySelector('.lens-asset-task-panel__header')
+    const controls = Array.from(header?.children || []).map((element) => element.className)
+    expect(controls.slice(-3)).toEqual([
+      expect.stringContaining('lens-asset-task-panel__refresh'),
+      expect.stringContaining('lens-asset-task-panel__count'),
+      expect.stringContaining('lens-asset-task-panel__expand'),
+    ])
+    fireEvent.click(screen.getByRole('button', { name: '扩展任务列表' }))
+    expect(expand).toHaveBeenCalledTimes(1)
+    expect(close).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '刷新任务列表' }))
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(2))
+  })
+
+  it('未提供页面抽屉能力时不显示无效扩展入口', async () => {
+    render(wrap(<AssetTaskPanel data={data} onClose={vi.fn()} />))
+    await screen.findByText('当前资产任务')
+    expect(screen.queryByRole('button', { name: '扩展任务列表' })).toBeNull()
+  })
+
   it('身份信息与生成参数分别放在两行', async () => {
     mocks.list.mockResolvedValue({ rows: [{ id: '88', originAppId: 47, taskStatus: 'SUCCESS', createUserName: '提交用户', channel: '渠道甲', createTime: '2026-10-19 16:00:00', reqPar: JSON.stringify([{ ratio: '16:9', resolution: '2K', quality: 'high' }]) }], total: 1 })
     render(wrap(<AssetTaskPanel data={data} onClose={vi.fn()} />))

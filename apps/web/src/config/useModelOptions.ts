@@ -302,6 +302,17 @@ export function readLensModelQualities(meta: unknown): string[] {
   return []
 }
 
+/**
+ * 读取模型选项的「剧配置默认模型」标记。
+ *
+ * @param meta 模型选项的 meta（toLensModelOptions 透传后端 isDefault）
+ * @returns 该模型是否为剧配置页配置的默认模型
+ */
+export function readLensModelIsDefault(meta: unknown): boolean {
+  if (!meta || typeof meta !== 'object') return false
+  return (meta as { isDefault?: unknown }).isDefault === true
+}
+
 /** lens 模型条目 → 画布模型选项（value/label 对齐 ModelOption；enabled=false 的条目灰显禁用） */
 export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
   if (!Array.isArray(items)) return []
@@ -327,6 +338,8 @@ export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
       // 透传 lens 单次消耗（unitConsume）、模型扩展参数（others，含 qualities 质量档位）
       // 以及模型能力配置（resolutions → 分辨率/尺寸选项）：选择模型后右侧参数跟随变化
       meta: {
+        // 剧配置页配置的默认模型标记（后端 isDefault）：节点首次渲染时据此选中默认生视频模型
+        isDefault: item?.isDefault === true,
         lensUnitConsume: typeof item?.unitConsume === 'number' ? item.unitConsume : undefined,
         lensCreditPricing: item.creditPricing,
         // 视频分辨率与报价均来自同一模型接口，不能借用生图配置或通用候选。

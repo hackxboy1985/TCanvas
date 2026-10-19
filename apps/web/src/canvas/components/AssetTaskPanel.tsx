@@ -1,6 +1,6 @@
 import React from 'react'
 import { ActionIcon, Badge, Button, Group, Loader, Pagination, Select, Text } from '@mantine/core'
-import { IconRefresh, IconX } from '@tabler/icons-react'
+import { IconArrowsMaximize, IconRefresh, IconX } from '@tabler/icons-react'
 import { LensAssetTaskStatus, listAssetImageTasks, canViewTaskParams, type LensTaskRecord, type LensModelOption } from '../../api/lens'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
 import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
@@ -19,8 +19,8 @@ const STATUS_OPTIONS = [
 const PENDING_STATUSES = new Set(['CREATE', 'CREATED', 'QUEUED', 'RUNNING', 'SYNCING'])
 
 /** 独立于原右侧抽屉的资产任务列表；只在挂载时查询，卸载即停止轮询并废弃在途响应。 */
-export function AssetTaskPanel({ data, onClose }: {
-  data: Record<string, unknown>; onClose: () => void
+export function AssetTaskPanel({ data, onClose, onExpand }: {
+  data: Record<string, unknown>; onClose: () => void; onExpand?: () => void
 }) {
   const identity = readLensAssetTaskIdentity(data)
   const dramaId = new URLSearchParams(window.location.search).get('dramaId')?.trim() || ''
@@ -83,11 +83,17 @@ export function AssetTaskPanel({ data, onClose }: {
           <IconX className="lens-asset-task-panel__close-icon" size={16} />
         </ActionIcon>
         <Text className="lens-asset-task-panel__title" size="sm" fw={600}>任务列表</Text>
-        <Badge className="lens-asset-task-panel__count" variant="light" color="gray">{total}</Badge>
         <ActionIcon className="lens-asset-task-panel__refresh" variant="subtle" color="gray" aria-label="刷新任务列表"
           loading={loading} onClick={() => setRefresh((value) => value + 1)}>
           <IconRefresh className="lens-asset-task-panel__refresh-icon" size={16} />
         </ActionIcon>
+        <Badge className="lens-asset-task-panel__count" variant="light" color="gray">{total}</Badge>
+        {onExpand && (
+          <ActionIcon className="lens-asset-task-panel__expand" variant="subtle" color="gray"
+            aria-label="扩展任务列表" title="扩展任务列表" onClick={onExpand}>
+            <IconArrowsMaximize className="lens-asset-task-panel__expand-icon" size={16} />
+          </ActionIcon>
+        )}
       </Group>
       <Select className="lens-asset-task-panel__status" size="xs" aria-label="资产任务状态" data={STATUS_OPTIONS}
         value={status} allowDeselect={false} onChange={(value) => {

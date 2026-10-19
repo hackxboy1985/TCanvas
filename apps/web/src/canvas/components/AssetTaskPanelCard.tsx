@@ -17,6 +17,25 @@ type Media = { url: string; type: 'image' | 'video'; thumbnail?: string }
 function parseJson(raw: string | undefined): unknown {
   return raw?.trim() ? JSON.parse(raw) : null
 }
+/**
+ * 把任务参数格式化成缩进良好的 JSON 文本，便于人工读参数。
+ *
+ * <p>{@code reqPar} 是后端 {@code components} 的 JSON 字符串，紧凑格式一行到底无法阅读。
+ * 解析失败时原样返回 —— 参数面板只做展示，不能让一条脏数据导致弹窗空白或组件崩溃。
+ *
+ * @param raw 原始参数字符串，可为空
+ * @returns 缩进 2 空格的 JSON 文本；无法解析时返回原文；为空时返回空串
+ */
+function prettyJson(raw: string | undefined): string {
+  const text = raw?.trim() ? raw : ''
+  if (!text) return ''
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2)
+  } catch {
+    // 非 JSON（如纯文本参数）原样展示，不制造假的结构
+    return text
+  }
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -106,7 +125,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
         {canViewParams && rawParams && <Button className="lens-asset-task-panel__params" size="compact-xs" variant="light" color="gray" leftSection={<IconEye className="lens-asset-task-panel__params-icon" size={13} />} onClick={() => setParamsOpened(true)}>查看参数</Button>}
       </Group>
       <Modal className="lens-asset-task-panel__params-modal" opened={paramsOpened} onClose={() => setParamsOpened(false)} title="任务参数" centered>
-        <Text className="lens-asset-task-panel__params-content" component="pre" size="xs">{rawParams}</Text>
+        <Text className="lens-asset-task-panel__params-content" component="pre" size="xs">{prettyJson(rawParams)}</Text>
       </Modal>
     </article>
   )

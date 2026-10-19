@@ -421,8 +421,23 @@ export interface LensCanvasTaskSubmitParams {
    *
    * <p>自由节点的任务归属必传：写入 task_queue.asset_id，用于把任务结果精确匹配回该节点。
    * 需由前端在 flow 数据里持久化（见 CanvasFreeNodeAssetId），保证刷新后不变。
+   *
+   * <p><b>业务投影节点（角色/场景/道具）不得传</b>：它们用 assetType/assetId 定位。
    */
   canvasNodeAssetId?: number
+  /**
+   * 业务资产类型：0=角色 1=场景 2=道具。
+   *
+   * <p>业务投影节点必传，与 assetId 一起写入 task_queue，
+   * 使任务能被对应业务面板按真实资产ID查到。自由节点不传。
+   */
+  assetType?: number
+  /**
+   * 业务资产ID（真实 lens 资产主键）。
+   *
+   * <p>业务投影节点必传。按字符串下发，避免 Long 主键在 Number 转换时丢精度。
+   */
+  assetId?: string
 }
 
 /**
@@ -596,6 +611,13 @@ export interface LensModelOption {
   type?: string
   /** toModelJson 输出：模型自身启用标记 */
   enable?: boolean
+  /**
+   * 剧配置页设置的默认模型标记。
+   *
+   * <p>由后端 markDefault() 按 Redis 中配置的默认模型 value 打标；
+   * 未配置默认模型时后端不输出该字段，前端据此回退到列表第一个模型。
+   */
+  isDefault?: boolean
   /** buildResult 合并的勾选状态（海外渠道需显式勾选才为 true） */
   enabled?: boolean
   needDuration?: boolean
@@ -1001,6 +1023,13 @@ export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promi
   if (typeof params.canvasNodeAssetId === 'number' && Number.isFinite(params.canvasNodeAssetId)) {
     payload.canvasNodeAssetId = Math.trunc(params.canvasNodeAssetId)
   }
+  // 业务投影节点（角色/场景/道具）的真实业务身份：与 canvasNodeAssetId 互斥
+  if (typeof params.assetType === 'number' && Number.isFinite(params.assetType)) {
+    payload.assetType = Math.trunc(params.assetType)
+  }
+  if (typeof params.assetId === 'string' && params.assetId.trim()) {
+    payload.assetId = params.assetId.trim()
+  }
 
   const data = await lensFetch<LensCanvasTaskSubmitResult>('/api/application/runTaskByCanvas?as=lens', {
     method: 'POST',
@@ -1263,6 +1292,59 @@ export async function polishPrompt(params: LensPromptPolishParams): Promise<Lens
     throw new Error('提示词润色失败：接口未返回有效内容')
   }
   return { polishedText, billing: normalizeLensPromptPolishBilling(data?.billing) }
+}
+
+/** lens 提示词润色的计费预览（后端 previewChargePromptPolish 返回体，只读不扣分）。 */
+export interface LensPromptPolishBillingPreview {
+  /** 是否还能免费润色（今日剩余免费次数 > 0） */
+  free: boolean
+  /** 今日剩余免费次数 */
+  freeRemain: number
+  /** 每日免费次数上限（后台可配，最大 10） */
+  freeLimit: number
+  /** 一次润色消耗的积分（免费次数用尽后生效） */
+  credit: number
+}
+
+/**
+ * 查询提示词润色的计费预览（只读接口，不占用免费额度、不扣积分）。
+ *
+ * <p>画布「AI润色」按钮据此展示本次润色是否免费以及消耗多少积分；
+ * 真实计费仍以后端润色接口成功后返回的 billing 为准。
+ *
+ * @returns 计费预览（free / freeRemain / freeLimit / credit）
+ */
+export async function fetchPromptPolishBillingPreview(): Promise<LensPromptPolishBillingPreview> {
+  const data = await lensFetch<Record<string, unknown>>('/api/canvas/promptPolish/billing')
+  const preview = normalizeLensPromptPolishBillingPreview(data)
+  if (!preview) {
+    throw new Error('AI润色计费预览失败：后端返回字段缺失或类型不符')
+  }
+  return preview
+}
+
+/**
+ * 归一化润色计费预览：字段缺失或类型不符时返回 null（不做逐字段补默认值，
+ * 避免把「后端没返回」伪装成「免费 0 次 / 0 积分」误导用户）。
+ *
+ * @param raw 后端返回的 data 字段
+ * @returns 计费预览，形状不合法时返回 null
+ */
+function normalizeLensPromptPolishBillingPreview(raw: unknown): LensPromptPolishBillingPreview | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  const toNumber = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null
+  const freeRemain = toNumber(record.freeRemain)
+  const freeLimit = toNumber(record.freeLimit)
+  const credit = toNumber(record.credit)
+  if (typeof record.free !== 'boolean' || freeRemain === null || freeLimit === null || credit === null) return null
+  return {
+    free: record.free,
+    freeRemain,
+    freeLimit,
+    credit,
+  }
 }
 
 /**

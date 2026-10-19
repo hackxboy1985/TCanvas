@@ -24,8 +24,10 @@ import {
   CANVAS_NODE_ASSET_ID_FIELD,
   ensureCanvasNodeAssetId as allocateCanvasNodeAssetId,
   getLensCanvasFlowId,
+  isCanvasFreeNode,
   readCanvasNodeAssetId,
 } from '../canvas/utils/canvasNodeAssetId'
+import { readLensAssetTaskIdentity } from '../canvas/utils/lensAssetTaskIdentity'
 import { useUIStore } from '../ui/uiStore'
 import { toast } from '../ui/toast'
 import { notifyAssetRefresh } from '../ui/assetEvents'
@@ -1296,9 +1298,16 @@ function readUserSelectedImageParams(
  * <p>画布侧已拼好的提示词（角色卡约束、@别名槽位、focus guide 等）原样下发；
  * 模型/比例/尺寸/质量仅在用户显式选择时下发，否则由 lens 后端从剧配置推导。
  *
- * <p><b>任务归属</b>：自由节点不传 assetType/assetId/storyboardIds（那些是 0/1/2 的真实资产，
- * 传了会污染用户数据），而是传 canvasFlowId + canvasNodeAssetId —— 后端据此写入
- * task_queue 的 scene_id / asset_id（asset_type 固定 10），供「任务结果展开」按节点查询。
+ * <p><b>任务归属</b>分两类，必须严格区分：
+ * <ul>
+ *   <li><b>业务投影节点</b>（角色/场景/道具，节点 data 带 entityId + assetCategory）：
+ *       下发真实业务身份 assetType + assetId，后端写入 task_queue 的 asset_type/asset_id，
+ *       这样所属业务面板按 (assetType=0, assetId=对应角色) 就能查到该任务。
+ *       <b>不下发 canvasNodeAssetId</b> —— 否则后端会把 asset_type 写成 10（画布自由节点）、
+ *       asset_id 写成节点序号，业务面板永远查不到，且留下脏数据。</li>
+ *   <li><b>画布自由节点</b>：不传 assetType/assetId（那些是真实资产，传了会污染用户数据），
+ *       传 canvasFlowId + canvasNodeAssetId，后端据此写 scene_id 与 asset_type=10。</li>
+ * </ul>
  */
 async function runLensCanvasImageTask(
   request: TaskRequestDto,
@@ -1310,9 +1319,12 @@ async function runLensCanvasImageTask(
     ? extras.referenceImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
     : []
   const userSelected = readUserSelectedImageParams(nodeData)
+  // 业务投影节点（角色/场景/道具）用真实业务身份定位任务；自由节点返回 null
+  const businessIdentity = nodeData ? readLensAssetTaskIdentity(nodeData) : null
   // 节点数字ID：应已由调用方在提交前通过 ensureCanvasNodeAssetId 分配并写回节点 data。
   // 这里只读不分配 —— 分配需要写回 store 与保存 flow，属于调用方职责（见 canvasNodeAssetId.ts）。
-  const canvasNodeAssetId = readCanvasNodeAssetId(nodeData)
+  // 业务投影节点不读也不传：它们的归属由 assetType/assetId 决定。
+  const canvasNodeAssetId = businessIdentity ? null : readCanvasNodeAssetId(nodeData)
   const submitted = await runTaskByCanvas({
     prompt: request.prompt,
     dramaId: urlParams.dramaId,
@@ -1322,6 +1334,9 @@ async function runLensCanvasImageTask(
     nodeId: typeof extras?.nodeId === 'string' ? extras.nodeId : undefined,
     nodeKind: typeof extras?.nodeKind === 'string' ? extras.nodeKind : undefined,
     canvasFlowId: urlParams.flowId,
+    // 二选一：业务身份 或 画布节点归属，绝不同时下发
+    assetType: businessIdentity ? businessIdentity.assetType : undefined,
+    assetId: businessIdentity ? businessIdentity.assetId : undefined,
     canvasNodeAssetId: canvasNodeAssetId === null ? undefined : canvasNodeAssetId,
   })
   // 不返回具体结果，让既有轮询分支按 queued 状态接续推进（与 /public/tasks 链路同构）
@@ -1404,16 +1419,23 @@ async function runImageTaskByRuntime(
  * <p>未注入 {@code ensureCanvasNodeAssetId}（非画布宿主环境）时原样返回，
  * 不静默造一个临时ID —— 临时ID刷新后会变，反而造成任务错配。
  *
+ * <p><b>业务投影节点（角色/场景/道具/分镜）不分配画布归属</b>：它们有 entityId，
+ * 后端按自身 assetType/assetId 落库（角色=0、场景=1、道具=2），任务结果走各自的
+ * 业务查询。若错给它们分配 canvasNodeAssetId，后端会把 asset_type 写成 10（画布自由节点）、
+ * asset_id 写成节点序号，导致业务面板按真实资产ID查不到该任务，且产生脏数据。
+ *
  * @param ctx runner 上下文（提供 ensureCanvasNodeAssetId 处理器）
  * @param id 节点ID
  * @param nodeData 节点当前 data
- * @returns 并入 canvasNodeAssetId 后的 data（无法分配时返回原 data）
+ * @returns 并入 canvasNodeAssetId 后的 data（业务投影节点/无法分配时返回原 data）
  */
 function withCanvasNodeAssetId(
   ctx: Pick<RunnerContext, 'ensureCanvasNodeAssetId'>,
   id: string,
   nodeData: Record<string, unknown>,
 ): Record<string, unknown> {
+  // 业务投影节点走自身业务身份，禁止套用画布自由节点归属
+  if (!isCanvasFreeNode(nodeData)) return nodeData
   if (!ctx.ensureCanvasNodeAssetId) return nodeData
   const assetId = ctx.ensureCanvasNodeAssetId(id)
   if (assetId === null || !Number.isFinite(assetId) || assetId <= 0) return nodeData

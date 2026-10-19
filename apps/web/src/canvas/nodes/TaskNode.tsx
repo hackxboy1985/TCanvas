@@ -188,7 +188,12 @@ import { refineStructuredImagePrompt } from './taskNode/structuredPromptRefine'
 import { PromptEditorActions } from './taskNode/components/PromptEditorActions'
 import { PromptPolishPreview } from './taskNode/components/PromptPolishPreview'
 import { usePromptEditorAdmin } from '../../auth/usePromptEditorAdmin'
-import { saveLensAssetPrompt, type LensPromptPolishBilling } from '../../api/lens'
+import {
+  fetchPromptPolishBillingPreview,
+  saveLensAssetPrompt,
+  type LensPromptPolishBilling,
+  type LensPromptPolishBillingPreview,
+} from '../../api/lens'
 import imageViewControlsModule from '@tapcanvas/image-view-controls'
 import {
   resolvePrimarySemanticAnchorBinding,
@@ -1347,6 +1352,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const structuredPromptErrorMessage = imagePromptExecutionState.errorMessage
   const [prompt, setPrompt] = React.useState<string>(rawPrompt || '')
   const [structuredPromptRefineLoading, setStructuredPromptRefineLoading] = React.useState(false)
+  // AI润色的计费预览（只读接口，不扣分）：用于在按钮后面展示「（免费N次）」或「（N积分）」
+  const [polishBillingPreview, setPolishBillingPreview] = React.useState<LensPromptPolishBillingPreview | null>(null)
   // 对比与撤销快照仅保存在当前编辑会话，不写入资产表或画布 flow。
   const [polishPreview, setPolishPreview] = React.useState<{
     before: string
@@ -2063,85 +2070,17 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     return normalizeClipRange((data as any)?.clipRange)
   }, [data, videoPrimaryIndex, videoResults])
   const [videoSelectedIndex, setVideoSelectedIndex] = React.useState(0)
-  const frameSampleUrlsRef = React.useRef<string[]>([])
-  const [frameSamples, setFrameSamples] = React.useState<FrameSample[]>([])
-  const [frameCaptureLoading, setFrameCaptureLoading] = React.useState(false)
 
-  const cleanupFrameSamples = React.useCallback(() => {
-    frameSampleUrlsRef.current.forEach((u) => {
-      try {
-        URL.revokeObjectURL(u)
-      } catch {
-        // ignore
-      }
-    })
-    frameSampleUrlsRef.current = []
-    setFrameSamples([])
+  /** 抽帧预览的提示出口：抽帧逻辑已抽到公共组件 VideoFramePreview，由组件回调触发节点 toast */
+  const handleFramePreviewNotify = React.useCallback((message: string, level: 'success' | 'error') => {
+    toast(message, level)
   }, [])
 
-  React.useEffect(() => {
-    return () => {
-      cleanupFrameSamples()
-    }
-  }, [cleanupFrameSamples])
-
-	  const handleCaptureVideoFrames = React.useCallback(async () => {
-	    const src = videoResults[videoPrimaryIndex]?.url || videoUrl
-	    if (!src) {
-	      toast('当前没有可用的视频链接', 'error')
-	      return
-	    }
+  /** 抽帧预览用的视频时长（秒）：优先主视频结果时长，缺失时为空（组件内退化为只抽第 1 秒） */
+  const framePreviewDurationSeconds = React.useMemo<number | null>(() => {
     const duration = videoResults[videoPrimaryIndex]?.duration
-    const sampleTimes = (() => {
-      if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) {
-        const durationSeconds = Math.max(1, duration)
-        const floorSeconds = Math.floor(durationSeconds)
-        const times: number[] = []
-        const step = floorSeconds + 1 > MAX_FRAME_ANALYSIS_SAMPLES
-          ? Math.ceil((floorSeconds + 1) / MAX_FRAME_ANALYSIS_SAMPLES)
-          : 1
-        for (let t = 0; t <= floorSeconds; t += step) {
-          times.push(Number(t.toFixed(2)))
-        }
-        if (!times.includes(Number(durationSeconds.toFixed(2)))) {
-          times.push(Number(durationSeconds.toFixed(2)))
-        }
-        return times
-      }
-      return [1]
-    })().filter((t, idx, arr) => Number.isFinite(t) && t >= 0 && arr.indexOf(t) === idx)
-
-    setFrameCaptureLoading(true)
-    cleanupFrameSamples()
-    try {
-      const { frames } = await captureFramesAtTimes({ type: 'url', url: src }, sampleTimes)
-      frameSampleUrlsRef.current = frames.map((f) => f.objectUrl)
-      setFrameSamples(
-        frames.map((f) => ({
-          url: f.objectUrl,
-          time: f.time,
-          blob: f.blob,
-          remoteUrl: null,
-          description: null,
-          describing: false,
-        })),
-      )
-      if (!frames.length) {
-        toast('未能抽取到有效帧，可能受跨域或视频格式限制', 'error')
-      } else {
-        toast(`已抽取 ${frames.length} 帧`, 'success')
-      }
-    } catch (err: any) {
-      console.error('captureFramesAtTimes error', err)
-      const message =
-        (err?.message as string | undefined) ||
-        '抽帧失败，可能是跨域或视频格式不支持'
-      toast(message, 'error')
-	    } finally {
-	      setFrameCaptureLoading(false)
-	    }
-	  }, [cleanupFrameSamples, videoPrimaryIndex, videoResults, videoUrl])
-
+    return typeof duration === 'number' && Number.isFinite(duration) && duration > 0 ? duration : null
+  }, [videoPrimaryIndex, videoResults])
 	  // 旧版基于 Sora 的角色创建能力已移除（不再依赖前端配置 Token/厂商）。
 
   const persistedCharacterRewriteModel = (data as any)?.characterRewriteModel
@@ -2408,7 +2347,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     data,
     isAudioNode,
   ])
-  const { selectedNodeCount } = useCanvasRenderContext()
+  const { selectedNodeCount, onOpenTaskResult } = useCanvasRenderContext()
   const isSingleSelectionActive = Boolean(selected && !dragging && selectedNodeCount <= 1)
   const wantsCharacterRefs = isSingleSelectionActive
   const characterRefs = useRFStore(
@@ -4138,6 +4077,42 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       promptEditorMode: 'structured',
     })
   }, [id, updateNodeData])
+  /**
+   * 拉取「AI润色」的计费预览，供按钮旁展示免费次数或积分消耗。
+   *
+   * <p>只在 lens 模式下请求（非 lens 模式没有 lens 计费）；失败时保持 null 且不打断用户，
+   * 按钮照常可用，真实扣费结果仍以润色成功后的 billing 为准。
+   *
+   * @returns 计费预览；非 lens 模式或请求失败时返回 null
+   */
+  const refreshPolishBillingPreview = React.useCallback(async () => {
+    if (!isLensMode()) return null
+    try {
+      const preview = await fetchPromptPolishBillingPreview()
+      setPolishBillingPreview(preview)
+      return preview
+    } catch (error) {
+      // 预览失败不影响润色本身，但要留下可检索的日志，便于定位是接口还是网络问题。
+      console.warn('[AI润色] 获取计费预览失败', error)
+      return null
+    }
+  }, [])
+  // 生图节点首次渲染时拉取一次计费预览，按钮初始文案就有依据
+  React.useEffect(() => {
+    if (!canUseStructuredPromptEditor) return
+    void refreshPolishBillingPreview()
+  }, [canUseStructuredPromptEditor, refreshPolishBillingPreview])
+  /**
+   * 生成「AI润色」按钮的费用说明文案。
+   *
+   * <p>规则：今日还有免费次数 →「（免费N次）」；免费次数用尽 →「（N积分）」；
+   * 预览还没拿到（请求中或失败）时返回空串，不编造费用。
+   */
+  const polishBillingSuffix = React.useMemo(() => {
+    if (!polishBillingPreview) return ''
+    if (polishBillingPreview.free) return `（免费${polishBillingPreview.freeRemain}次）`
+    return `（${polishBillingPreview.credit}积分）`
+  }, [polishBillingPreview])
   const handleRefineImagePrompt = React.useCallback(async () => {
     if (!canUseStructuredPromptEditor || viewOnly || structuredPromptRefineLoading) return
 
@@ -4176,6 +4151,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       toast(message, 'error')
     } finally {
       setStructuredPromptRefineLoading(false)
+      // 计费真实发生后重新拉取预览：按钮文案立刻反映「剩余免费次数」或「改为扣积分」
+      void refreshPolishBillingPreview()
     }
   }, [
     canUseStructuredPromptEditor,
@@ -4185,6 +4162,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     refineStructuredPromptFromText,
     structuredPromptRefineLoading,
     isStructuredPromptMode,
+    refreshPolishBillingPreview,
     updateNodeData,
   ])
   /** 采用前检查输入未变更；保留完整原文和 JSON 模式，支持精确恢复。 */
@@ -4228,7 +4206,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       {lastPolishComparison ? <Button className="tc-task-node__polish-compare" size="compact-xs" variant="subtle" onClick={() => setShowLastPolishComparison(true)}>查看对比</Button> : null}
       {polishOriginal ? <Button className="tc-task-node__polish-restore" size="compact-xs" variant="subtle" disabled={viewOnly} onClick={handleRestorePolish}>恢复润色前</Button> : null}
       {typeof (data as Record<string, unknown>).assetCategory === 'number' ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>保存提示词</Button> : null}
-      <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>AI 润色</Button>
+      <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>{'AI润色'}</Button>
+      {/* 费用说明：免费显示「（免费N次）」，免费用尽显示「（N积分）」；单独用 Text 渲染，不并入按钮文字 */}
+      {polishBillingSuffix ? (
+        <Text className="tc-task-node__prompt-refine-cost" size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{polishBillingSuffix}</Text>
+      ) : null}
     </Group>
   ) : null
   // JSON 只切换已有结构化结果的展示，绝不调用润色接口或触发计费。
@@ -5168,10 +5150,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         videoUrl={videoUrl}
         videoThumbnailUrl={videoThumbnailUrl}
         videoTitle={videoTitle}
-        frameCaptureLoading={frameCaptureLoading}
-        frameSamples={frameSamples}
-        handleCaptureVideoFrames={handleCaptureVideoFrames}
-        cleanupFrameSamples={cleanupFrameSamples}
+        videoDurationSeconds={framePreviewDurationSeconds}
+        onFramePreviewNotify={handleFramePreviewNotify}
         mediaOverlayBackground={mediaOverlayBackground}
         mediaOverlayText={mediaOverlayText}
         mediaFallbackSurface={mediaFallbackSurface}
@@ -8877,6 +8857,8 @@ const rewritePromptWithCharacters = React.useCallback(
           </div>
           {assetTaskPanelOpened && (
             <AssetTaskPanel key={id} data={data as Record<string, unknown>}
+              // 扩展复用页面级右侧抽屉，与视频节点共用入口，不在工具栏内创建弹窗。
+              onExpand={onOpenTaskResult ? () => onOpenTaskResult(id) : undefined}
               onClose={() => setAssetTaskPanelOpened(false)} />
           )}
           </div>

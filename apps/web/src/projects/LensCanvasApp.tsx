@@ -428,6 +428,8 @@ function buildCanvasNodes(input: {
           roleName: child.characterName,
           imageUrl: child.threeImg,
           referenceView: 'three_view',
+          // 父角色图由「父→子派生连线」进入上游参考区（见 pushDerivedEdges），
+          // 不在 anchorBindings 里重复挂，避免参考图重复与语义重叠。
           anchorBindings: [{ kind: 'character', entityId: childId, label: child.characterName, imageUrl: child.threeImg }],
           source: 'lens_projection',
           nodeWidth: LENS_ASSET_NODE_WIDTH,
@@ -475,6 +477,8 @@ function buildCanvasNodes(input: {
         { x: COL2_X + (childIndex + 1) * CHILD_GAP_X, y: sceneCursorY + ROW_GAP },
         {
           imageUrl: child.imgUrl,
+          // 主场景图由「父→子派生连线」进入上游参考区（见 pushDerivedEdges），
+          // 不在 anchorBindings 里重复挂，避免参考图重复与语义重叠。
           anchorBindings: [{ kind: 'scene', entityId: childId, label: child.imgName, imageUrl: child.imgUrl }],
           source: 'lens_projection',
           nodeWidth: LENS_ASSET_NODE_WIDTH,
