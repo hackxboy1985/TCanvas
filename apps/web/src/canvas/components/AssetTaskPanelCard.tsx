@@ -1,8 +1,10 @@
 import React from 'react'
 import { Badge, Button, Group, Modal, Text } from '@mantine/core'
-import { LensAssetTaskStatus, type LensTaskRecord } from '../../api/lens'
+import { LensAssetTaskStatus, type LensTaskRecord, type LensAssetTaskAdoptionTarget } from '../../api/lens'
 import { useUIStore } from '../../ui/uiStore'
 import { toast } from '../../ui/toast'
+import { IconCopy, IconEye } from '@tabler/icons-react'
+import { AssetTaskAdoptButton } from './AssetTaskAdoptButton'
 
 const STATUS_LABELS: Record<string, string> = {
   [LensAssetTaskStatus.Created]: '创建', CREATED: '创建', [LensAssetTaskStatus.Queued]: '排队',
@@ -30,8 +32,8 @@ function safeMediaUrl(value: unknown): string {
   }
 }
 
-/** 独立卡片只读展示资产任务，不改变原抽屉和资产采纳链路。 */
-export function AssetTaskPanelCard({ record, canViewParams }: { record: LensTaskRecord; canViewParams: boolean }) {
+/** 资产任务卡片复用原接口关联结果，不改变原固定抽屉或视频采纳链路。 */
+export function AssetTaskPanelCard({ record, canViewParams, target }: { record: LensTaskRecord; canViewParams: boolean; target?: LensAssetTaskAdoptionTarget }) {
   const [paramsOpened, setParamsOpened] = React.useState(false)
   const status = record.taskStatus || record.status || ''
   const rawParams = record.reqPar ?? record.taskParams
@@ -88,9 +90,10 @@ export function AssetTaskPanelCard({ record, canViewParams }: { record: LensTask
       </button>)}</div>
       {!details.media.length && <Text className="lens-asset-task-panel__result-status" size="xs" c={failed ? 'red' : undefined}>{record.resMsg || record.errorMsg || (pending ? '生成中，请稍候…' : '暂无结果')}</Text>}
       {details.errors.map((error) => <Text className="lens-asset-task-panel__error" key={error} size="xs" c="red">{error}</Text>)}
-      <Group className="lens-asset-task-panel__actions" gap="xs">
-        {!!record.prompt && <Button className="lens-asset-task-panel__copy" size="compact-xs" variant="subtle" color="gray" onClick={() => { void copyPrompt() }}>复制提示词</Button>}
-        {canViewParams && rawParams && <Button className="lens-asset-task-panel__params" size="compact-xs" variant="subtle" color="gray" onClick={() => setParamsOpened(true)}>查看参数</Button>}
+      <Group className="lens-asset-task-panel__actions" gap={6}>
+        {target && <AssetTaskAdoptButton target={target} images={details.media.filter((media) => media.type === 'image' && /^https?:/.test(media.url)).map((media) => media.url)} />}
+        {!!record.prompt && <Button className="lens-asset-task-panel__copy" size="compact-xs" variant="outline" color="gray" leftSection={<IconCopy className="lens-asset-task-panel__copy-icon" size={13} />} onClick={() => { void copyPrompt() }}>复制提示词</Button>}
+        {canViewParams && rawParams && <Button className="lens-asset-task-panel__params" size="compact-xs" variant="light" color="gray" leftSection={<IconEye className="lens-asset-task-panel__params-icon" size={13} />} onClick={() => setParamsOpened(true)}>查看参数</Button>}
       </Group>
       <Modal className="lens-asset-task-panel__params-modal" opened={paramsOpened} onClose={() => setParamsOpened(false)} title="任务参数" centered>
         <Text className="lens-asset-task-panel__params-content" component="pre" size="xs">{rawParams}</Text>

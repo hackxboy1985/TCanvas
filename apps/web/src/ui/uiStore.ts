@@ -227,6 +227,8 @@ export type AssetPanelStoryboardRunRequest = {
 export type CanvasReferencePickerState = {
   targetNodeId: string
   blockedSourceNodeIds: string[]
+  /** 由分镜节点完成业务关联后再连线，失败保留选择状态。 */
+  onSelect?: (sourceNodeId: string) => Promise<void>
 }
 
 export type NanoComicStoryboardRunState = {
@@ -303,7 +305,7 @@ type UIState = {
   requestAssetPanelStoryboardRun: (request: Omit<AssetPanelStoryboardRunRequest, 'requestKey'>) => void
   clearAssetPanelStoryboardRunRequest: () => void
   canvasReferencePicker: CanvasReferencePickerState | null
-  openCanvasReferencePicker: (payload: { targetNodeId: string; blockedSourceNodeIds?: string[] }) => void
+  openCanvasReferencePicker: (payload: { targetNodeId: string; blockedSourceNodeIds?: string[]; onSelect?: (sourceNodeId: string) => Promise<void> }) => void
   closeCanvasReferencePicker: () => void
   nanoComicStoryboardRunState: NanoComicStoryboardRunState | null
   setNanoComicStoryboardRunState: (state: NanoComicStoryboardRunState | null) => void
@@ -515,6 +517,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       canvasReferencePicker: {
         targetNodeId,
         blockedSourceNodeIds,
+        onSelect: payload.onSelect,
       },
     })
   },

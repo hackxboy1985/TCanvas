@@ -251,13 +251,24 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     })
   }, [])
 
-  /** 放大到本节点（双击触发：视频/图片都不进入全屏或大图预览） */
+  /** 播放当前视频，播放失败时保留真实状态并显示原因。 */
+  const playCurrentVideo = useCallback(() => {
+    const video = videoRef.current
+    if (!video || !video.paused) return
+    void video.play().catch((error: unknown) => {
+      setIsPlaying(!video.paused)
+      setSaveState(`视频播放失败：${error instanceof Error ? error.message : String(error)}`)
+    })
+  }, [])
+
+  /** 双击聚焦并播放当前视频，不进入浏览器全屏。 */
   const zoomToSelf = useCallback((e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault()
       e.stopPropagation()
     }
     pauseOtherVideos()
+    playCurrentVideo()
     const node = rf.getNode(id)
     if (!node) return
     const w = Number(node?.measured?.width ?? node?.width ?? 400)
@@ -276,14 +287,14 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       parentId = (parent as unknown as { parentId?: string }).parentId
     }
     rf.setCenter(absX + w / 2, absY + h / 2, { zoom: 1.2, duration: 250 })
-  }, [rf, id, pauseOtherVideos])
+  }, [rf, id, pauseOtherVideos, playCurrentVideo])
 
   /** 播放/暂停切换 */
   const togglePlay = useCallback(() => {
     const v = videoRef.current
     if (!v) return
-    if (v.paused) { void v.play(); setIsPlaying(true) } else { v.pause(); setIsPlaying(false) }
-  }, [])
+    if (v.paused) { playCurrentVideo() } else { v.pause(); setIsPlaying(false) }
+  }, [playCurrentVideo])
 
   /** 秒数格式化（控制条时间） */
   const formatClock = useCallback((sec: number): string => {
@@ -570,7 +581,18 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', marginBottom: 10 }}>
                 <Text size="xs" fw={600} c="dimmed" style={{ letterSpacing: 0.4, whiteSpace: 'nowrap' }}>上游参考</Text>
                 <Text size="md" fw={700} style={{ textAlign: 'center', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>分镜#{data.storyboardOrder ?? '-'}</Text>
-                <div />
+                {/* 与标题同一行，固定在编辑工具栏右上角。 */}
+                <Group className="lens-shot-task-toolbar-actions" justify="flex-end" wrap="nowrap">
+                  {onOpenTaskResult && (
+                    <Button
+                      className="lens-shot-task-results nodrag nopan"
+                      size="compact-xs" variant="subtle" color="gray"
+                      leftSection={<IconListSearch className="lens-shot-task-results-icon" size={14} />}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => { event.stopPropagation(); onOpenTaskResult(id) }}
+                    >任务结果</Button>
+                  )}
+                </Group>
               </div>
 
               {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，右上角类型胶囊） */}
@@ -653,18 +675,6 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 mb={12}
               />
 
-              {/* 工具栏右上角入口与节点标题共用任务抽屉，按当前分镜查询。 */}
-              {onOpenTaskResult && (
-                <Group className="lens-shot-task-toolbar-actions" justify="flex-end" mb={4}>
-                  <Button
-                    className="lens-shot-task-results nodrag nopan"
-                    size="compact-xs" variant="subtle" color="gray"
-                    leftSection={<IconListSearch className="lens-shot-task-results-icon" size={14} />}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => { event.stopPropagation(); onOpenTaskResult(id) }}
-                  >任务结果</Button>
-                </Group>
-              )}
               {/* 底部控制栏：模型 + 画幅 + 分辨率 + 积分 + 生成；保存位于上方提示词开关前。 */}
               <div className="tc-task-node__toolbar-controls--footer tc-task-node__toolbar-controls--media-footer">
                 <Group gap={8} align="flex-end" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>

@@ -94,7 +94,9 @@ export function AssetTaskPanel({ data, onClose }: {
         {error && <Button className="lens-asset-task-panel__retry" size="compact-xs" variant="subtle" onClick={() => setRefresh((value) => value + 1)}>重新加载</Button>}
         {!error && loading && records.length === 0 && <Loader className="lens-asset-task-panel__loading" size="sm" />}
         {!error && !loading && records.length === 0 && <Text className="lens-asset-task-panel__empty" size="sm">暂无任务记录</Text>}
-        {records.map((record, index) => <AssetTaskPanelCard key={record.id || index} record={record} canViewParams={canViewParams} />)}
+        {records.map((record, index) => <AssetTaskPanelCard key={record.id || index} record={record} canViewParams={canViewParams}
+          target={assetId && assetType !== undefined && dramaId ? { category: assetType + 1, entityId: assetId, dramaId,
+            label: typeof data.label === 'string' && data.label ? data.label : '当前资产' } : undefined} />)}
       </div>
       {total > PAGE_SIZE && <Pagination className="lens-asset-task-panel__pagination" size="xs" siblings={0} boundaries={1}
         total={Math.ceil(total / PAGE_SIZE)} value={page} onChange={setPage} />}

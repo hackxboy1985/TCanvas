@@ -536,6 +536,24 @@ export async function getFlow(dramaId: string, episodeNum: number): Promise<Lens
   return lensFetch<LensCanvasFlow | null>(`/api/canvas/${encodeURIComponent(dramaId)}/episode/${episodeNum}/flow`)
 }
 
+/** 按分镜板契约分页读取完整资产，避免父子资产跨页丢失。 */
+export async function listReferenceAssets<T extends LensRole | LensAssetImage>(dramaId: string, category: 1 | 2 | 3): Promise<T[]> {
+  const pageSize = 100
+  const rows: T[] = []
+  for (let pageNum = 1; ; pageNum += 1) {
+    const page = await lensFetchPage<T>(category === 1 ? '/api/lensRole/list' : '/api/lensImage/listHistory', {
+      method: 'POST', body: JSON.stringify({ dramaId, pageNum, pageSize, ...(category === 1 ? {} : { type: category - 1 }) }),
+    })
+    rows.push(...page.rows)
+    if (rows.length >= page.total || page.rows.length === 0) return rows
+  }
+}
+
+/** 只追加分镜资产关联；权限与并发去重交给现有业务接口。 */
+export async function addShotReferenceRelations(dramaId: string, storyboardId: string, addRelations: { assetId: string; assetCategory: number }[]): Promise<void> {
+  await lensFetch<unknown>('/api/storyboard/saveRelations', { method: 'POST', body: JSON.stringify({ dramaId, storyboardId, addRelations }) })
+}
+
 /** 保存编排（upsert + 乐观锁） */
 export async function saveFlow(dramaId: string, episodeNum: number, payload: { name?: string; data: unknown; version?: number }): Promise<LensCanvasFlow> {
   return lensFetch<LensCanvasFlow>(`/api/canvas/${encodeURIComponent(dramaId)}/episode/${episodeNum}/flow`, {
@@ -839,6 +857,35 @@ export async function adoptShotResult(params: LensAdoptShotResultParams): Promis
       uploadType: params.uploadType,
       prompt: '1',
     }),
+  })
+}
+
+/** 资产图片变更来源，与后端 AssetImageModifySource 保持一致。 */
+export enum LensAssetImageModifySource {
+  TaskAssociate = 'task_associate',
+}
+
+export interface LensAssetTaskAdoptionTarget {
+  /** 节点业务资产分类：角色1、场景2、道具3。 */
+  category: number
+  entityId: string
+  dramaId: string
+  label: string
+}
+
+/** 关联任务原图到当前业务资产；子资产使用自身ID，严禁走分镜采纳接口。 */
+export async function associateLensAssetTaskResult(target: LensAssetTaskAdoptionTarget, imageUrl: string): Promise<void> {
+  if (!/^[1-9]\d*$/.test(target.entityId) || !/^[1-9]\d*$/.test(target.dramaId) || ![1, 2, 3].includes(target.category)) {
+    throw new Error('资产身份或剧本信息缺失，无法采纳结果')
+  }
+  const url = new URL(imageUrl)
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('只能采纳已上传的图片原图地址')
+  const isRole = target.category === 1
+  await lensFetch<unknown>(isRole ? '/api/lensRole?as=lens' : '/api/lensImage?as=lens', {
+    method: 'PUT',
+    body: JSON.stringify(isRole
+      ? { id: target.entityId, dramaId: target.dramaId, threeImg: imageUrl, modifySource: LensAssetImageModifySource.TaskAssociate }
+      : { id: target.entityId, url: imageUrl, joinId: target.dramaId, modifySource: LensAssetImageModifySource.TaskAssociate }),
   })
 }
 

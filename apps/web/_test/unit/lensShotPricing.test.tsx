@@ -13,13 +13,13 @@ vi.mock('../../src/config/useModelOptions', async (original) => {
   return { ...actual, useModelOptions: () => models }
 })
 vi.mock('../../src/canvas/store', () => ({ useRFStore: { getState: () => ({ nodes: [], updateNodeData: vi.fn() }) } }))
-const { openTaskResult } = vi.hoisted(() => ({ openTaskResult: vi.fn() }))
+const { openTaskResult, setCenter } = vi.hoisted(() => ({ openTaskResult: vi.fn(), setCenter: vi.fn() }))
 vi.mock('../../src/canvas/CanvasRenderContext', () => ({ useCanvasRenderContext: () => ({ onOpenTaskResult: openTaskResult }) }))
 vi.mock('../../src/api/lens', () => ({ editStoryboard: vi.fn().mockResolvedValue({}), clearStoryboardSpeaker: vi.fn(), submitShotVideo: vi.fn() }))
 vi.mock('@xyflow/react', () => ({
   Handle: () => null, Position: { Bottom: 'bottom', Top: 'top', Left: 'left', Right: 'right' },
   NodeToolbar: ({ children }: { children: React.ReactNode }) => <div className="test-shot-toolbar">{children}</div>,
-  useReactFlow: () => ({ getNode: () => undefined }),
+  useReactFlow: () => ({ getNode: () => ({ position: { x: 100, y: 200 }, width: 800, height: 450 }), setCenter }),
 }))
 vi.mock('@mantine/core', async (original) => ({
   ...await original<typeof import('@mantine/core')>(),
@@ -52,6 +52,23 @@ describe('分镜节点底部视频积分联动', () => {
     expect(currentPause).not.toHaveBeenCalled()
     expect(pausedPause).not.toHaveBeenCalled()
     expect(outsidePause).not.toHaveBeenCalled()
+  })
+  it.each(['media', 'controls'] as const)('双击 %s 放大并播放暂停中的视频', (target) => {
+    setCenter.mockClear()
+    const props = { id: 'shot-video', data: { selectedImageUrl: '/shot.mp4', selectFileType: 1 }, selected: false } as React.ComponentProps<typeof LensShotNode>
+    const { container } = render(<MantineProvider><div className="react-flow"><LensShotNode {...props} /></div></MantineProvider>)
+    const video = container.querySelector<HTMLVideoElement>('.lens-shot-media')!
+    let paused = true
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused })
+    const play = vi.spyOn(video, 'play').mockImplementation(() => { paused = false; fireEvent.play(video); return Promise.resolve() })
+    vi.spyOn(video, 'pause').mockImplementation(() => { paused = true; fireEvent.pause(video) })
+    const element = target === 'media' ? video : container.querySelector<HTMLElement>('.lens-shot-video-controls')!
+    // 浏览器双击先发送两次 click，必须在最后的 dblclick 明确恢复播放。
+    if (target === 'media') { fireEvent.click(video, { detail: 1 }); fireEvent.click(video, { detail: 2 }) }
+    fireEvent.doubleClick(element)
+    expect(play).toHaveBeenCalled()
+    expect(video.paused).toBe(false)
+    expect(setCenter).toHaveBeenCalledWith(500, 425, { zoom: 1.2, duration: 250 })
   })
   it('工具栏任务结果入口复用当前分镜的抽屉回调', () => {
     openTaskResult.mockClear()

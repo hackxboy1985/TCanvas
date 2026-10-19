@@ -2041,6 +2041,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       if (node.id === referencePickerTargetId) return
       if (!isCanvasReferencePickerCandidateNode(node as FlowNode, referencePickerTargetId)) return
       if (referencePickerBlockedSourceIds.has(node.id)) return
+      if (canvasReferencePicker?.onSelect) {
+        void canvasReferencePicker.onSelect(String(node.id)).then(closeCanvasReferencePicker).catch((error: unknown) => {
+          toast(error instanceof Error ? error.message : '添加参考失败', 'error')
+        })
+        return
+      }
       const connected = quickConnectNodes(String(node.id), referencePickerTargetId, { showInvalidToast: false })
       if (connected) closeCanvasReferencePicker()
       return
@@ -2074,7 +2080,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       : null
     setTapConnectSource({ nodeId: node.id })
     setConnectingType(derivedType)
-  }, [closeCanvasReferencePicker, quickConnectNodes, referencePickerBlockedSourceIds, referencePickerTargetId, tapConnectSource])
+  }, [canvasReferencePicker, closeCanvasReferencePicker, quickConnectNodes, referencePickerBlockedSourceIds, referencePickerTargetId, tapConnectSource])
 
   const onNodeDoubleClick = useCallback((_evt: React.MouseEvent, node: FlowNode) => {
     if (!node?.id) return
