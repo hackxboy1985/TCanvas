@@ -650,7 +650,7 @@ try {
 |---|---|---|
 | **P0** | Lens 后端：`lens_canvas_flow` 表 + `LensCanvasController`（flow 读写）+ `LensAssetEnrichedVo` 加 description 字段 | 无 |
 | **P1** | 前端：`lensApi` 适配层 + 画布接入（选集/初始加载/保存/主动加资产） | P0 |
-| **P2** | 节点模型：业务节点投影 + 「任务结果展开」按钮 + subflow（换装/子场景） | P1 |
+| **P2** | 节点模型：业务节点投影 + 「任务结果展开」按钮 + subflow（换装/子场景） | P1 ｜ 部分完成：「任务结果展开」（B 组）已完成 2026-02-19 |
 | **P3** | 写操作接入：新建/编辑/删除/生成（复用 Lens 现有接口） | P2 |
 | **P4** | C 类：vision / image_to_prompt / prompt_refine / AI 对话驱动画布 | P1（可与 P2/P3 并行） |
 | **P5** | F 类待分析项逐个落地（见 §9） | 各单项分析后 |
@@ -697,12 +697,21 @@ try {
 
 **B. 「任务结果」展开按钮**
 
+> 实施落地（✅ 已完成，2026-02-19）：**用右侧抽屉而非画布平铺节点**。
+> 结果可能几十张，平铺会撑爆画布且分页无法表达，因此走 `TaskResultDrawer`（只读），
+> 与归一「任务列表」形态一致。归属写入 `task_queue` 三元组：
+> `scene_id`=flowId、`asset_type`=10（`AssetType.CANVAS_NODE`）、`asset_id`=节点数字ID；
+> 查询用 `POST /api/task/list` 传这三个条件（**Mapper SQL 零改动**）。
+> 注意：实施时发现原设计缺了「画布侧提交不带资产归属」这个前提 ——
+> 原 `RunTaskByCanvasLogic` 把 assetType/assetId/sceneId 全传空，导致按 assetId 查不到画布任务，
+> 已补齐（见 `FLOW_CHANGELOG.md` 2026-02-19）。
+
 | # | 工作项 | 状态 | 说明 |
 |---|---|---|---|
-| B.1 | 展开按钮 | ⬜ 待做 | 角色/场景/道具/分镜节点各带「展示任务结果」按钮 |
-| B.2 | 三态结果节点 | ⬜ 待做 | 展开后主节点 → 连线 → 多个结果节点（成功图/生成中进度/失败原因） |
-| B.3 | 轮询 + 懒加载 | ⬜ 待做 | 5s 轮询（只轮询未完成，终态后停止）；展开才查、单独展开（无展开所有） |
-| B.4 | 数据源区分 | ⬜ 待做 | 生图任务 `/api/task/list`；分镜生视频 `/api/storyboardTask/list` |
+| B.1 | 展开按钮 | ✅ 已完成 | 节点入口按钮 → 右侧 `TaskResultDrawer`（非画布平铺节点） |
+| B.2 | 三态结果节点 | ✅ 已完成 | 成功图 / 生成中（呼吸点，**无百分比进度**，后端不返回进度）/ 失败原因（展示在媒体区） |
+| B.3 | 轮询 + 懒加载 | ✅ 已完成 | 5s 轮询（仅存在未完成任务时启动，全终态自动停）；展开才查、收起即停、单独展开 |
+| B.4 | 数据源区分 | ✅ 已完成 | 自由节点 `/api/task/list`（assetType=10 + sceneId + assetId）；角色/场景/道具 `/api/task/list`（assetType=0/1/2）；分镜 `/api/storyboardTask/list`（storyboardId） |
 
 **C. subflow（换装/子场景）**
 

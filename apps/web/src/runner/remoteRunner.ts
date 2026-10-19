@@ -18,7 +18,14 @@ import {
   upsertProjectBookStoryboardChunk,
 } from '../api/server'
 import { getAuthToken } from '../auth/store'
+import { useRFStore } from '../canvas/store'
 import { getCanvasTaskStatus, runTaskByCanvas } from '../api/lens'
+import {
+  CANVAS_NODE_ASSET_ID_FIELD,
+  ensureCanvasNodeAssetId as allocateCanvasNodeAssetId,
+  getLensCanvasFlowId,
+  readCanvasNodeAssetId,
+} from '../canvas/utils/canvasNodeAssetId'
 import { useUIStore } from '../ui/uiStore'
 import { toast } from '../ui/toast'
 import { notifyAssetRefresh } from '../ui/assetEvents'
@@ -106,6 +113,16 @@ interface RunnerHandlers {
   beginToken: (id: string) => string
   endRunToken: (id: string) => void
   isCanceled: (id: string, runToken?: string | null) => boolean
+  /**
+   * 确保节点已分配画布资产数字ID，返回该ID。
+   *
+   * <p>用途：画布自由节点的任务归属需要稳定的节点数字ID（写入 task_queue.asset_id），
+   * 且必须持久化到 flow 才能在刷新后保持稳定。分配与写回 store 由调用方注入，
+   * runner 只消费结果，避免 runner 直接依赖 React store。
+   *
+   * <p>可选：未注入时按"无归属"处理（提交不带 canvasNodeAssetId）。
+   */
+  ensureCanvasNodeAssetId?: (id: string) => number | null
 }
 
 interface RunnerContext extends RunnerHandlers {
@@ -1198,6 +1215,14 @@ async function runAutoTask(request: TaskRequestDto): Promise<TaskResultDto> {
 interface LensCanvasUrlParams {
   dramaId: string
   episodeNum: number
+  /**
+   * 画布编排ID（lens_canvas_flow.id）。
+   *
+   * <p>自由节点的任务归属需要它：写入 task_queue.scene_id 以隔离不同画布。
+   * 由 {@code LensCanvasApp} 在 getFlow 后通过 {@code setLensCanvasFlowId} 注入，
+   * 因此这里只在已加载 flow 时才有值。
+   */
+  flowId?: number
 }
 
 /**
@@ -1215,7 +1240,7 @@ function readLensCanvasUrlParams(): LensCanvasUrlParams | null {
   if (!dramaId) return null
   const episodeRaw = Number(params.get('episode') || 1)
   const episodeNum = Number.isFinite(episodeRaw) && episodeRaw > 0 ? Math.trunc(episodeRaw) : 1
-  return { dramaId, episodeNum }
+  return { dramaId, episodeNum, flowId: getLensCanvasFlowId() }
 }
 
 /**
@@ -1270,7 +1295,10 @@ function readUserSelectedImageParams(
  *
  * <p>画布侧已拼好的提示词（角色卡约束、@别名槽位、focus guide 等）原样下发；
  * 模型/比例/尺寸/质量仅在用户显式选择时下发，否则由 lens 后端从剧配置推导。
- * 画布节点没有 lens 资产身份，因此不传 assetType/assetId/storyboardIds。
+ *
+ * <p><b>任务归属</b>：自由节点不传 assetType/assetId/storyboardIds（那些是 0/1/2 的真实资产，
+ * 传了会污染用户数据），而是传 canvasFlowId + canvasNodeAssetId —— 后端据此写入
+ * task_queue 的 scene_id / asset_id（asset_type 固定 10），供「任务结果展开」按节点查询。
  */
 async function runLensCanvasImageTask(
   request: TaskRequestDto,
@@ -1282,6 +1310,9 @@ async function runLensCanvasImageTask(
     ? extras.referenceImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
     : []
   const userSelected = readUserSelectedImageParams(nodeData)
+  // 节点数字ID：应已由调用方在提交前通过 ensureCanvasNodeAssetId 分配并写回节点 data。
+  // 这里只读不分配 —— 分配需要写回 store 与保存 flow，属于调用方职责（见 canvasNodeAssetId.ts）。
+  const canvasNodeAssetId = readCanvasNodeAssetId(nodeData)
   const submitted = await runTaskByCanvas({
     prompt: request.prompt,
     dramaId: urlParams.dramaId,
@@ -1290,6 +1321,8 @@ async function runLensCanvasImageTask(
     ...userSelected,
     nodeId: typeof extras?.nodeId === 'string' ? extras.nodeId : undefined,
     nodeKind: typeof extras?.nodeKind === 'string' ? extras.nodeKind : undefined,
+    canvasFlowId: urlParams.flowId,
+    canvasNodeAssetId: canvasNodeAssetId === null ? undefined : canvasNodeAssetId,
   })
   // 不返回具体结果，让既有轮询分支按 queued 状态接续推进（与 /public/tasks 链路同构）
   return {
@@ -1360,6 +1393,31 @@ async function runImageTaskByRuntime(
 ): Promise<TaskResultDto> {
   if (urlParams) return runLensCanvasImageTask(request, urlParams, nodeData)
   return runAutoTask(request)
+}
+
+/**
+ * 确保节点已分配画布资产数字ID，并把结果并入 lensNodeData。
+ *
+ * <p>自由节点提交任务时必须带 canvasNodeAssetId（写入 task_queue.asset_id），
+ * 否则「任务结果展开」无法把历史任务匹配回该节点。
+ *
+ * <p>未注入 {@code ensureCanvasNodeAssetId}（非画布宿主环境）时原样返回，
+ * 不静默造一个临时ID —— 临时ID刷新后会变，反而造成任务错配。
+ *
+ * @param ctx runner 上下文（提供 ensureCanvasNodeAssetId 处理器）
+ * @param id 节点ID
+ * @param nodeData 节点当前 data
+ * @returns 并入 canvasNodeAssetId 后的 data（无法分配时返回原 data）
+ */
+function withCanvasNodeAssetId(
+  ctx: Pick<RunnerContext, 'ensureCanvasNodeAssetId'>,
+  id: string,
+  nodeData: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!ctx.ensureCanvasNodeAssetId) return nodeData
+  const assetId = ctx.ensureCanvasNodeAssetId(id)
+  if (assetId === null || !Number.isFinite(assetId) || assetId <= 0) return nodeData
+  return { ...nodeData, [CANVAS_NODE_ASSET_ID_FIELD]: Math.trunc(assetId) }
 }
 
 function beginPendingRequestProgress(
@@ -2129,6 +2187,21 @@ function buildRunnerContext(id: string, get: Getter): RunnerContext | null {
     beginToken: state.beginRunToken as RunnerHandlers['beginToken'],
     endRunToken: state.endRunToken as RunnerHandlers['endRunToken'],
     isCanceled: state.isCanceled as RunnerHandlers['isCanceled'],
+    // 画布自由节点的任务归属：分配稳定数字ID 并写回节点 data（随 flow 持久化）。
+    // 仅在 lens 画布模式下有意义，非 lens 模式不会消费该值。
+    ensureCanvasNodeAssetId: (nodeId: string): number | null => {
+      const rfState = useRFStore.getState()
+      const target = rfState.nodes.find((n) => n.id === nodeId)
+      if (!target) return null
+      // 已有则幂等返回，不重复分配（保证历史任务仍能匹配）
+      const existing = readCanvasNodeAssetId(target.data)
+      if (existing !== null) return existing
+      const patch = allocateCanvasNodeAssetId({ data: target.data }, rfState.nodes)
+      const assigned = patch[CANVAS_NODE_ASSET_ID_FIELD]
+      if (!Number.isFinite(assigned) || assigned <= 0) return null
+      rfState.updateNodeData(nodeId, patch)
+      return Math.trunc(assigned)
+    },
   }
 
   const textModelKey =
@@ -4003,7 +4076,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
       status: 'running',
       statusPatch: { lastError: undefined },
       lensUrlParams,
-      lensNodeData: data as Record<string, unknown>,
+      lensNodeData: withCanvasNodeAssetId(ctx, id, data as Record<string, unknown>),
     })
     let res = pendingTask.result
     const requestProgress = pendingTask.requestProgress
@@ -4427,7 +4500,7 @@ async function runSingleFissionGrid(input: {
     maxProgress: progressMax,
     status: 'running',
     lensUrlParams,
-    lensNodeData: ctx.data as Record<string, unknown>,
+    lensNodeData: withCanvasNodeAssetId(ctx, id, ctx.data as Record<string, unknown>),
   })
   let res = pendingTask.result
   const requestProgress = pendingTask.requestProgress
@@ -4765,7 +4838,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
         maxProgress: Math.max(progressStart + 1, progressEnd - 3),
         status: 'running',
         lensUrlParams,
-        lensNodeData: data as Record<string, unknown>,
+        lensNodeData: withCanvasNodeAssetId(ctx, id, data as Record<string, unknown>),
       })
       let res = pendingTask.result
       const requestProgress = pendingTask.requestProgress
@@ -5239,7 +5312,7 @@ async function runGenericTask(ctx: RunnerContext) {
             maxProgress: requestProgressCap,
             status: 'running',
             lensUrlParams,
-            lensNodeData: data as Record<string, unknown>,
+            lensNodeData: withCanvasNodeAssetId(ctx, id, data as Record<string, unknown>),
           })
         : null
       let res = imageRequest

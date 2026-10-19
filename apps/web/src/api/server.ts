@@ -5,6 +5,13 @@ import { getAuthToken, getAuthTokenFromCookie, type User } from '../auth/store'
 import { sanitizeFlowValueForPersistence } from '../canvas/utils/persistenceSanitizer'
 import { useUploadRuntimeStore } from '../domain/upload-runtime/store/uploadRuntimeStore'
 import type { StoryboardStructuredData } from '../storyboard/storyboardStructure'
+import {
+  createLensNodePreset,
+  deleteLensNodePreset,
+  listLensNodePresets,
+  type LensNodePresetDto,
+  type LensNodePresetType,
+} from './lens'
 import { createSseEventParser } from './sse'
 // self-import guard: only used for type re-export in the same module
 
@@ -1272,13 +1279,42 @@ export async function createPromptSample(payload: PromptSampleInput): Promise<Pr
   return r.json()
 }
 
-const llmNodePresetCache = new Map<string, LlmNodePresetDto[]>()
-const llmNodePresetInFlight = new Map<string, Promise<LlmNodePresetDto[]>>()
+/**
+ * 节点预设「整表」本地缓存：key = type（未指定 type 时为 ALL）。
+ *
+ * <p>只缓存不带 q 的全量列表：画布上每个 TaskNode 挂载都只按 type 取一次全量，
+ * 关键字搜索由调用方在本地过滤，避免 q 维度把缓存切碎导致请求数随输入增长。
+ */
+const llmNodePresetTableCache = new Map<string, LlmNodePresetDto[]>()
+/** 同一 type 的首次请求（single-flight）：并发调用方 await 同一个 Promise，不重复发请求 */
+const llmNodePresetTableInFlight = new Map<string, Promise<LlmNodePresetDto[]>>()
+/**
+ * 请求进行中到达的失效请求（type → 请求序号）。
+ *
+ * <p>create/delete 只 +1 序号、不直接删除 in-flight：若直接删除，同 type 的在途 promise
+ * 仍会（以旧数据）写回缓存。改为由请求体比对自己发出时的序号是否过期，过期则不写缓存。
+ */
+const llmNodePresetTableEpoch = new Map<string, number>()
+/**
+ * 最近一次「加载预设失败」的提示指纹（type + 稳定错误信息）。
+ *
+ * <p>失败必须显式上报，但画布上 N 个节点同时加载失败时只提示一次，避免刷新刷屏；
+ * 提示过的失败再次发生（例如用户手动点重试）仍会再提示。
+ */
+const llmNodePresetErrorNotice = new Map<string, string>()
 
-function toLlmNodePresetCacheKey(params?: { type?: LlmNodePresetType; query?: string }): string {
-  const type = typeof params?.type === 'string' ? params.type.trim() : ''
-  const query = typeof params?.query === 'string' ? params.query.trim() : ''
-  return `type=${type}|q=${query}`
+/** 整表缓存 key：非空 type 用类型本身，未指定 type 用 ALL 表示全部 */
+const LLM_NODE_PRESET_ALL_TYPES_KEY = 'ALL'
+
+function toLlmNodePresetTableKey(type?: LlmNodePresetType): string {
+  return typeof type === 'string' && type.trim() ? type.trim() : LLM_NODE_PRESET_ALL_TYPES_KEY
+}
+
+/** 按服务端 q 的语义（包含匹配、忽略大小写、trim 后为空不过滤）在前端做等价本地过滤 */
+function filterLlmNodePresetsByQuery(items: LlmNodePresetDto[], query?: string): LlmNodePresetDto[] {
+  const keyword = typeof query === 'string' ? query.trim().toLowerCase() : ''
+  if (!keyword) return items
+  return items.filter((item) => item.title.toLowerCase().includes(keyword) || item.prompt.toLowerCase().includes(keyword))
 }
 
 function cloneLlmNodePresets(items: LlmNodePresetDto[]): LlmNodePresetDto[] {
@@ -1286,39 +1322,124 @@ function cloneLlmNodePresets(items: LlmNodePresetDto[]): LlmNodePresetDto[] {
 }
 
 function invalidateLlmNodePresetCache(): void {
-  llmNodePresetCache.clear()
-  llmNodePresetInFlight.clear()
+  // 不直接 clear in-flight：只推进序号，由请求体自查是否过期，避免旧响应写回缓存
+  for (const key of [...llmNodePresetTableCache.keys(), ...llmNodePresetTableInFlight.keys()]) {
+    llmNodePresetTableEpoch.set(key, (llmNodePresetTableEpoch.get(key) ?? 0) + 1)
+  }
+  llmNodePresetTableCache.clear()
+  // 列表已变化，失败提示指纹一并作废，下一次失败仍会显式提示
+  llmNodePresetErrorNotice.clear()
+}
+
+/**
+ * 是否 lens 画布模式（URL 带 dramaId）。
+ *
+ * <p>刻意不复用 `../config/useModelOptions` 的 `isLensMode()`：该模块第 2 行
+ * `import { ... } from '../api/server'`，而本文件会 import 它，构成
+ * server.ts ↔ useModelOptions.ts 循环依赖（server.ts 被 useModelOptions 依赖，
+ * 反向 import 后模块初始化顺序不确定，可能拿到 undefined 导出）。
+ * 此处使用等价实现，判定逻辑与 `isLensMode()` 完全一致。
+ */
+function isLensCanvasMode(): boolean {
+  if (typeof window === 'undefined') return false
+  return Boolean(new URLSearchParams(window.location.search).get('dramaId'))
+}
+
+/**
+ * 把 lens 节点预设投影成画布统一 DTO。
+ *
+ * <p>仅做字段映射，不补默认值：lens 侧 normalizeLensNodePreset 已强制校验
+ * id/title/type/prompt/scope，缺失会显式抛错，这里不再兜底。
+ *
+ * @param preset lens 侧节点预设
+ * @returns 画布节点预设 DTO
+ */
+function toLlmNodePresetDto(preset: LensNodePresetDto): LlmNodePresetDto {
+  return {
+    id: preset.id,
+    title: preset.title,
+    type: preset.type,
+    prompt: preset.prompt,
+    ...(preset.description === undefined ? {} : { description: preset.description }),
+    scope: preset.scope,
+    ...(preset.enabled === undefined ? {} : { enabled: preset.enabled }),
+    ...(preset.sortOrder === undefined ? {} : { sortOrder: preset.sortOrder }),
+    createdAt: preset.createdAt,
+    updatedAt: preset.updatedAt,
+  }
 }
 
 export async function listLlmNodePresets(params?: { type?: LlmNodePresetType; query?: string }): Promise<LlmNodePresetDto[]> {
-  const cacheKey = toLlmNodePresetCacheKey(params)
-  const cached = llmNodePresetCache.get(cacheKey)
-  if (cached) return cloneLlmNodePresets(cached)
+  const tableKey = toLlmNodePresetTableKey(params?.type)
+  const cached = llmNodePresetTableCache.get(tableKey)
+  // 命中本地整表缓存：零请求，直接按 q 本地过滤
+  if (cached) return cloneLlmNodePresets(filterLlmNodePresetsByQuery(cached, params?.query))
 
-  const inFlight = llmNodePresetInFlight.get(cacheKey)
-  if (inFlight) return inFlight
+  const inFlight = llmNodePresetTableInFlight.get(tableKey)
+  if (inFlight) {
+    // single-flight：同一 type 的并发调用方共享同一次请求
+    const shared = await inFlight
+    return cloneLlmNodePresets(filterLlmNodePresetsByQuery(shared, params?.query))
+  }
 
-  const qs = new URLSearchParams()
-  if (params?.type) qs.set('type', params.type)
-  if (params?.query) qs.set('q', params.query)
-  const query = qs.toString()
-  const url = query ? `${API_BASE}/ai/node-presets?${query}` : `${API_BASE}/ai/node-presets`
+  const epochAtStart = llmNodePresetTableEpoch.get(tableKey) ?? 0
   const request = (async (): Promise<LlmNodePresetDto[]> => {
-    const r = await apiFetch(url, withAuth())
-    if (!r.ok) throw new Error(`list node presets failed: ${r.status}`)
-    const body = await r.json().catch(() => [])
-    const items = Array.isArray(body) ? body as LlmNodePresetDto[] : []
-    llmNodePresetCache.set(cacheKey, items)
-    return cloneLlmNodePresets(items)
+    let items: LlmNodePresetDto[]
+    if (isLensCanvasMode()) {
+      // lens 模式：走 lens 的 /api/ai/node-presets（RuoYi 包装，由 lensFetch 解包）
+      const presets = await listLensNodePresets({ type: params?.type })
+      items = presets.map(toLlmNodePresetDto)
+    } else {
+      // 非 lens 模式：行为与原先一致（只去掉 q，q 由本地过滤）
+      const qs = new URLSearchParams()
+      if (params?.type) qs.set('type', params.type)
+      const query = qs.toString()
+      const url = query ? `${API_BASE}/ai/node-presets?${query}` : `${API_BASE}/ai/node-presets`
+      const r = await apiFetch(url, withAuth())
+      if (!r.ok) throw new Error(`list node presets failed: ${r.status}`)
+      const body = await r.json().catch(() => [])
+      items = Array.isArray(body) ? body as LlmNodePresetDto[] : []
+    }
+    // 期间发生过失效（新增/删除）：本响应已过期，不得写回缓存
+    if ((llmNodePresetTableEpoch.get(tableKey) ?? 0) === epochAtStart) {
+      llmNodePresetTableCache.set(tableKey, items)
+    }
+    return items
   })()
     .finally(() => {
-      llmNodePresetInFlight.delete(cacheKey)
+      llmNodePresetTableInFlight.delete(tableKey)
     })
-  llmNodePresetInFlight.set(cacheKey, request)
-  return request
+  llmNodePresetTableInFlight.set(tableKey, request)
+  const items = await request
+  return cloneLlmNodePresets(filterLlmNodePresetsByQuery(items, params?.query))
+}
+
+/**
+ * 节点预设「加载失败」提示去重：同一类失败只提示一次。
+ *
+ * <p>不吞错：函数返回 true 表示本次应由调用方提示；重复失败返回 false，
+ * 调用方仍会进入显式失败分支（清空列表 / 保持加载失败态），只是不再弹第二次 toast。
+ *
+ * @param type 预设类型
+ * @param err 失败原因（Error 或任意抛出值）
+ * @returns 是否需要向用户提示本次失败
+ */
+export function shouldNoticeLlmNodePresetLoadError(type: LlmNodePresetType, err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  const fingerprint = `${message}`
+  if (llmNodePresetErrorNotice.get(type) === fingerprint) return false
+  llmNodePresetErrorNotice.set(type, fingerprint)
+  return true
 }
 
 export async function createLlmNodePreset(payload: CreateLlmNodePresetInput): Promise<LlmNodePresetDto> {
+  // lens 模式：走 lens 的 /api/ai/node-presets
+  if (isLensCanvasMode()) {
+    const created = await createLensNodePreset(payload)
+    invalidateLlmNodePresetCache()
+    return toLlmNodePresetDto(created)
+  }
+
   const r = await apiFetch(`${API_BASE}/ai/node-presets`, withAuth({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1331,6 +1452,13 @@ export async function createLlmNodePreset(payload: CreateLlmNodePresetInput): Pr
 }
 
 export async function deleteLlmNodePreset(id: string): Promise<void> {
+  // lens 模式：走 lens 的 /api/ai/node-presets/{id}
+  if (isLensCanvasMode()) {
+    await deleteLensNodePreset(id)
+    invalidateLlmNodePresetCache()
+    return
+  }
+
   const r = await apiFetch(`${API_BASE}/ai/node-presets/${id}`, withAuth({ method: 'DELETE' }))
   if (!r.ok) throw new Error(`delete node preset failed: ${r.status}`)
   invalidateLlmNodePresetCache()

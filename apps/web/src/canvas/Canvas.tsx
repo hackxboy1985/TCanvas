@@ -278,6 +278,14 @@ type CanvasInnerProps = {
   shotArrange?: 'column' | 'flow'
   /** 切换分镜组排列方向 */
   onShotArrangeChange?: (direction: 'column' | 'flow') => void
+  /**
+   * 打开「任务结果」抽屉（lens 画布）。
+   *
+   * <p>必须作为 Canvas 的 prop 传入而不是在外部包一层 Provider：
+   * Canvas 内部自己渲染了 CanvasRenderContext.Provider，嵌套时内层生效，
+   * 外部包的那层会被覆盖，节点侧将永远拿到 undefined。
+   */
+  onOpenTaskResult?: (nodeId: string) => void
 }
 
 type CanvasStyle = React.CSSProperties & Record<'--tc-spotlight-grid-color' | '--tc-spotlight-radius', string>
@@ -356,7 +364,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -2122,8 +2130,11 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       heavySelectionActive,
       heavySelectionDragging,
       selectedNodeCount,
+      // 宿主注入的「任务结果」入口（lens 画布）；未传时节点不显示该按钮。
+      // 注意：本 Provider 在嵌套时覆盖外层，因此必须在此透传，否则节点侧永远拿不到。
+      onOpenTaskResult: onOpenTaskResultProp,
     }),
-    [heavySelectionActive, heavySelectionDragging, selectedNodeCount],
+    [heavySelectionActive, heavySelectionDragging, selectedNodeCount, onOpenTaskResultProp],
   )
   const canCreateScriptBundleFromSelection = useMemo(() => {
     if (dragging) return false
@@ -3432,6 +3443,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         nodesConnectable={!viewOnly}
         elementsSelectable={!viewOnly}
         proOptions={{ hideAttribution: true }}
+        // 连线固定在最底层。React Flow 默认的 basic 模式会把「有父节点的连线」（即组内
+        // 节点，如分镜组内的分镜）抬高到该节点之上，导致静态时连线压住节点、单击后又
+        // 因选中重新计算而恢复正常。manual 模式不施加任何自动层级，连线始终在节点下方。
+        zIndexMode="manual"
         isValidConnection={(c) => {
           if (viewOnly) return false
           if (!c.source || !c.target) return false
@@ -4119,8 +4134,8 @@ const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
 /** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
-const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void }>(
-  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange }, ref): JSX.Element {
+const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void }>(
+  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult }, ref): JSX.Element {
     const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
     return (
@@ -4131,6 +4146,7 @@ const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: (
           arrangeHandler={arrangeHandler}
           shotArrange={shotArrange}
           onShotArrangeChange={onShotArrangeChange}
+          onOpenTaskResult={onOpenTaskResult}
         />
       </ReactFlowProviderWithClass>
     )

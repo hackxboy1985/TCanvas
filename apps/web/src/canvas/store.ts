@@ -1258,13 +1258,17 @@ function autoFitSingleGroupNode(nodes: Node[], groupId: string, childIds?: Set<s
     return nodes
   }
 
+  // 顶部额外留白：组框顶部留出一条可拖拽带。
+  // 组内子节点若为不可拖拽（固定在组内），其顶部区域会紧贴组框顶部，用户容易把子节点
+  // 标题误认为组框标题并尝试拖动，却因命中子节点而拖不动。留白带让组框顶部始终可拖。
+  const topPadding = Math.max(0, Number((group.data as { topPadding?: number })?.topPadding ?? 0) || 0)
   const desiredPos = {
     x: (group.position?.x ?? 0) + (minX - GROUP_PADDING),
-    y: (group.position?.y ?? 0) + (minY - GROUP_PADDING),
+    y: (group.position?.y ?? 0) + (minY - GROUP_PADDING - topPadding),
   }
   const desiredSize = {
     w: Math.max(GROUP_MIN_WIDTH, (maxX - minX) + GROUP_PADDING * 2),
-    h: Math.max(GROUP_MIN_HEIGHT, (maxY - minY) + GROUP_PADDING * 2),
+    h: Math.max(GROUP_MIN_HEIGHT, (maxY - minY) + GROUP_PADDING * 2 + topPadding),
   }
   const currentSize = getNodeSize(group, { w: desiredSize.w, h: desiredSize.h })
   const dx = desiredPos.x - (group.position?.x ?? 0)
@@ -1304,6 +1308,34 @@ function autoFitSingleGroupNode(nodes: Node[], groupId: string, childIds?: Set<s
       }
     }),
   )
+}
+
+/**
+ * 节点测量尺寸变化后，同步适配其所属组框尺寸。
+ *
+ * 图片/视频节点在媒体加载完成后实际高度会变化（首次测量往往早于媒体就绪），
+ * 若不重新适配，组框会小于子节点导致内容溢出。分镜节点曾自行做该处理，
+ * 这里收敛为画布通用行为，避免同类节点各自重试。
+ *
+ * @param nodes 当前节点列表（已应用本次变更）
+ * @param changedIds 本次尺寸发生变化的节点ID
+ * @returns 适配后的节点列表（无组框受影响时原样返回）
+ */
+function refitParentGroupsForChangedNodes(nodes: Node[], changedIds: Iterable<string>): Node[] {
+  const byId = new Map(nodes.map((n) => [n.id, n] as const))
+  const parentGroupIds = new Set<string>()
+  for (const id of changedIds) {
+    const parentId = getNodeParentId(byId.get(id) as Node)
+    if (parentId && byId.get(parentId)?.type === 'groupNode') {
+      parentGroupIds.add(parentId)
+    }
+  }
+  if (parentGroupIds.size === 0) return nodes
+  let next = nodes
+  for (const groupId of parentGroupIds) {
+    next = autoFitSingleGroupNode(next, groupId)
+  }
+  return next
 }
 
 function createGroupForNodeIdsInNodes(
@@ -1783,7 +1815,7 @@ export const useRFStore = create<RFState>((set, get) => ({
     }
 
     const rawUpdated = applyNodeChanges(changes, s.nodes)
-    const updatedWithDims = dimChanges.size
+    const updatedWithDimsBase = dimChanges.size
       ? rawUpdated.map((node) => {
         const dims = dimChanges.get(node.id)
         if (!dims) return node
@@ -1802,6 +1834,10 @@ export const useRFStore = create<RFState>((set, get) => ({
         }
       })
       : rawUpdated
+    // 媒体就绪导致节点尺寸变化时，同步放大所属组框（否则子节点会溢出组框）
+    const updatedWithDims = dimChanges.size
+      ? refitParentGroupsForChangedNodes(updatedWithDimsBase, dimChanges.keys())
+      : updatedWithDimsBase
 
     const isPureDragMove =
       hasDragMove &&

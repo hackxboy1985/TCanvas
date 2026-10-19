@@ -47,3 +47,6 @@ helloagents
 project-data
 
 cert
+
+# apps/web 测试工程（本地测试用，不入库）
+apps/web/_test/
