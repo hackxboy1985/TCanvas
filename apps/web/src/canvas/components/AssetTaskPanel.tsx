@@ -1,9 +1,9 @@
 import React from 'react'
 import { ActionIcon, Badge, Button, Group, Loader, Pagination, Select, Text } from '@mantine/core'
 import { IconRefresh, IconX } from '@tabler/icons-react'
-import { LensAssetTaskStatus, listAssetImageTasks, canViewTaskParams, type LensTaskRecord } from '../../api/lens'
+import { LensAssetTaskStatus, listAssetImageTasks, canViewTaskParams, type LensTaskRecord, type LensModelOption } from '../../api/lens'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
-import { loadLensAssetTaskApplicationIds } from '../utils/lensAssetTaskApplications'
+import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
 import { AssetTaskPanelCard } from './AssetTaskPanelCard'
 
 const PAGE_SIZE = 20
@@ -38,6 +38,7 @@ export function AssetTaskPanel({ data, onClose }: {
   const [refresh, setRefresh] = React.useState(0)
   const [records, setRecords] = React.useState<LensTaskRecord[]>([])
   const [total, setTotal] = React.useState(0)
+  const [applications, setApplications] = React.useState<LensModelOption[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -49,8 +50,11 @@ export function AssetTaskPanel({ data, onClose }: {
       setError(null)
       try {
         if (!assetId || assetType === undefined || !dramaId) throw new Error('缺少剧或资产信息，无法查询任务')
-        const applicationIds = await loadLensAssetTaskApplicationIds()
+        const models = await loadLensAssetTaskApplications()
         if (disposed) return
+        const applicationIds = models.filter((model) => model.enabled === true).map((model) => String(model.value))
+        if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
+        setApplications(models)
         const result = await listAssetImageTasks({ dramaId, assetId, assetType, applicationIds,
           taskStatus: status, pageNum: page, pageSize: PAGE_SIZE })
         if (disposed) return
@@ -94,7 +98,7 @@ export function AssetTaskPanel({ data, onClose }: {
         {error && <Button className="lens-asset-task-panel__retry" size="compact-xs" variant="subtle" onClick={() => setRefresh((value) => value + 1)}>重新加载</Button>}
         {!error && loading && records.length === 0 && <Loader className="lens-asset-task-panel__loading" size="sm" />}
         {!error && !loading && records.length === 0 && <Text className="lens-asset-task-panel__empty" size="sm">暂无任务记录</Text>}
-        {records.map((record, index) => <AssetTaskPanelCard key={record.id || index} record={record} canViewParams={canViewParams}
+        {records.map((record, index) => <AssetTaskPanelCard key={record.id || index} record={record} applicationName={resolveLensTaskApplicationName(record.originAppId, applications)} canViewParams={canViewParams}
           target={assetId && assetType !== undefined && dramaId ? { category: assetType + 1, entityId: assetId, dramaId,
             label: typeof data.label === 'string' && data.label ? data.label : '当前资产' } : undefined} />)}
       </div>

@@ -33,7 +33,7 @@ function safeMediaUrl(value: unknown): string {
 }
 
 /** 资产任务卡片复用原接口关联结果，不改变原固定抽屉或视频采纳链路。 */
-export function AssetTaskPanelCard({ record, canViewParams, target }: { record: LensTaskRecord; canViewParams: boolean; target?: LensAssetTaskAdoptionTarget }) {
+export function AssetTaskPanelCard({ record, canViewParams, target, applicationName }: { record: LensTaskRecord; applicationName: string; canViewParams: boolean; target?: LensAssetTaskAdoptionTarget }) {
   const [paramsOpened, setParamsOpened] = React.useState(false)
   const status = record.taskStatus || record.status || ''
   const rawParams = record.reqPar ?? record.taskParams
@@ -41,6 +41,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target }: { record: 
     const media: Media[] = []
     const references: string[] = []
     let ratio = ''
+    const parameters: string[] = []
     const errors: string[] = []
     try {
       const results = parseJson(record.results)
@@ -59,6 +60,11 @@ export function AssetTaskPanelCard({ record, canViewParams, target }: { record: 
       const component: unknown = Array.isArray(params) ? params[0] : params
       if (isRecord(component)) {
         ratio = typeof component.ratio === 'string' ? component.ratio : typeof component.aspectRatio === 'string' ? component.aspectRatio : ''
+        // 只展示接口中实际存在的生成参数，不补默认值。
+        for (const [key, label] of [['resolution', '分辨率'], ['quality', '质量'], ['width', '宽'], ['height', '高']] as const) {
+          const value = component[key]
+          if ((typeof value === 'string' && value.trim()) || typeof value === 'number') parameters.push(label + ' ' + value)
+        }
         const refs: unknown = component.images ?? component.refImages ?? record.referenceImages
         const parsed: unknown = typeof refs === 'string' ? JSON.parse(refs) : refs
         if (Array.isArray(parsed)) for (const reference of parsed) {
@@ -67,7 +73,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target }: { record: 
         }
       }
     } catch { errors.push('任务参数格式异常') }
-    return { media, references, ratio, errors }
+    return { media, references, ratio, parameters, errors }
   }, [record.results, record.fileUrl, record.referenceImages, rawParams])
   const failed = [LensAssetTaskStatus.Failed, 'ERROR', 'SYNC_FAILED'].includes(status)
   const pending = ['CREATE', 'CREATED', 'QUEUED', 'RUNNING', 'SYNCING'].includes(status)
@@ -75,17 +81,21 @@ export function AssetTaskPanelCard({ record, canViewParams, target }: { record: 
     try { await navigator.clipboard.writeText(record.prompt || ''); toast('提示词已复制', 'success') }
     catch { toast('复制失败，请手动选择文本复制', 'error') }
   }
+  const submitter = record.createUserName || record.submitter || record.userName
+  const detailText = [record.createTime, record.id ? '#' + record.id : '', details.ratio, ...details.parameters].filter(Boolean).join(' · ')
   return (
     <article className="lens-asset-task-panel__card">
-      <Group className="lens-asset-task-panel__meta" gap={6}>
-        <Text className="lens-asset-task-panel__model" size="xs" fw={600}>{record.moduleName || record.model}</Text>
+      <Group className="lens-asset-task-panel__meta" gap={6} wrap="nowrap">
+        <Text className="lens-asset-task-panel__model" size="xs" fw={600} title={applicationName}>{applicationName}</Text>
         <Badge className="lens-asset-task-panel__badge" size="xs" variant="light" color={failed ? 'red' : status === LensAssetTaskStatus.Success ? 'green' : 'blue'}>{STATUS_LABELS[status] || status || '未知状态'}</Badge>
+        {submitter && <Text className="lens-asset-task-panel__submitter" size="xs" title={submitter}>{submitter}</Text>}
+        {record.channel && <Text className="lens-asset-task-panel__channel" size="xs" title={record.channel}>{record.channel}</Text>}
       </Group>
-      <Text className="lens-asset-task-panel__details" size="xs">{[record.createUserName || record.submitter || record.userName, record.createTime, record.id ? '#' + record.id : '', details.ratio, record.channel].filter(Boolean).join(' · ')}</Text>
+      <Text className="lens-asset-task-panel__details" size="xs" title={detailText}>{detailText}</Text>
       {!!details.references.length && <div className="lens-asset-task-panel__references">{details.references.map((url, index) => <img className="lens-asset-task-panel__reference" key={url + index} src={url} alt={'参考图 ' + (index + 1)} loading="lazy" />)}</div>}
       {!!record.prompt && <Text className="lens-asset-task-panel__prompt" size="xs" title={record.prompt}>{record.prompt}</Text>}
       <div className="lens-asset-task-panel__results">{details.media.map((media, index) => <button className="lens-asset-task-panel__preview" type="button" key={media.url + index}
-        aria-label={'预览结果 ' + (index + 1)} onClick={() => useUIStore.getState().openPreview({ url: media.url, kind: media.type, name: record.moduleName || '任务结果' })}>
+        aria-label={'预览结果 ' + (index + 1)} onClick={() => useUIStore.getState().openPreview({ url: media.url, kind: media.type, name: applicationName })}>
         {media.type === 'image' ? <img className="lens-asset-task-panel__image" src={media.thumbnail || media.url} alt={'生成结果 ' + (index + 1)} loading="lazy" /> : <video className="lens-asset-task-panel__image" src={media.url} preload="metadata" />}
       </button>)}</div>
       {!details.media.length && <Text className="lens-asset-task-panel__result-status" size="xs" c={failed ? 'red' : undefined}>{record.resMsg || record.errorMsg || (pending ? '生成中，请稍候…' : '暂无结果')}</Text>}

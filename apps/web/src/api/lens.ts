@@ -455,6 +455,8 @@ export interface LensTaskRecord {
   model?: string
   /** 模型名（生图任务，映射自 lens_application.module_name） */
   moduleName?: string
+  /** 用户选择的原始应用ID，用于匹配模型列表的应用显示名。 */
+  originAppId?: string | number
   /** 提交人（生图任务） */
   submitter?: string
   /** 提交人用户名（分镜生视频任务） */
@@ -561,6 +563,11 @@ export async function listReferenceAssets<T extends LensRole | LensAssetImage>(d
 /** 只追加分镜资产关联；权限与并发去重交给现有业务接口。 */
 export async function addShotReferenceRelations(dramaId: string, storyboardId: string, addRelations: { assetId: string; assetCategory: number }[]): Promise<void> {
   await lensFetch<unknown>('/api/storyboard/saveRelations', { method: 'POST', body: JSON.stringify({ dramaId, storyboardId, addRelations }) })
+}
+
+/** 删除分镜资产关联，失败时保留画布引用与连线。 */
+export async function removeShotReferenceRelations(dramaId: string, storyboardId: string, removeRelations: { assetId: string; assetCategory: number }[]): Promise<void> {
+  await lensFetch<unknown>('/api/storyboard/removeRelations', { method: 'POST', body: JSON.stringify({ dramaId, storyboardId, removeRelations }) })
 }
 
 /** 保存编排（upsert + 乐观锁） */

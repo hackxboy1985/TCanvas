@@ -9,17 +9,34 @@ import { LensAssetTaskStatus, type LensTaskPage } from '../../src/api/lens'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), apps: vi.fn(), permission: vi.fn() }))
 vi.mock('../../src/api/lens', async (original) => ({ ...await original<typeof import('../../src/api/lens')>(), listAssetImageTasks: mocks.list, canViewTaskParams: mocks.permission }))
-vi.mock('../../src/canvas/utils/lensAssetTaskApplications', () => ({ loadLensAssetTaskApplicationIds: mocks.apps }))
+vi.mock('../../src/canvas/utils/lensAssetTaskApplications', async (original) => ({ ...await original<typeof import('../../src/canvas/utils/lensAssetTaskApplications')>(), loadLensAssetTaskApplications: mocks.apps }))
 const data = { assetCategory: 1, entityId: '3914', parentEntityId: '3913' }
 const wrap = (child: React.ReactNode) => <MantineProvider>{child}</MantineProvider>
 beforeEach(() => {
   window.history.replaceState(null, '', '/canvas/?dramaId=720')
-  mocks.apps.mockResolvedValue(['47'])
+  mocks.apps.mockResolvedValue([{ value: '47', label: '应用显示名', enabled: true }])
   mocks.permission.mockResolvedValue(false)
   mocks.list.mockResolvedValue({ rows: [{ id: '1', taskStatus: 'SUCCESS', prompt: '当前资产任务', createUserName: '测试用户' }], total: 1 })
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks() })
 describe('工具栏右侧资产任务列表', () => {
+  it('身份信息与生成参数分别放在两行', async () => {
+    mocks.list.mockResolvedValue({ rows: [{ id: '88', originAppId: 47, taskStatus: 'SUCCESS', createUserName: '提交用户', channel: '渠道甲', createTime: '2026-10-19 16:00:00', reqPar: JSON.stringify([{ ratio: '16:9', resolution: '2K', quality: 'high' }]) }], total: 1 })
+    render(wrap(<AssetTaskPanel data={data} onClose={vi.fn()} />))
+    await screen.findByText('应用显示名')
+    const meta = document.querySelector('.lens-asset-task-panel__meta')
+    expect(meta?.textContent).toBe('应用显示名成功提交用户渠道甲')
+    const details = document.querySelector('.lens-asset-task-panel__details')
+    expect(details?.textContent).toBe('2026-10-19 16:00:00 · #88 · 16:9 · 分辨率 2K · 质量 high')
+    expect(details?.getAttribute('title')).toBe(details?.textContent)
+  })
+  it('按originAppId展示应用名，避免显示内部模型标识', async () => {
+    mocks.list.mockResolvedValue({ rows: [{ id: '1', originAppId: 47, moduleName: '内部应用标识', model: 'internal-model', taskStatus: 'SUCCESS' }], total: 1 })
+    render(wrap(<AssetTaskPanel data={data} onClose={vi.fn()} />))
+    await screen.findByText('应用显示名')
+    expect(screen.queryByText('内部应用标识')).toBeNull()
+    expect(screen.queryByText('internal-model')).toBeNull()
+  })
   it('本地入口不触发原右侧抽屉', () => {
     const drawer = vi.fn(), local = vi.fn()
     render(wrap(<CanvasRenderContext.Provider value={{ heavySelectionActive: false, heavySelectionDragging: false, selectedNodeCount: 1, onOpenTaskResult: drawer }}>

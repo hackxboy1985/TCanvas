@@ -7,7 +7,7 @@ import type { LensTaskPage } from '../../src/api/lens'
 
 const api = vi.hoisted(() => ({ listAssetImageTasks: vi.fn(), listShotVideoTasks: vi.fn(), adoptShotResult: vi.fn() }))
 vi.mock('../../src/api/lens', async (importOriginal) => ({ ...await importOriginal<typeof import('../../src/api/lens')>(), ...api }))
-vi.mock('../../src/canvas/utils/lensAssetTaskApplications', () => ({ loadLensAssetTaskApplicationIds: async () => ['47', '52'] }))
+vi.mock('../../src/canvas/utils/lensAssetTaskApplications', async (importOriginal) => ({ ...await importOriginal<typeof import('../../src/canvas/utils/lensAssetTaskApplications')>(), loadLensAssetTaskApplications: async () => [{ value: '47', label: '生图应用甲', enabled: true }, { value: '52', label: '生图应用乙', enabled: true }] }))
 
 /** 用真实抽屉组件验证查询，网络层只返回明确的测试记录。 */
 function drawer(target: TaskResultTarget, opened = true) {
@@ -17,6 +17,13 @@ function drawer(target: TaskResultTarget, opened = true) {
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 
 describe('资产生图任务列表', () => {
+  it('根据originAppId展示应用名，不展示内部模型名', async () => {
+    api.listAssetImageTasks.mockResolvedValue({ rows: [{ id: '1', originAppId: 52, model: 'internal-model', moduleName: '内部应用', taskStatus: 'SUCCESS' }], total: 1 })
+    render(drawer({ nodeId: 'role', title: '角色', kind: 'role', entityId: '123', dramaId: '100' }))
+    await screen.findByText('生图应用乙')
+    expect(screen.queryByText('internal-model')).toBeNull()
+    expect(screen.queryByText('内部应用')).toBeNull()
+  })
   it.each([['role', 0], ['scene', 1], ['prop', 2]] as const)('按 %s 自身资产ID查询', async (kind, assetType) => {
     api.listAssetImageTasks.mockResolvedValue({ rows: [], total: 0 })
     render(drawer({ nodeId: 'child', title: '子资产', kind, entityId: '9223372036854775806', dramaId: '100' }))

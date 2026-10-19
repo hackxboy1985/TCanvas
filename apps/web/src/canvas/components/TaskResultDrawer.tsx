@@ -47,10 +47,11 @@ import {
   listShotVideoTasks,
   type LensShotFileType,
   type LensTaskRecord,
+  type LensModelOption,
 } from '../../api/lens'
 import { toast } from '../../ui/toast'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
-import { loadLensAssetTaskApplicationIds } from '../utils/lensAssetTaskApplications'
+import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
 
 /** 轮询间隔（毫秒），对齐 §5.2 的 5s */
 const POLL_INTERVAL_MS = 5000
@@ -444,7 +445,7 @@ export function TaskResultDrawer({
   const [total, setTotal] = React.useState(0)
   const [page, setPage] = React.useState(1)
   const [taskStatus, setTaskStatus] = React.useState(LensAssetTaskStatus.All)
-  const applicationIdsRef = React.useRef<string[] | null>(null)
+  const applicationsRef = React.useRef<LensModelOption[] | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   /** 查看参数弹窗内容（空串表示关闭） */
@@ -499,8 +500,10 @@ export function TaskResultDrawer({
         if (!identity) {
           throw new Error(`资产实体ID非法：${target.entityId}`)
         }
-        const applicationIds = applicationIdsRef.current ?? await loadLensAssetTaskApplicationIds()
-        applicationIdsRef.current = applicationIds
+        const applications = applicationsRef.current ?? await loadLensAssetTaskApplications()
+        applicationsRef.current = applications
+        const applicationIds = applications.filter((application) => application.enabled === true).map((application) => String(application.value))
+        if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
         if (requestVersion !== requestVersionRef.current) return
         const res = await listAssetImageTasks({
           applicationIds,
@@ -643,7 +646,12 @@ export function TaskResultDrawer({
       .catch(() => toast('复制失败，请手动选择文本复制', 'error'))
   }, [])
 
-  const cards = React.useMemo(() => records.map((r, i) => toCardModel(r, i)), [records])
+  const cards = React.useMemo(() => records.map((record, index) => {
+    const card = toCardModel(record, index)
+    // 资产任务展示用户选择的应用名，内部模型字段仅供分镜任务使用。
+    if (target?.kind !== 'storyboard') card.modelName = resolveLensTaskApplicationName(record.originAppId, applicationsRef.current ?? [])
+    return card
+  }), [records, target?.kind])
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   /**
    * 「采纳结果」是否可用。
