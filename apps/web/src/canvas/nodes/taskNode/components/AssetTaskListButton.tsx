@@ -5,8 +5,10 @@ import { useCanvasRenderContext } from '../../../CanvasRenderContext'
 import { readLensAssetTaskIdentity } from '../../../utils/lensAssetTaskIdentity'
 
 /** 仅业务资产显示任务入口；没有生成结果时也能查看排队、失败及历史任务。 */
-export function AssetTaskListButton({ nodeId, data, showLabel = false }: { nodeId: string; data: Record<string, unknown>; showLabel?: boolean }) {
-  const { onOpenTaskResult } = useCanvasRenderContext()
+export function AssetTaskListButton({ nodeId, data, showLabel = false, onOpen }: { nodeId: string; data: Record<string, unknown>; showLabel?: boolean; onOpen?: (nodeId: string) => void }) {
+  const { onOpenTaskResult: openDrawer } = useCanvasRenderContext()
+  // 生图工具栏使用就地列表；未指定时保留原入口能力，不改原固定抽屉。
+  const onOpenTaskResult = onOpen || openDrawer
   if (!onOpenTaskResult || !readLensAssetTaskIdentity(data)) return null
   // 工具栏入口带文字，节点标题入口保持紧凑图标；两者共用同一回调。
   if (showLabel) return (

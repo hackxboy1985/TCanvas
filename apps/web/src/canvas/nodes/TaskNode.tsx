@@ -119,6 +119,7 @@ import { TaskNodeHandles } from './taskNode/components/TaskNodeHandles'
 import { TopToolbar } from './taskNode/components/TopToolbar'
 import { TaskNodeHeader } from './taskNode/components/TaskNodeHeader'
 import { AssetTaskListButton } from './taskNode/components/AssetTaskListButton'
+import { AssetTaskPanel } from '../components/AssetTaskPanel'
 import { ControlChips } from './taskNode/components/ControlChips'
 import { StatusBanner } from './taskNode/components/StatusBanner'
 import { GenerationOverlay } from './taskNode/components/GenerationOverlay'
@@ -1090,6 +1091,13 @@ function collectDynamicUpstreamReferenceEntriesForNode(
 }
 
 function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>): JSX.Element {
+  // 任务列表仅保存界面显隐，不写入节点数据或 flow；原右侧抽屉保持不变。
+  const [assetTaskPanelOpened, setAssetTaskPanelOpened] = React.useState(false)
+  const openAssetTaskPanel = React.useCallback(() => {
+    useRFStore.setState((state) => ({ nodes: state.nodes.map((node) =>
+      node.selected === (node.id === id) ? node : { ...node, selected: node.id === id }) }))
+    setAssetTaskPanelOpened(true)
+  }, [id])
   const status = data?.status ?? 'idle'
   const showGenerationOverlay = status === 'running' || status === 'queued'
   const color =
@@ -8335,7 +8343,7 @@ const rewritePromptWithCharacters = React.useCallback(
           labelDraft={labelDraft}
           currentLabel={currentLabel}
           subtitle={isLensProjectionNode ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel) : subtitle}
-          actions={<AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} />}
+          actions={<AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} onOpen={openAssetTaskPanel} />}
           metaBadges={headerMetaBadges}
           statusLabel={statusLabel}
           statusColor={color}
@@ -8603,6 +8611,7 @@ const rewritePromptWithCharacters = React.useCallback(
       {/* Bottom detail panel near node */}
       {showBottomToolbar && (
         <NodeToolbar className="tc-task-node__toolbar" position={Position.Bottom} align="center">
+          <div className="tc-task-node__toolbar-workspace" style={{ width: toolbarWidthCss }}>
           <div
             className={[
               'tc-task-node__toolbar-frame',
@@ -8631,7 +8640,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 useMediaFocusToolbar ? 'tc-task-node__toolbar-content--media' : '',
               ].filter(Boolean).join(' ')}
             >
-              <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} showLabel />
+              <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} showLabel onOpen={openAssetTaskPanel} />
               {!useMediaFocusToolbar && controlChipsNode ? (
                 <div className="tc-task-node__toolbar-controls">
                   {controlChipsNode}
@@ -8865,6 +8874,11 @@ const rewritePromptWithCharacters = React.useCallback(
                 </div>
               )}
             </div>
+          </div>
+          {assetTaskPanelOpened && (
+            <AssetTaskPanel key={id} data={data as Record<string, unknown>}
+              onClose={() => setAssetTaskPanelOpened(false)} />
+          )}
           </div>
         </NodeToolbar>
       )}
