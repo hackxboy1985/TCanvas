@@ -539,11 +539,19 @@ export async function getFlow(dramaId: string, episodeNum: number): Promise<Lens
 
 /** 按分镜板契约分页读取完整资产，避免父子资产跨页丢失。 */
 export async function listReferenceAssets<T extends LensRole | LensAssetImage>(dramaId: string, category: 1 | 2 | 3): Promise<T[]> {
+  // 角色接口不分页，默认仅查主身份；与分镜板一致，独立查询全部子造型。
+  if (category === 1) {
+    const [roles, clones] = await Promise.all([
+      lensFetch<T[]>('/api/lensRole/list', { method: 'POST', body: JSON.stringify({ dramaId, allRole: 1 }) }),
+      lensFetch<T[]>('/api/lensRole/list', { method: 'POST', body: JSON.stringify({ dramaId, roleType: 1 }) }),
+    ])
+    return [...roles, ...clones]
+  }
   const pageSize = 100
   const rows: T[] = []
   for (let pageNum = 1; ; pageNum += 1) {
-    const page = await lensFetchPage<T>(category === 1 ? '/api/lensRole/list' : '/api/lensImage/listHistory', {
-      method: 'POST', body: JSON.stringify({ dramaId, pageNum, pageSize, ...(category === 1 ? {} : { type: category - 1 }) }),
+    const page = await lensFetchPage<T>('/api/lensImage/listHistory', {
+      method: 'POST', body: JSON.stringify({ dramaId, pageNum, pageSize, type: category - 1 }),
     })
     rows.push(...page.rows)
     if (rows.length >= page.total || page.rows.length === 0) return rows
