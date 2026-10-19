@@ -14,7 +14,7 @@ import Canvas from '../canvas/Canvas'
 import PreviewModal from '../ui/PreviewModal'
 import type { CanvasHandle } from '../canvas/Canvas'
 import { useRFStore } from '../canvas/store'
-import type { LensShotRef } from '../canvas/nodes/LensShotNode'
+import { buildShotRefsFromAssets } from '../canvas/nodes/LensShotNode'
 import {
   listEpisodes,
   listStoryboards,
@@ -31,6 +31,7 @@ import {
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
 import { TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
+import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 
 /** 读取 URL query 参数 */
 function readQueryParams(): { dramaId: string; episode: number } {
@@ -114,14 +115,14 @@ const ARRANGE_GAP = 40
 const ARRANGE_SECTION_GAP = 120
 
 /**
- * 投影资产节点（角色/场景/道具）的尺寸。
+ * 投影资产节点（角色/场景/道具）的尺寸见 ./lensCanvasNodeLayout。
  *
  * `data.nodeHeight` 的语义是**图片内容高度**：TaskNode 会把它同时用于图片容器高度，
  * 且渲染标题栏（投影节点恒定渲染，展示角色名 + 类型标签）时外壳由内容自然撑开，
- * 实际总高 = 图片高度 + 标题栏高度。因此这里只传图片高度，不能把标题栏再算进来，
+ * 实际总高 = 图片高度 + 标题栏高度。因此只传图片高度，不能把标题栏再算进来，
  * 否则图片容器与外壳各算一次标题栏、会导致底部溢出组框。
  */
-const LENS_ASSET_MEDIA_HEIGHT = 250
+
 /**
  * 顶部栏占位高度（仅用于估算节点总高与行距）。
  * 投影节点以 showMeta/showIcon/showStatus=false 渲染 TaskNodeHeader 紧凑模式，
@@ -130,7 +131,6 @@ const LENS_ASSET_MEDIA_HEIGHT = 250
 const LENS_ASSET_HEADER_HEIGHT = 44
 /** 节点实际总高（图片区 + 顶部栏），用于行距估算 */
 const LENS_ASSET_NODE_HEIGHT = LENS_ASSET_MEDIA_HEIGHT + LENS_ASSET_HEADER_HEIGHT
-const LENS_ASSET_NODE_WIDTH = 384
 
 /**
  * 父子分组（分身/子场景）组框顶部的可拖拽带高度。
@@ -546,18 +546,7 @@ function buildCanvasNodes(input: {
     const shotId = `storyboard-${shot.id}`
     // 该分镜引用的资产（场景/道具/角色/站位），从 assets 按 refId 关联
     const speakerList = String(shot.speakerName || '').split(',').map((s) => s.trim()).filter(Boolean)
-    const refs: LensShotRef[] = assets
-      .filter((a) => String(a.refId) === String(shot.id))
-      .map((a) => {
-        const roleName = a.characterName || ''
-        return {
-          category: a.assetCategory ?? 0,
-          id: String(a.roleId || a.assetId || ''),
-          name: roleName || a.imgName || '',
-          imgUrl: a.threeImg || a.roleImg || a.imgUrl || '',
-          isSpeaker: a.assetCategory === 1 && Boolean(roleName) && speakerList.includes(roleName),
-        }
-      })
+    const refs = buildShotRefsFromAssets(assets, String(shot.id), speakerList)
     nodes.push({
       id: shotId,
       type: 'lensShot',

@@ -3,12 +3,18 @@ import { addShotReferenceRelations, removeShotReferenceRelations, type LensAsset
 import { useRFStore } from '../store'
 import { pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import type { LensShotRef } from './LensShotNode'
+import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from '../../projects/lensCanvasNodeLayout'
 
 /** 分类与 Lens 资产关联表一致。 */
 export enum ReferenceCategory { Role = 1, Scene = 2, Prop = 3 }
 export interface ReferenceAsset extends LensShotRef { parentId?: string; variantName?: string; subType?: string }
 export interface ReferenceGroup { id: string; name: string; items: ReferenceAsset[] }
 export const referenceKey = (item: LensShotRef): string => item.category + ':' + item.id
+
+/** 新增资产节点的横向偏移：与首列角色节点保持固定间距；与投影节点同样统一 384 宽、250 高图片区。 */
+const NEW_ASSET_NODE_OFFSET_X = 440
+/** 新增资产节点纵向间距：节点总高约 294，留 36 空白，避免重叠。 */
+const NEW_ASSET_NODE_GAP_Y = 330
 
 /** 分镜板同构分组：角色/子造型同组，场景/子场景同组，道具平铺。 */
 export function groupReferenceAssets(category: ReferenceCategory, rows: LensRole[] | LensAssetImage[]): ReferenceGroup[] {
@@ -102,9 +108,10 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
       if (!source) {
         // 使用投影相同的稳定 ID，重新打开后由业务快照补齐展示字段。
         const prefix = asset.category === ReferenceCategory.Role ? 'role' : asset.category === ReferenceCategory.Scene ? 'scene' : 'prop'
-        source = { id: prefix + '-' + asset.id, type: 'taskNode', position: { x: target.position.x - 420, y: target.position.y + index * 240 },
+        // 尺寸与主画布投影一致，否则节点按 TaskNode 默认尺寸渲染，底部工具栏会被算到很远处。
+        source = { id: prefix + '-' + asset.id, type: 'taskNode', position: { x: target.position.x - NEW_ASSET_NODE_OFFSET_X, y: target.position.y + index * NEW_ASSET_NODE_GAP_Y },
           data: { label: asset.name, kind: 'image', source: 'lens_projection', sourceProjectId: dramaId, entityId: asset.id,
-            assetCategory: asset.category, imageUrl: asset.imgUrl } }
+            assetCategory: asset.category, imageUrl: asset.imgUrl, nodeWidth: LENS_ASSET_NODE_WIDTH, nodeHeight: LENS_ASSET_MEDIA_HEIGHT } }
         const newNode = source
         useRFStore.setState((current) => ({ nodes: [...current.nodes, newNode] }))
       }

@@ -22,7 +22,7 @@ import { collectOrderedUpstreamReferenceItems } from './taskNode/upstreamReferen
 import { useModelOptions } from '../../config/useModelOptions'
 import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
-import { editStoryboard, clearStoryboardSpeaker, submitShotVideo } from '../../api/lens'
+import { editStoryboard, clearStoryboardSpeaker, submitShotVideo, type LensAssetEnriched } from '../../api/lens'
 import {
   buildDurationOptions,
   clampDuration,
@@ -37,8 +37,16 @@ export interface LensShotRef {
   /** 1=角色 2=场景 3=道具 4=站位 */
   category: number
   id: string
+  /** 完整显示名：子角色为「方怡静（连衣裙）」，子场景为「街道（夜晚）」 */
   name: string
   imgUrl?: string
+  /**
+   * 基础名，仅角色使用：主角色即自身名称，子角色取父角色名。
+   *
+   * 写入 lens 的 speakerName 必须是基础名（与分镜板 toggleSpeaker 一致），
+   * 不能用带造型后缀的完整名。缺失时回退到 name。
+   */
+  baseName?: string
   /** 是否说话者（speakerName 匹配） */
   isSpeaker?: boolean
 }
@@ -131,6 +139,37 @@ function StatusDot({ data }: { data: LensShotNodeData }): JSX.Element {
   return <span className="lens-shot-status-dot lens-shot-status-dot--idle" title="未生成" />
 }
 
+/**
+ * 由资产快照构造分镜引用。
+ *
+ * 快照里的 characterName/imgName 已由后端拼好子角色「方怡静（连衣裙）」、
+ * 子场景「街道（夜晚）」等完整名称，这里直接作为 name 展示；
+ * 说话者必须使用基础名，与分镜板 toggleSpeaker 写入的口径一致。
+ */
+export function buildShotRefsFromAssets(
+  assets: LensAssetEnriched[],
+  shotId: string,
+  speakerList: string[],
+): LensShotRef[] {
+  return assets
+    .filter((asset) => String(asset.refId) === String(shotId))
+    .map((asset) => {
+      const displayName = asset.characterName || asset.imgName || ''
+      // 子角色取父角色名作为基础名；主角色基础名即自身名称。
+      const roleBaseName = asset.assetCategory === 1
+        ? (asset.parentId ? displayName.replace(/[（(].*?[）)]$/, '').trim() : displayName)
+        : ''
+      return {
+        category: asset.assetCategory ?? 0,
+        id: String(asset.roleId || asset.assetId || ''),
+        name: displayName,
+        imgUrl: asset.threeImg || asset.roleImg || asset.imgUrl || '',
+        ...(roleBaseName ? { baseName: roleBaseName } : null),
+        isSpeaker: asset.assetCategory === 1 && Boolean(roleBaseName) && speakerList.includes(roleBaseName),
+      }
+    })
+}
+
 /** 说话者切换：点击角色引用上的说话图标，切换 speakerName 并写回 lens */
 function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string): void {
   const store = useRFStore.getState()
@@ -151,7 +190,7 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
   store.updateNodeData(nodeId, {
     speakerName: nextSpeakerName || undefined,
     refs: Array.isArray(data.refs)
-      ? data.refs.map((r) => (r.category === 1 && r.name === roleName ? { ...r, isSpeaker: next.includes(roleName) } : r))
+      ? data.refs.map((r) => (r.category === 1 && (r.baseName || r.name) === roleName ? { ...r, isSpeaker: next.includes(roleName) } : r))
       : [],
   })
 
@@ -546,7 +585,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
       {showRefs && refs.length > 0 && (
         <div className="lens-shot-refs" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderTop: '1px solid rgba(127,127,127,0.16)', flexWrap: 'wrap', flexShrink: 0 }}>
           {refs.map((ref) => (
-            <Tooltip key={`${ref.category}-${ref.id}`} label={`${REF_LABEL[ref.category] ?? '引用'} · ${ref.name}`} position="top" withArrow>
+            <Tooltip key={`${ref.category}-${ref.id}`} label={ref.name} position="top" withArrow>
               <span className="lens-shot-ref" style={{ position: 'relative', display: 'inline-flex', cursor: ref.category === 1 ? 'pointer' : 'default' }}>
                 {ref.imgUrl ? (
                   <img className="lens-shot-ref-img" src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid rgba(127,127,127,0.2)' }} />
@@ -556,7 +595,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 {ref.category === 1 && (
                   <span
                     className={`lens-shot-speaker ${ref.isSpeaker ? 'is-speaker' : ''}`}
-                    onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref.name) }}
+                    onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref.baseName || ref.name) }}
                     title={ref.isSpeaker ? '取消说话者' : '设为说话者'}
                     style={{
                       position: 'absolute', right: -4, top: -4, width: 14, height: 14, borderRadius: '50%',
@@ -619,7 +658,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
               {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，右上角类型胶囊） */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
                 {refs.length > 0 ? refs.map((ref) => (
-                  <Tooltip key={`${ref.category}-${ref.id}`} label={`${REF_LABEL[ref.category] ?? '引用'} · ${ref.name}`} position="top" withArrow>
+                  <Tooltip key={`${ref.category}-${ref.id}`} label={ref.name} position="top" withArrow>
                     <span className="lens-shot-toolbar-reference" style={{ position: 'relative', display: 'inline-flex', cursor: 'grab' }}>
                       {ref.imgUrl ? (
                         <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)' }} />
