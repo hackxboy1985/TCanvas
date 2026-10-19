@@ -1,7 +1,7 @@
 /**
  * 画布「任务结果」展开抽屉。
  *
- * <p><b>定位</b>：只读展示某个节点（自由节点 / 角色 / 场景 / 道具 / 分镜）的历史生成任务。
+ * <p><b>定位</b>：展示业务节点（角色及子造型 / 场景及子场景 / 道具 / 分镜）的历史生成任务。
  * 信息结构**对齐 lens 分镜板的「分镜任务」右侧列表**
  * （`RuoYi-Vue3/src/views/lens/creation/storyboard-task/index.vue`），
  * 保证用户在两处看到同样的信息：模型、状态、提交人、Ultra 标识、分镜号、时长、
@@ -15,7 +15,6 @@
  *
  * <p><b>数据来源按节点类型区分</b>（后端接口与表都不同，必须分开）：
  * <ul>
- *   <li>自由节点：{@code /api/task/list} + assetType=10 + sceneId=flowId + assetId=节点数字ID</li>
  *   <li>角色/场景/道具：{@code /api/task/list} + assetType=0/1/2 + assetId=实体ID</li>
  *   <li>分镜：{@code /api/storyboardTask/list} + storyboardId</li>
  * </ul>
@@ -35,20 +34,23 @@ import {
   Loader,
   Modal,
   Pagination,
+  Select,
   Stack,
   Text,
   Tooltip,
 } from '@mantine/core'
 import { IconAlertTriangle, IconCheck, IconCopy, IconEye, IconRefresh } from '@tabler/icons-react'
 import {
-  CANVAS_NODE_ASSET_TYPE,
   adoptShotResult,
-  listCanvasFreeNodeTasks,
+  listAssetImageTasks,
+  LensAssetTaskStatus,
   listShotVideoTasks,
   type LensShotFileType,
   type LensTaskRecord,
 } from '../../api/lens'
 import { toast } from '../../ui/toast'
+import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
+import { loadLensAssetTaskApplicationIds } from '../utils/lensAssetTaskApplications'
 
 /** 轮询间隔（毫秒），对齐 §5.2 的 5s */
 const POLL_INTERVAL_MS = 5000
@@ -96,13 +98,9 @@ export interface TaskResultTarget {
   /** 节点显示名（抽屉标题） */
   title: string
   /** 节点类型 */
-  kind: 'free' | 'role' | 'scene' | 'prop' | 'storyboard'
+  kind: 'role' | 'scene' | 'prop' | 'storyboard'
   /** 剧ID（后端权限校验用，必传） */
   dramaId: string
-  /** 画布 flowId（自由节点必传） */
-  canvasFlowId?: number
-  /** 节点数字ID（自由节点必传） */
-  canvasNodeAssetId?: number
   /** 业务实体ID（角色/场景/道具的 lens_role.id / lens_asset_image.id） */
   entityId?: string
   /** 分镜ID（分镜节点必传） */
@@ -154,7 +152,6 @@ export interface TaskResultDrawerProps {
 
 /** 节点类型 → 展示文案 */
 const KIND_LABEL: Record<TaskResultTarget['kind'], string> = {
-  free: '自由节点',
   role: '角色',
   scene: '场景',
   prop: '道具',
@@ -446,6 +443,8 @@ export function TaskResultDrawer({
   const [records, setRecords] = React.useState<LensTaskRecord[]>([])
   const [total, setTotal] = React.useState(0)
   const [page, setPage] = React.useState(1)
+  const [taskStatus, setTaskStatus] = React.useState(LensAssetTaskStatus.All)
+  const applicationIdsRef = React.useRef<string[] | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   /** 查看参数弹窗内容（空串表示关闭） */
@@ -455,6 +454,8 @@ export function TaskResultDrawer({
   /** 采纳请求进行中（防止重复提交） */
   const [adopting, setAdopting] = React.useState(false)
   const pollTimerRef = React.useRef<number | null>(null)
+  /** 关闭、切换资产或翻页时废弃旧响应，避免慢请求覆盖当前资产任务。 */
+  const requestVersionRef = React.useRef(0)
 
   /** 停止轮询（关闭抽屉 / 全部终态 / 卸载时调用） */
   const stopPolling = React.useCallback(() => {
@@ -467,11 +468,12 @@ export function TaskResultDrawer({
   /**
    * 按目标节点类型查询任务。
    *
-   * <p>自由节点必须带 canvasFlowId + canvasNodeAssetId，否则会串到同画布其它节点。
+   * <p>资产必须携带自身实体ID，子资产不使用父级ID；自由节点不接入。
    */
   const fetchTasks = React.useCallback(
     async (targetPage: number): Promise<void> => {
-      if (!target) return
+      if (!target || !opened) return
+      const requestVersion = ++requestVersionRef.current
       setLoading(true)
       setError(null)
       try {
@@ -483,22 +485,7 @@ export function TaskResultDrawer({
             pageNum: targetPage,
             pageSize: PAGE_SIZE,
           })
-          setRecords(Array.isArray(res.rows) ? res.rows : [])
-          setTotal(res.total ?? 0)
-          return
-        }
-        if (target.kind === 'free') {
-          if (target.canvasFlowId === undefined || target.canvasNodeAssetId === undefined) {
-            throw new Error('自由节点缺少画布归属（canvasFlowId / canvasNodeAssetId），无法查询任务')
-          }
-          const res = await listCanvasFreeNodeTasks({
-            dramaId: target.dramaId,
-            sceneId: target.canvasFlowId,
-            assetType: CANVAS_NODE_ASSET_TYPE,
-            assetId: target.canvasNodeAssetId,
-            pageNum: targetPage,
-            pageSize: PAGE_SIZE,
-          })
+          if (requestVersion !== requestVersionRef.current) return
           setRecords(Array.isArray(res.rows) ? res.rows : [])
           setTotal(res.total ?? 0)
           return
@@ -508,28 +495,35 @@ export function TaskResultDrawer({
         if (assetType === undefined || !target.entityId) {
           throw new Error('资产节点缺少实体ID，无法查询任务')
         }
-        const entityAssetId = Number(target.entityId)
-        if (!Number.isFinite(entityAssetId) || entityAssetId <= 0) {
+        const identity = readLensAssetTaskIdentity({ assetCategory: assetType + 1, entityId: target.entityId })
+        if (!identity) {
           throw new Error(`资产实体ID非法：${target.entityId}`)
         }
-        const res = await listCanvasFreeNodeTasks({
+        const applicationIds = applicationIdsRef.current ?? await loadLensAssetTaskApplicationIds()
+        applicationIdsRef.current = applicationIds
+        if (requestVersion !== requestVersionRef.current) return
+        const res = await listAssetImageTasks({
+          applicationIds,
+          taskStatus,
           dramaId: target.dramaId,
           assetType,
-          assetId: Math.trunc(entityAssetId),
+          assetId: identity.assetId,
           pageNum: targetPage,
           pageSize: PAGE_SIZE,
         })
+        if (requestVersion !== requestVersionRef.current) return
         setRecords(Array.isArray(res.rows) ? res.rows : [])
         setTotal(res.total ?? 0)
       } catch (err) {
+        if (requestVersion !== requestVersionRef.current) return
         setRecords([])
         setTotal(0)
         setError(err instanceof Error ? err.message : '任务查询失败')
       } finally {
-        setLoading(false)
+        if (requestVersion === requestVersionRef.current) setLoading(false)
       }
     },
-    [target],
+    [target, opened, taskStatus],
   )
 
   // 关闭抽屉 / 切换目标时丢弃未确认的采纳草稿（避免残留上一次的上下文）
@@ -603,8 +597,11 @@ export function TaskResultDrawer({
       setError(null)
       return
     }
+    setRecords([])
+    setTotal(0)
     setPage(1)
     void fetchTasks(1)
+    return () => { requestVersionRef.current += 1 }
   }, [opened, target, fetchTasks, stopPolling])
 
   // 轮询：仅当本页存在未完成任务时启动，全部终态后自动停止
@@ -651,7 +648,7 @@ export function TaskResultDrawer({
   /**
    * 「采纳结果」是否可用。
    *
-   * <p>只有分镜节点有自身对应的分镜（target.storyboardId）；角色/场景/道具/自由节点
+   * <p>只有分镜节点有自身对应的分镜（target.storyboardId）；角色/场景/道具
    * 没有可回写的分镜，因此不显示该按钮（不猜测目标、不降级）。
    */
   const adoptStoryboardId = target?.kind === 'storyboard' ? target.storyboardId : undefined
@@ -685,8 +682,20 @@ export function TaskResultDrawer({
             <Text size="sm" c="dimmed">
               {loading ? '查询中…' : `共 ${total} 条`}
             </Text>
+            {target?.kind !== 'storyboard' && (
+              <Select className="lens-asset-task-status" size="xs" w={140} aria-label="资产任务状态"
+                value={taskStatus} onChange={(value) => setTaskStatus(value as LensAssetTaskStatus)}
+                allowDeselect={false} data={[
+                  { value: LensAssetTaskStatus.All, label: '默认：隐藏失败' },
+                  { value: LensAssetTaskStatus.Created, label: '创建' },
+                  { value: LensAssetTaskStatus.Queued, label: '排队' },
+                  { value: LensAssetTaskStatus.Running, label: '生成中' },
+                  { value: LensAssetTaskStatus.Success, label: '成功' },
+                  { value: LensAssetTaskStatus.Failed, label: '失败' },
+                ]} />
+            )}
             <Tooltip label="刷新">
-              <ActionIcon variant="subtle" onClick={() => void fetchTasks(page)} aria-label="刷新任务列表">
+              <ActionIcon variant="subtle" loading={loading} onClick={() => void fetchTasks(page)} aria-label="刷新任务列表">
                 <IconRefresh size={16} />
               </ActionIcon>
             </Tooltip>
@@ -726,7 +735,7 @@ export function TaskResultDrawer({
                   <span className={`lens-task-status-pill lens-task-status-pill--${card.statusClass}`}>
                     {card.statusText}
                   </span>
-                  {card.pending && <span className="lens-task-fresh-hint">需手动刷新</span>}
+                  {card.pending && <span className="lens-task-fresh-hint">自动更新中</span>}
                   {card.submitter && <span className="lens-task-meta-text">{card.submitter}</span>}
                   {card.seqJobId && (
                     <Tooltip label={`序列任务 ${card.seqJobId}`}>

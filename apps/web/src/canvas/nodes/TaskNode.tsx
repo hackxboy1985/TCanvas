@@ -44,6 +44,7 @@ import {
   uploadServerAssetFile,
   createLlmNodePreset,
   listLlmNodePresets,
+  shouldNoticeLlmNodePresetLoadError,
   type LlmNodePresetDto,
   type LlmNodePresetType,
   type PromptSampleDto,
@@ -117,6 +118,7 @@ import { useImageViewEditor, type ImageViewEditorApplyPayload } from './taskNode
 import { TaskNodeHandles } from './taskNode/components/TaskNodeHandles'
 import { TopToolbar } from './taskNode/components/TopToolbar'
 import { TaskNodeHeader } from './taskNode/components/TaskNodeHeader'
+import { AssetTaskListButton } from './taskNode/components/AssetTaskListButton'
 import { ControlChips } from './taskNode/components/ControlChips'
 import { StatusBanner } from './taskNode/components/StatusBanner'
 import { GenerationOverlay } from './taskNode/components/GenerationOverlay'
@@ -182,10 +184,11 @@ import { collectUpstreamVideoTextContext } from './taskNode/videoPromptGeneratio
 import { ChapterGroundedBadge } from './taskNode/components/ChapterGroundedBadge'
 import { resolveCompiledImagePrompt, resolveImagePromptExecution } from './taskNode/imagePromptSpec'
 import { refineStructuredImagePrompt } from './taskNode/structuredPromptRefine'
-import imageViewControlsModule from '@tapcanvas/image-view-controls'
 import { PromptEditorActions } from './taskNode/components/PromptEditorActions'
+import { PromptPolishPreview } from './taskNode/components/PromptPolishPreview'
 import { usePromptEditorAdmin } from '../../auth/usePromptEditorAdmin'
-import type { LensPromptPolishBilling } from '../../api/lens'
+import { saveLensAssetPrompt, type LensPromptPolishBilling } from '../../api/lens'
+import imageViewControlsModule from '@tapcanvas/image-view-controls'
 import {
   resolvePrimarySemanticAnchorBinding,
   resolveSemanticNodeRoleBinding,
@@ -194,6 +197,7 @@ import {
 } from '../utils/semanticBindings'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { getCanvasTaskStatus, runTaskByCanvas } from '../../api/lens'
+import { getLensCanvasFlowId, readCanvasNodeAssetId } from '../utils/canvasNodeAssetId'
 import { isLensMode, readLensModelQualities } from '../../config/useModelOptions'
 
 /** lens 生图质量档位中文名（后端 others.qualities 取值：medium/high/xhigh/max） */
@@ -209,14 +213,15 @@ const LENS_QUALITY_LABELS: Record<string, string> = {
  *
  * <p>与 {@code projects/LensCanvasApp.tsx#readQueryParams} 保持一致：episode 缺省 1、非正数回退 1。
  */
-function readLensCanvasUrlParams(): { dramaId: string; episodeNum: number } | null {
+function readLensCanvasUrlParams(): { dramaId: string; episodeNum: number; flowId?: number } | null {
   if (typeof window === 'undefined') return null
   const params = new URLSearchParams(window.location.search)
   const dramaId = String(params.get('dramaId') || '').trim()
   if (!dramaId) return null
   const episodeRaw = Number(params.get('episode') || 1)
   const episodeNum = Number.isFinite(episodeRaw) && episodeRaw > 0 ? Math.trunc(episodeRaw) : 1
-  return { dramaId, episodeNum }
+  // flowId 由 LensCanvasApp 在 getFlow/saveFlow 后注入，用于自由节点的任务归属
+  return { dramaId, episodeNum, flowId: getLensCanvasFlowId() }
 }
 
 /** 从任务结果里取第一张图片 URL（兼容 assets[].type === 'image' 与仅有 url 的形态） */
@@ -308,6 +313,7 @@ function readUserSelectedImageSubmitParams(nodeData: Record<string, unknown>): {
 async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<string> {
   const lensUrlParams = readLensCanvasUrlParams()
   if (lensUrlParams) {
+    const poseNodeAssetId = readCanvasNodeAssetId(input.nodeData)
     const submitted = await runTaskByCanvas({
       prompt: input.prompt,
       dramaId: lensUrlParams.dramaId,
@@ -316,6 +322,9 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
       ...readUserSelectedImageSubmitParams(input.nodeData),
       nodeId: input.id,
       nodeKind: input.kind,
+      // 任务归属：写入 task_queue 的 scene_id/asset_id，供「任务结果展开」按节点查询
+      canvasFlowId: lensUrlParams.flowId,
+      canvasNodeAssetId: poseNodeAssetId === null ? undefined : poseNodeAssetId,
     })
     for (let i = 0; i < 24; i += 1) {
       // eslint-disable-next-line no-await-in-loop
@@ -1330,6 +1339,20 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const structuredPromptErrorMessage = imagePromptExecutionState.errorMessage
   const [prompt, setPrompt] = React.useState<string>(rawPrompt || '')
   const [structuredPromptRefineLoading, setStructuredPromptRefineLoading] = React.useState(false)
+  // 对比与撤销快照仅保存在当前编辑会话，不写入资产表或画布 flow。
+  const [polishPreview, setPolishPreview] = React.useState<{
+    before: string
+    after: string
+    structured: NonNullable<typeof structuredPromptValue>
+  } | null>(null)
+  const [polishOriginal, setPolishOriginal] = React.useState<{
+    prompt: string
+    structuredPrompt: typeof structuredPromptValue
+    promptEditorMode: 'structured' | 'text'
+  } | null>(null)
+  const [lastPolishComparison, setLastPolishComparison] = React.useState<typeof polishPreview>(null)
+  const [showLastPolishComparison, setShowLastPolishComparison] = React.useState(false)
+  const [savingAssetPrompt, setSavingAssetPrompt] = React.useState(false)
   const rawStoryboardEditorPatch = React.useMemo(
     () => buildStoryboardEditorPatch({
       cells: (data as Record<string, unknown>)?.storyboardEditorCells,
@@ -4093,6 +4116,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       systemPrompt,
       modelAlias: resolvePromptRefineModelAlias(),
       productionMetadata: (data as Record<string, unknown>)?.productionMetadata,
+      onBilling,
     })
   }, [data, prompt, resolvePromptRefineModelAlias, systemPrompt])
   const handleCommitStructuredPrompt = React.useCallback((patch: {
@@ -4100,7 +4124,6 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     prompt: string
   }) => {
     setPrompt(patch.prompt)
-      onBilling,
     updateNodeData(id, {
       structuredPrompt: patch.structuredPrompt,
       prompt: patch.prompt,
@@ -4126,12 +4149,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         structuredPrompt: nextStructuredPrompt,
         promptEditorMode: 'structured',
       }).trim()
-      setPrompt(nextCompiledPrompt)
-      updateNodeData(id, {
-        structuredPrompt: nextStructuredPrompt,
-        prompt: nextCompiledPrompt,
-        promptEditorMode: isStructuredPromptMode ? 'structured' : 'text',
-      })
+      // 先展示结果；不覆盖用户输入，也不把未确认结果写入节点。
+      setPolishPreview({ before: currentPrompt, after: nextCompiledPrompt, structured: nextStructuredPrompt })
       // lens 模式下润色走 lens 后端并计费，把免费/扣分事实如实告知用户（拿不到计费信息时不编造）
       const polishBilling = billingResult.value
       if (polishBilling) {
@@ -4152,6 +4171,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     }
   }, [
     canUseStructuredPromptEditor,
+    viewOnly,
     id,
     prompt,
     refineStructuredPromptFromText,
@@ -4159,7 +4179,51 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     isStructuredPromptMode,
     updateNodeData,
   ])
-    viewOnly,
+  /** 采用前检查输入未变更；保留完整原文和 JSON 模式，支持精确恢复。 */
+  const handleAdoptPolish = () => {
+    if (!polishPreview || viewOnly) return
+    if (prompt.trim() !== polishPreview.before.trim()) {
+      toast('当前提示词已变化，请重新润色，避免覆盖新修改', 'warning')
+      return
+    }
+    setPolishOriginal({ prompt, structuredPrompt: structuredPromptValue, promptEditorMode: isStructuredPromptMode ? 'structured' : 'text' })
+    setLastPolishComparison(polishPreview)
+    setPrompt(polishPreview.after)
+    updateNodeData(id, { prompt: polishPreview.after, structuredPrompt: polishPreview.structured, promptEditorMode: isStructuredPromptMode ? 'structured' : 'text' })
+    setPolishPreview(null)
+    toast('已采用到当前编辑内容，尚未保存到 Lens 资产', 'success')
+  }
+  /** 恢复本次采用前的输入；不重新请求 AI，也不触发计费。 */
+  const handleRestorePolish = () => {
+    if (!polishOriginal || viewOnly) return
+    setPrompt(polishOriginal.prompt)
+    updateNodeData(id, polishOriginal)
+    setPolishOriginal(null)
+    setLastPolishComparison(null)
+  }
+  /** 显式保存才更新 Lens 资产提示词，失败保留当前编辑内容供重试。 */
+  const handleSaveAssetPrompt = async () => {
+    if (viewOnly || savingAssetPrompt) return
+    const record = data as Record<string, unknown>
+    try {
+      setSavingAssetPrompt(true)
+      await saveLensAssetPrompt({ category: Number(record.assetCategory), entityId: String(record.entityId || ''), dramaId: String(record.sourceProjectId || ''), prompt })
+      toast('提示词已保存到 Lens 资产', 'success')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '保存资产提示词失败', 'error')
+    } finally {
+      setSavingAssetPrompt(false)
+    }
+  }
+  const promptPolishActions = canUseStructuredPromptEditor ? (
+    <Group className="tc-task-node__polish-actions" gap={4} wrap="nowrap">
+      {lastPolishComparison ? <Button className="tc-task-node__polish-compare" size="compact-xs" variant="subtle" onClick={() => setShowLastPolishComparison(true)}>查看对比</Button> : null}
+      {polishOriginal ? <Button className="tc-task-node__polish-restore" size="compact-xs" variant="subtle" disabled={viewOnly} onClick={handleRestorePolish}>恢复润色前</Button> : null}
+      {typeof (data as Record<string, unknown>).assetCategory === 'number' ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>保存提示词</Button> : null}
+      <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>AI 润色</Button>
+    </Group>
+  ) : null
+  // JSON 只切换已有结构化结果的展示，绝不调用润色接口或触发计费。
   const handleStructuredPromptModeChange = React.useCallback((next: boolean) => {
     if (!isPromptEditorAdmin || !structuredPromptValue || viewOnly || structuredPromptRefineLoading) return
     if (next && resolveCompiledImagePrompt({ structuredPrompt: structuredPromptValue, promptEditorMode: 'structured' }).trim() !== prompt.trim()) {
@@ -4168,13 +4232,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     }
     updateNodeData(id, { promptEditorMode: next ? 'structured' : 'text' })
   }, [isPromptEditorAdmin, structuredPromptValue, prompt, viewOnly, structuredPromptRefineLoading, id, updateNodeData])
-  // JSON 只切换已有结构化结果的展示，绝不调用润色接口或触发计费。
   const baseShowTimeMenu = hasDuration
   const baseShowResolutionMenu = isVideoNode
     ? configuredSizeOptions.length > 0 || hasAspect
-    : imageModelConfig
+    : isLensMode()
       ? configuredImageAspectOptions.length > 0
-      : hasAspect
+      : imageModelConfig
+        ? configuredImageAspectOptions.length > 0
+        : hasAspect
   const videoFramingControlledBySize = Boolean(isVideoNode && baseShowResolutionMenu)
   const baseShowOrientationMenu = isVideoNode
     ? !videoFramingControlledBySize && (hasOrientation || configuredOrientationOptions.length > 0)
@@ -4369,7 +4434,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (!isVideoNode) return ''
     return selectedConfiguredResolutionOption?.label || effectiveVideoResolution || '未设定'
   }, [effectiveVideoResolution, isVideoNode, selectedConfiguredResolutionOption])
-  const summaryResolution = summaryVideoSize
+  // 图片比例显示当前比例，不能复用图片编辑节点的像素尺寸说明。
+  const summaryResolution = isVideoNode
+    ? summaryVideoSize
+    : selectedConfiguredImageAspectOption?.label || aspect
   const summaryOrientation = React.useMemo(() => {
     const configuredLabel =
       configuredOrientationOptions.find((option) => option.value === orientation)?.label || ''
@@ -4406,15 +4474,17 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         kind: billingNodeKind,
         modelOption: selectedActiveModelOption,
         specKey: isVideoNode ? videoSpecKey : null,
-        specValues: imageBillingSpecValues,
+        specValues: isVideoNode ? { resolution: effectiveVideoResolution } : imageBillingSpecValues,
+        durationSeconds: isVideoNode ? videoDuration : null,
         quantity: coreKind === 'image' ? sampleCount : 1,
       }),
-    [billingNodeKind, coreKind, imageBillingSpecValues, isVideoNode, sampleCount, selectedActiveModelOption, videoSpecKey],
+    [billingNodeKind, coreKind, effectiveVideoResolution, imageBillingSpecValues, isVideoNode, sampleCount, selectedActiveModelOption, videoDuration, videoSpecKey],
   )
   const requiredCreditsLabel = React.useMemo(() => {
     if (!(isVideoNode || coreKind === 'image')) return null
+    if (requiredGenerationCredits === null || (isLensMode() && !selectedActiveModelOption?.pricing)) return '积分未配置'
     return `${requiredGenerationCredits}积分`
-  }, [coreKind, isVideoNode, requiredGenerationCredits])
+  }, [coreKind, isVideoNode, requiredGenerationCredits, selectedActiveModelOption])
   const promptPresetOptions = React.useMemo(
     () =>
       presetItems.map((item) => ({
@@ -4491,6 +4561,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       videoModelVendor: option?.vendor || null,
       // 标记用户显式选择：lens 模式下据此决定是否把 appId 下发给后端
       imageModelUserSelected: true,
+      // 参数选择归属于具体模型，切换后不沿用旧模型的显式选择标记。
+      imageResolutionUserSelected: false,
+      imageQualityUserSelected: false,
+      imageSizeUserSelected: false,
+      imageRatioUserSelected: false,
     })
   }, [findModelOptionByIdentifier, id, modelMenuOptions, resolveRequestedModelIdentifier, updateNodeData])
 
@@ -4711,7 +4786,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           options: configuredImageResolutionOptions,
           onChange: (value: string) => {
             setImageResolution(value)
-            updateNodeData(id, { imageResolution: value, resolution: value })
+            updateNodeData(id, { imageResolution: value, resolution: value, imageResolutionUserSelected: true })
           },
         }]
       }
@@ -4757,7 +4832,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const showImageSizeMenu =
     hasImageSize &&
     !imageSizeMatchesResolutionOptions &&
-    (imageModelConfig ? configuredImageSizeOptions.length > 0 : true) &&
+    (isLensMode() ? configuredImageSizeOptions.length > 0 : imageModelConfig ? configuredImageSizeOptions.length > 0 : true) &&
     !mappedImageControlBindings.has('imageSize')
   React.useEffect(() => {
     if (typeof persistedCharacterRewriteModel === 'string' && persistedCharacterRewriteModel.trim() && persistedCharacterRewriteModel !== characterRewriteModel) {
@@ -4800,9 +4875,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     try {
       const list = await listLlmNodePresets({ type: presetType })
       setPresetItems(Array.isArray(list) ? list : [])
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPresetItems([])
-      toast(err?.message || '加载节点预设失败', 'error')
+      // 显式失败：清空列表；提示按「类型 + 错误」去重，避免画布上每个节点各弹一次
+      if (shouldNoticeLlmNodePresetLoadError(presetType, err)) {
+        toast(err instanceof Error ? err.message : '加载节点预设失败', 'error')
+      }
     } finally {
       setPresetLoading(false)
     }
@@ -8238,7 +8316,10 @@ const rewritePromptWithCharacters = React.useCallback(
         width: nodeWidth,
         maxWidth: 720,
         ...(isPlainTextNode && textNodeHeight ? { height: textNodeHeight } : null),
-        ...(isResizableVisualNode && nodeHeight ? { height: nodeHeight } : null),
+        // 用 minHeight 而非固定 height：图片内容的自身高度即 nodeHeight，
+        // 若外壳也固定为 nodeHeight，渲染标题栏时「标题栏 + 图片内容」会超出外壳导致底部溢出。
+        // 改为最小高度后由内容自然撑开，无需按标题栏模式（含/不含图标）分别硬编码高度。
+        ...(isResizableVisualNode && nodeHeight ? { minHeight: nodeHeight } : null),
       } as React.CSSProperties}
     >
       <GenerationOverlay
@@ -8254,6 +8335,7 @@ const rewritePromptWithCharacters = React.useCallback(
           labelDraft={labelDraft}
           currentLabel={currentLabel}
           subtitle={isLensProjectionNode ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel) : subtitle}
+          actions={<AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} />}
           metaBadges={headerMetaBadges}
           statusLabel={statusLabel}
           statusColor={color}
@@ -8549,6 +8631,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 useMediaFocusToolbar ? 'tc-task-node__toolbar-content--media' : '',
               ].filter(Boolean).join(' ')}
             >
+              <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} showLabel />
               {!useMediaFocusToolbar && controlChipsNode ? (
                 <div className="tc-task-node__toolbar-controls">
                   {controlChipsNode}
@@ -8669,12 +8752,12 @@ const rewritePromptWithCharacters = React.useCallback(
 
                 {canUseStructuredPromptEditor && !isPlainTextNode && (
                   <PromptEditorActions
+                    actions={promptPolishActions}
                     isAdmin={isPromptEditorAdmin}
                     structured={isStructuredPromptMode}
                     hasStructuredPrompt={Boolean(structuredPromptValue)}
                     loading={structuredPromptRefineLoading}
                     readOnly={viewOnly}
-                    onRefine={() => { void handleRefineImagePrompt() }}
                     onModeChange={handleStructuredPromptModeChange}
                   />
                 )}
@@ -8790,6 +8873,13 @@ const rewritePromptWithCharacters = React.useCallback(
 	        nodeKind={kind}
 	        onClose={() => setPromptSamplesOpen(false)}
         onApplySample={handleApplyPromptSample}
+      />
+      <PromptPolishPreview
+        opened={Boolean(polishPreview) || showLastPolishComparison}
+        before={polishPreview?.before ?? lastPolishComparison?.before ?? ''}
+        after={polishPreview?.after ?? lastPolishComparison?.after ?? ''}
+        onClose={() => { setPolishPreview(null); setShowLastPolishComparison(false) }}
+        onAdopt={polishPreview ? handleAdoptPolish : undefined}
       />
       <Modal
         className="task-node-preset-modal"

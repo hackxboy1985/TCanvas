@@ -20,6 +20,8 @@ type TaskNodeHeaderProps = {
   showIcon?: boolean
   showStatus?: boolean
   showSubtitle?: boolean
+  /** 标题右侧的业务操作，不依赖节点是否已有生成结果。 */
+  actions?: React.ReactNode
   isNew?: boolean
   metaBadges?: Array<{
     label: string
@@ -50,6 +52,7 @@ export function TaskNodeHeader({
   showIcon = true,
   showStatus = true,
   showSubtitle = false,
+  actions,
   isNew = false,
   metaBadges = [],
   onLabelDraftChange,
@@ -108,6 +111,7 @@ export function TaskNodeHeader({
             </Text>
           )}
         </div>
+        {actions}
         {isNew && (
           <Badge className="task-node-header-new-badge" size="xs" radius="md" color="pink" variant="light">
             新建

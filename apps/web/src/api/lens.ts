@@ -286,11 +286,23 @@ export interface LensAssetEnriched {
   roleId?: string
   characterName?: string
   cloneName?: string
+  /**
+   * 父级ID（语义按 assetCategory 区分）：
+   * - assetCategory=1（角色）：分身的父角色ID，非分身时为 null
+   * - assetCategory=2,3,4（场景/道具/站位）：父场景ID，非子场景时为 null
+   *
+   * 画布据此建立「主角色 → 分身」「主场景 → 子场景」的派生关系与分组合并。
+   */
+  parentId?: string
   roleImg?: string
   frontImg?: string
   threeImg?: string
   imgName?: string
   imgUrl?: string
+  /** 子场景特征名（仅子场景有值，如"夜"） */
+  variantName?: string
+  /** 子场景分类：time/weather/inout/area/position/furniture/facility */
+  subType?: string
   imgState?: number
   hasHuman?: number
   description?: string
@@ -388,26 +400,86 @@ export interface LensCanvasTaskSubmitParams {
   width?: number
   /** 用户显式选择的输出高度（像素）；未选则不下发 */
   height?: number
+  /** 用户显式选择的分辨率档位，按当前模型配置原值下发。 */
+  resolution?: string
   /** 用户显式选择的质量档位；未选/空串则不下发，由渠道兜底 */
   quality?: string
   /** 画布节点ID（仅用于后端日志排查） */
   nodeId?: string
   /** 画布节点类型（仅用于后端日志排查） */
   nodeKind?: string
+  /**
+   * 画布编排ID（lens_canvas_flow.id）。
+   *
+   * <p>自由节点的任务归属必传：写入 task_queue.scene_id，用于隔离不同画布。
+   * 不同 flow 的节点编号可能重复，只靠节点ID会把任务串到一起。
+   */
+  canvasFlowId?: number
+  /**
+   * 画布节点数字ID。
+   *
+   * <p>自由节点的任务归属必传：写入 task_queue.asset_id，用于把任务结果精确匹配回该节点。
+   * 需由前端在 flow 数据里持久化（见 CanvasFreeNodeAssetId），保证刷新后不变。
+   */
+  canvasNodeAssetId?: number
 }
 
-/** 任务记录（task/list 或 storyboardTask/list 返回） */
+/**
+ * 任务记录（task/list 或 storyboardTask/list 返回）。
+ *
+ * <p>两个接口的字段名有差异，这里都声明为可选，由展示层归一化：
+ * 生图任务（lens_application_task）用 {@code taskStatus/fileUrl/resMsg/submitter/moduleName}；
+ * 分镜生视频任务（lens_storyboard_task）用 {@code status/results/errorMsg/userName/model} 等。
+ */
 export interface LensTaskRecord {
+  /** 任务ID */
   id?: string
+  /** 状态（生图任务字段名） */
   taskStatus?: string
+  /** 状态（分镜生视频任务字段名） */
   status?: string
+  /** 结果图 URL（多张以逗号分隔） */
   fileUrl?: string
+  /** 结果 JSON 数组（含 type/url/thumbnail） */
   results?: string
+  /** 失败原因（生图任务字段名） */
   resMsg?: string
+  /** 失败原因（分镜生视频任务字段名） */
   errorMsg?: string
+  /** 提示词 */
   prompt?: string
+  /** 渠道 */
   channel?: string
+  /** 模型名（分镜生视频任务） */
   model?: string
+  /** 模型名（生图任务，映射自 lens_application.module_name） */
+  moduleName?: string
+  /** 提交人（生图任务） */
+  submitter?: string
+  /** 提交人用户名（分镜生视频任务） */
+  userName?: string
+  /** 提交人用户名（角色/场景/道具/自由节点任务，LensApplicationTask.createUserName） */
+  createUserName?: string
+  /** 分镜号（分镜生视频任务） */
+  storyboardOrder?: number
+  /** 时长（秒） */
+  duration?: string | number
+  /** 创建时间 */
+  createTime?: string
+  /** 完整请求参数 JSON（分镜生视频任务字段名） */
+  taskParams?: string
+  /**
+   * 完整请求参数 JSON（角色/场景/道具/自由节点任务字段名）。
+   *
+   * <p>{@code /api/task/list} 返回的是 {@code LensApplicationTask}，没有 {@code taskParams}，
+   * 完整请求体叫 {@code reqPar}（后端各渠道 handler 用 {@code taskQueue.taskParams} 写入）。
+   * 参考图与画幅都藏在这个 JSON 里。
+   */
+  reqPar?: string
+  /** 参考图（可能为 JSON 字符串或数组） */
+  referenceImages?: string | string[]
+  /** Ultra 模式标识：序列任务ID 非空即 ultra 链路 */
+  seqJobId?: string
 }
 
 // ============ 类型化函数（全部复用 lens 现有接口） ============
@@ -494,8 +566,12 @@ export interface LensModelOption {
   enabled?: boolean
   needDuration?: boolean
   unitConsume?: number
-  consumeType?: string
+  consumeType?: number
+  /** 后端计费器解析的每次／每秒单价，不在画布重复维护计费倍率。 */
+  creditPricing?: { perSecond: boolean; cost: number; resolutionPrices: Record<string, number> } | null
   resolutions?: string[]
+  /** 各分辨率对应积分，由 Lens 模型管理配置返回。 */
+  resolutionPrices?: Record<string, number>
   /**
    * 模型扩展参数（后端 toModelJson 下发，经 OthersFilterUtil 白名单过滤）。
    * qualities 为该模型支持的质量档位（多选：medium/high/xhigh/max），
@@ -536,19 +612,245 @@ export async function getShotVideoModels(): Promise<LensModelOption[]> {
   return lensFetch<LensModelOption[]>('/api/model/shot_video')
 }
 
+/**
+ * 画布自由节点的资产类型（后端 AssetType.CANVAS_NODE）。
+ *
+ * <p>与 0=角色 1=场景 2=道具 隔开，用于把画布任务与真实资产生图任务区分开。
+ * 该类型不做资产回填（自由节点没有对应的业务表记录）。
+ */
+export const CANVAS_NODE_ASSET_TYPE = 10
+
+/** 画布任务结果查询参数（任务结果展开） */
+export interface LensTaskQueryParams {
+  /** 剧ID，用于后端权限校验（非管理员必须传，否则只能查到自己提交的任务） */
+  dramaId: string
+  /**
+   * 画布自由节点的归属三元组之一：画布 flowId。
+   *
+   * <p>后端写入 task_queue.scene_id，用于隔离不同画布。
+   */
+  sceneId?: number
+  /** 资产类型：10=画布自由节点 */
+  assetType?: number
+  /**
+   * 画布节点数字ID。
+   *
+   * <p>后端写入 task_queue.asset_id，传了就只查该节点的任务；
+   * 不传则查该画布（sceneId）下所有自由节点的任务。
+   */
+  assetId?: string | number
+  pageNum?: number
+  pageSize?: number
+}
+
+/** 任务结果分页返回（后端 TableDataInfo 结构） */
+export interface LensTaskPage {
+  /** 任务记录列表 */
+  rows: LensTaskRecord[]
+  /** 总条数（用于分页） */
+  total: number
+}
+
+/**
+ * 当前用户是否可查看任务请求参数（对齐 lens 分镜板的 canViewParams）。
+ *
+ * <p>后端 `/api/system/user/canViewParams` 返回布尔；非 admin 或权限不足时为 false。
+ * 接口异常时返回 false（不静默放行）——「查看参数」属敏感能力，失败必须收紧。
+ *
+ * @returns 可查看返回 true
+ */
+export async function canViewTaskParams(): Promise<boolean> {
+  const startedAt = Date.now()
+  const url = '/api/system/user/canViewParams'
+  const token = readCookie('Admin-Token')
+  lensLog('log', `[lens] → GET ${url}`)
+  let r: Response
+  try {
+    r = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    lensLog('error', `[lens] ✗ 请求未到达  GET ${url}`, {
+      url,
+      costMs: Date.now() - startedAt,
+      hasToken: Boolean(token),
+      reason,
+    })
+    return false
+  }
+  const rawText = await r.text().catch(() => '')
+  let body: { code?: number; data?: unknown }
+  try {
+    body = rawText ? (JSON.parse(rawText) as { code?: number; data?: unknown }) : {}
+  } catch {
+    lensLog('error', `[lens] ✗ 响应非 JSON  ${url}`, {
+      url,
+      httpStatus: r.status,
+      costMs: Date.now() - startedAt,
+      rawText: rawText.slice(0, LENS_DIAG_BODY_MAX_CHARS),
+    })
+    return false
+  }
+  const allowed = body.code === 200 && body.data === true
+  lensLog(allowed ? 'log' : 'error', `[lens] ${allowed ? '✓' : '✗'} ${r.status} ${Date.now() - startedAt}ms  ${url}`, {
+    url,
+    httpStatus: r.status,
+    code: body.code,
+    data: body.data,
+  })
+  return allowed
+}
+
+/**
+ * 查询画布自由节点的生图任务（任务结果展开）。
+ *
+ * <p>后端返回的是 TableDataInfo 分页结构（{@code { rows, total }}），不是裸数组，
+ * 因此这里显式解包 —— 直接按数组解析会拿到空结果。
+ *
+ * <p>传 {@code assetId} 可精确到单个自由节点；不传则返回该画布下全部自由节点任务，
+ * 由调用方按 {@code assetId} 自行分组匹配。
+ *
+ * @param params 剧ID、画布 flowId（sceneId）、资产类型与可选节点ID
+ * @returns 任务列表 + 总数
+ */
+export async function listCanvasFreeNodeTasks(params: LensTaskQueryParams): Promise<LensTaskPage> {
+  const body: Record<string, unknown> = {
+    dramaId: params.dramaId,
+    pageNum: params.pageNum ?? 1,
+    pageSize: params.pageSize ?? 20,
+  }
+  if (params.sceneId !== undefined) body.sceneId = String(params.sceneId)
+  if (params.assetType !== undefined) body.assetType = params.assetType
+  if (params.assetId !== undefined) body.assetId = String(params.assetId)
+
+  return lensFetchPage<LensTaskRecord>('/api/task/list', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** 资产生图任务状态筛选，与 /api/task/list 的 taskStatus 字段一致。 */
+export enum LensAssetTaskStatus {
+  All = '',
+  Created = 'CREATE',
+  Queued = 'QUEUED',
+  Running = 'RUNNING',
+  Success = 'SUCCESS',
+  Failed = 'FAILED',
+}
+
+/** 资产任务专用查询，始终携带自身ID；不使用分镜任务接口或画布自由节点归属。 */
+export async function listAssetImageTasks(params: {
+  dramaId: string; assetId: string; assetType: number; applicationIds: string[]
+  pageNum: number; pageSize: number; taskStatus: LensAssetTaskStatus
+}): Promise<LensTaskPage> {
+  if (!params.dramaId || !params.assetId || !params.applicationIds.length) {
+    throw new Error('缺少剧ID、资产ID或可用生图应用，无法查询资产任务')
+  }
+  return lensFetchPage<LensTaskRecord>('/api/task/list', {
+    method: 'POST',
+    body: JSON.stringify({ ...params, assetType: String(params.assetType), keyword: '', episodeNum: '',
+      taskStatusNot: params.taskStatus ? LensAssetTaskStatus.All : LensAssetTaskStatus.Failed }),
+  })
+}
+
 /** 角色/场景/道具生图任务查询（任务结果展开） */
-export async function listImageTasks(dramaId: string, episodeNum: number): Promise<LensTaskRecord[]> {
-  return lensFetch<LensTaskRecord[]>('/api/task/list', {
+export async function listImageTasks(dramaId: string, episodeNum: number): Promise<LensTaskPage> {
+  return lensFetchPage<LensTaskRecord>('/api/task/list', {
     method: 'POST',
     body: JSON.stringify({ dramaId, episodeNum, pageNum: 1, pageSize: 50 }),
   })
 }
 
-/** 分镜生视频任务查询（任务结果展开） */
-export async function listShotVideoTasks(dramaId: string, episodeNum: number): Promise<LensTaskRecord[]> {
-  return lensFetch<LensTaskRecord[]>('/api/storyboardTask/list', {
+/** 分镜生视频任务查询参数 */
+export interface LensShotVideoTaskQueryParams {
+  /** 剧ID（后端权限校验用） */
+  dramaId: string
+  /** 分镜ID：按单个分镜过滤（不传则返回该剧全部，量很大，务必传） */
+  storyboardId?: string
+  /** 集数（可选，与 storyboardId 同时传时取交集） */
+  episodeNum?: number
+  pageNum?: number
+  pageSize?: number
+}
+
+/**
+ * 分镜生视频任务查询（任务结果展开）。
+ *
+ * <p>后端返回 TableDataInfo 分页结构（{@code { rows, total }}），必须显式解包：
+ * 之前直接返回原值会让调用方拿到 {@code undefined} 的 rows，
+ * 渲染时读 {@code records.length} 直接抛 TypeError。
+ *
+ * <p>后端按 {@code storyboardId} 过滤单个分镜（见 StoryboardTaskController#list），
+ * 因此不传 storyboardId 会返回该剧全部任务，调用方务必传入。
+ *
+ * @param params 剧ID、分镜ID 与分页
+ * @returns 任务列表 + 总数
+ */
+export async function listShotVideoTasks(params: LensShotVideoTaskQueryParams): Promise<LensTaskPage> {
+  const body: Record<string, unknown> = {
+    dramaId: params.dramaId,
+    pageNum: params.pageNum ?? 1,
+    pageSize: params.pageSize ?? 20,
+  }
+  if (params.storyboardId) body.storyboardId = params.storyboardId
+  if (params.episodeNum !== undefined) body.episodeNum = params.episodeNum
+
+  return lensFetchPage<LensTaskRecord>('/api/storyboardTask/list', {
     method: 'POST',
-    body: JSON.stringify({ dramaId, episodeNum, pageNum: 1, pageSize: 50 }),
+    body: JSON.stringify(body),
+  })
+}
+
+/** 采纳结果的媒体类型（与 lens_storyboard.select_file_type 同口径） */
+export type LensShotFileType = 0 | 1
+
+/** 采纳结果入参（对齐 lens 分镜板 submitToStoryboard 的 addForceSet 调用） */
+export interface LensAdoptShotResultParams {
+  /** 目标分镜ID（lens_storyboard.id） */
+  storyboardId: string
+  /** 结果媒体 URL（图或视频的原始地址） */
+  url: string
+  /** 媒体类型：0=图 1=视频（后端写入 select_file_type） */
+  uploadType: LensShotFileType
+}
+
+/**
+ * 采纳结果到分镜（/api/image/addForceSet）。
+ *
+ * <p>后端 {@code ImageLogic.insertLensImageForceSet} 会插入 lens_image，
+ * 并把分镜的 selectedImageUrl / selectedImageId / selectFileType 更新为该结果
+ * （与 lens 分镜板 `submitToStoryboard` 完全同一出口，不新增平行链路）。
+ *
+ * <p>失败必须显式抛出：本函数不做任何兜底，由调用方 toast 并保留原始原因。
+ *
+ * @param params 分镜ID、结果 URL 与媒体类型
+ */
+export async function adoptShotResult(params: LensAdoptShotResultParams): Promise<void> {
+  await lensFetch<unknown>('/api/image/addForceSet', {
+    method: 'POST',
+    body: JSON.stringify({
+      storyboardId: params.storyboardId,
+      url: params.url,
+      uploadType: params.uploadType,
+      prompt: '1',
+    }),
+  })
+}
+
+/** 保存资产提示词到 Lens 业务表；资产分类和 ID 必须来自当前节点，不写入 flow。 */
+export async function saveLensAssetPrompt(params: { category: number; entityId: string; dramaId: string; prompt: string }): Promise<void> {
+  if (!params.entityId || !params.dramaId || ![1, 2, 3].includes(params.category)) {
+    throw new Error('资产身份或剧本信息缺失，无法保存提示词')
+  }
+  const endpoint = params.category === 1 ? '/api/lensRole' : '/api/lensImage'
+  await lensFetch<unknown>(endpoint, {
+    method: 'PUT',
+    body: JSON.stringify({ id: params.entityId, dramaId: params.dramaId, prompt: params.prompt }),
   })
 }
 
@@ -581,13 +883,19 @@ export async function clearStoryboardSpeaker(id: string, dramaId: string): Promi
 /**
  * 提交画布生图任务。
  *
- * <p>与角色/场景资产生图（{@link listImageTasks} 那套）的关键区别：<b>画布节点没有
- * lens 资产身份</b>（无 assetType/assetId/storyboardIds）。因此调用方必须不传这三项，
- * 否则后端会把画布产出回写到角色图或某个分镜的 selectedImageUrl 上，污染用户数据。
+ * <p>与角色/场景资产生图（{@link listImageTasks} 那套）的关键区别：<b>画布自由节点没有
+ * lens 资产身份</b>（无 lens_role / lens_asset_image 行），产出不落资产、不回填。
+ *
+ * <p><b>但仍需传归属信息</b>：{@code canvasFlowId} 与 {@code canvasNodeAssetId}，
+ * 后端会把它们写进 task_queue 的 scene_id / asset_id（asset_type 固定为 10），
+ * 使「任务结果展开」能按节点查到历史任务。这两个值由
+ * {@code ensureCanvasNodeAssetId} 在 flow 数据里分配并持久化，刷新后保持稳定。
+ *
+ * <p>注意：不要传 assetType=0/1/2 —— 那会把画布产出回写到角色图或场景资产上，污染用户数据。
  *
  * <p>模型与分辨率由后端从剧配置推导，前端不下发 modelKey。
  *
- * @param params 提示词、剧ID 与参考图
+ * @param params 提示词、剧ID、参考图与画布节点归属
  * @returns 后端提交结果（含 taskId，用于后续轮询）
  */
 export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promise<LensCanvasTaskSubmitResult> {
@@ -615,11 +923,21 @@ export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promi
   if (typeof params.height === 'number' && Number.isFinite(params.height)) {
     payload.height = Math.trunc(params.height)
   }
+  if (typeof params.resolution === 'string' && params.resolution.trim()) {
+    payload.resolution = params.resolution.trim()
+  }
   if (typeof params.quality === 'string' && params.quality.trim()) {
     payload.quality = params.quality.trim()
   }
   if (params.nodeId) payload.nodeId = params.nodeId
   if (params.nodeKind) payload.nodeKind = params.nodeKind
+  // 任务归属：两者必须成对下发，只传其一会导致结果无法匹配到节点
+  if (typeof params.canvasFlowId === 'number' && Number.isFinite(params.canvasFlowId)) {
+    payload.canvasFlowId = Math.trunc(params.canvasFlowId)
+  }
+  if (typeof params.canvasNodeAssetId === 'number' && Number.isFinite(params.canvasNodeAssetId)) {
+    payload.canvasNodeAssetId = Math.trunc(params.canvasNodeAssetId)
+  }
 
   const data = await lensFetch<LensCanvasTaskSubmitResult>('/api/application/runTaskByCanvas?as=lens', {
     method: 'POST',
@@ -678,6 +996,138 @@ export async function getCanvasTaskStatus(taskId: number): Promise<LensCanvasTas
     throw new Error(`lens 任务状态查询失败：未知任务状态 ${String(data.status)}`)
   }
   return data
+}
+
+// ============ 节点预设能力（lens 版 /api/ai/node-presets） ============
+
+/** 节点预设适用类型（与画布 LlmNodePresetType 一致） */
+export type LensNodePresetType = 'text' | 'image' | 'video'
+
+/** 节点预设来源：base=系统内置，user=用户自建 */
+export type LensNodePresetScope = 'base' | 'user'
+
+/** lens 节点预设条目（/api/ai/node-presets 返回元素，字段与后端 DTO 对齐） */
+export interface LensNodePresetDto {
+  id: string
+  title: string
+  type: LensNodePresetType
+  prompt: string
+  description?: string
+  scope: LensNodePresetScope
+  enabled?: boolean
+  sortOrder?: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** 新增节点预设入参（对应后端 POST body） */
+export interface LensNodePresetCreateInput {
+  title: string
+  type: LensNodePresetType
+  prompt: string
+  description?: string
+}
+
+/** 合法类型集合：用于对后端返回值做显式校验，不做隐式兜底 */
+const LENS_NODE_PRESET_TYPES: readonly LensNodePresetType[] = ['text', 'image', 'video']
+
+/** 合法来源集合：用于对后端返回值做显式校验，不做隐式兜底 */
+const LENS_NODE_PRESET_SCOPES: readonly LensNodePresetScope[] = ['base', 'user']
+
+/**
+ * 校验并归一化单条节点预设。
+ *
+ * <p>禁止隐式兜底：id/title/prompt/type 缺失或非法一律显式抛错，
+ * 避免把脏数据静默塞进画布「预设能力」下拉，导致用户点到空提示词。
+ *
+ * @param raw lens 接口返回的原始条目
+ * @param source 出错时用于定位的接口名
+ * @returns 字段齐备的节点预设
+ */
+function normalizeLensNodePreset(raw: unknown, source: string): LensNodePresetDto {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(`lens 节点预设解析失败（${source}）：条目不是对象`)
+  }
+  const item = raw as Record<string, unknown>
+  const id = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : null
+  const title = typeof item.title === 'string' && item.title.trim() ? item.title.trim() : null
+  const prompt = typeof item.prompt === 'string' ? item.prompt : null
+  const type = typeof item.type === 'string' ? item.type.trim() : ''
+  if (!id) throw new Error(`lens 节点预设解析失败（${source}）：条目缺少 id`)
+  if (!title) throw new Error(`lens 节点预设解析失败（${source}）：条目 ${id} 缺少 title`)
+  if (prompt === null) throw new Error(`lens 节点预设解析失败（${source}）：条目 ${id} 缺少 prompt`)
+  if (!LENS_NODE_PRESET_TYPES.includes(type as LensNodePresetType)) {
+    throw new Error(`lens 节点预设解析失败（${source}）：条目 ${id} 的 type 非法（${String(item.type)}）`)
+  }
+  const scope = typeof item.scope === 'string' ? item.scope.trim() : ''
+  if (!LENS_NODE_PRESET_SCOPES.includes(scope as LensNodePresetScope)) {
+    throw new Error(`lens 节点预设解析失败（${source}）：条目 ${id} 的 scope 非法（${String(item.scope)}）`)
+  }
+  const sortOrder =
+    typeof item.sortOrder === 'number' && Number.isFinite(item.sortOrder)
+      ? item.sortOrder
+      : item.sortOrder === null
+        ? null
+        : undefined
+  return {
+    id,
+    title,
+    type: type as LensNodePresetType,
+    prompt,
+    ...(typeof item.description === 'string' ? { description: item.description } : {}),
+    scope: scope as LensNodePresetScope,
+    ...(typeof item.enabled === 'boolean' ? { enabled: item.enabled } : {}),
+    ...(sortOrder === undefined ? {} : { sortOrder }),
+    createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
+    updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : '',
+  }
+}
+
+/**
+ * 读取 lens 节点预设列表。
+ *
+ * <p>后端按画布契约直接返回数组（无 AjaxResult 包装），故走 {@link lensFetchBare}。
+ *
+ * @param params.type 预设类型过滤（可选）
+ * @param params.query 关键字搜索（可选，对应后端 q 参数）
+ * @returns 节点预设数组
+ */
+export async function listLensNodePresets(params?: { type?: LensNodePresetType; query?: string }): Promise<LensNodePresetDto[]> {
+  const qs = new URLSearchParams()
+  if (params?.type) qs.set('type', params.type)
+  if (params?.query) qs.set('q', params.query)
+  const query = qs.toString()
+  const url = query ? `/api/ai/node-presets?${query}` : '/api/ai/node-presets'
+  const rows = await lensFetchBare(url)
+  if (!Array.isArray(rows)) {
+    throw new Error(`lens 节点预设列表解析失败：响应不是数组（实际为 ${rows === null ? 'null' : typeof rows}）`)
+  }
+  return rows.map((row) => normalizeLensNodePreset(row, 'list'))
+}
+
+/**
+ * 新增 lens 节点预设。
+ *
+ * <p>后端返回单个预设对象（无 AjaxResult 包装），故走 {@link lensFetchBare}。
+ *
+ * @param payload 标题、类型、提示词与可选描述
+ * @returns 新建后的节点预设
+ */
+export async function createLensNodePreset(payload: LensNodePresetCreateInput): Promise<LensNodePresetDto> {
+  const data = await lensFetchBare('/api/ai/node-presets', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return normalizeLensNodePreset(data, 'create')
+}
+
+/**
+ * 删除 lens 节点预设。
+ *
+ * @param id 预设ID
+ */
+export async function deleteLensNodePreset(id: string): Promise<void> {
+  await lensFetch<unknown>(`/api/ai/node-presets/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 /** 从 lens 已有身份接口读取真实管理员角色，不使用 TapCanvas 开发环境权限。 */

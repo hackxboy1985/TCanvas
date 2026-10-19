@@ -9399,3 +9399,294 @@ body {
   margin: 0 4px;
   align-self: stretch;
 }
+
+/* 资产生图工具栏右上角入口，与节点标题入口共用同一查询。 */
+.lens-asset-task-toolbar-actions { display: flex; justify-content: flex-end; flex-shrink: 0; }
+
+/* ===== Lens 任务结果抽屉（TaskResultDrawer）=====
+   信息结构对齐 lens 分镜板「分镜任务」右侧列表
+   （RuoYi-Vue3/src/views/lens/creation/storyboard-task/index.vue）。
+   视觉遵循 tapcanvas 约束：极简、单层圆角边框（卡片内不再套圆角边框容器）、
+   颜色用语义变量以同时兼容亮/暗色。 */
+.lens-task-result-drawer .mantine-Drawer-body {
+  padding: 12px;
+}
+
+/* 任务卡片 */
+.lens-task-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  background: rgba(127, 127, 127, 0.06);
+}
+.lens-task-card--failed {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.lens-task-card--running {
+  border-color: rgba(234, 179, 8, 0.35);
+}
+
+/* 顶部元信息行 */
+.lens-task-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lens-task-meta-left,
+.lens-task-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.lens-task-meta-right {
+  color: #86909c;
+}
+.lens-task-meta-text {
+  font-size: 11px;
+  color: #86909c;
+}
+.lens-task-meta-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 模型 chip */
+.lens-task-module-chip {
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: rgba(91, 115, 232, 0.14);
+  color: #5b73e8;
+}
+/* 分镜号 tag */
+.lens-task-shot-tag {
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(230, 81, 0, 0.12);
+  color: #e65100;
+}
+/* 状态 pill */
+.lens-task-status-pill {
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.lens-task-status-pill--success {
+  background: rgba(61, 187, 53, 0.14);
+  color: #3dbb35;
+}
+.lens-task-status-pill--running {
+  background: rgba(230, 162, 60, 0.16);
+  color: #e6a23c;
+}
+.lens-task-status-pill--failed {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+}
+.lens-task-status-pill--cancel {
+  background: rgba(127, 127, 127, 0.16);
+  color: #86909c;
+}
+/* 需手动刷新提示 */
+.lens-task-fresh-hint {
+  font-size: 11px;
+  color: #f59e0b;
+}
+/* Ultra 标识 */
+.lens-task-ultra-tag {
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+}
+
+/* 渠道 / 画幅 / 参考图数 chips */
+.lens-task-info-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lens-task-info-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  color: #86909c;
+  background: rgba(127, 127, 127, 0.1);
+}
+
+/* 参考图缩略图 */
+.lens-task-ref-imgs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lens-task-ref-link {
+  display: block;
+  line-height: 0;
+}
+.lens-task-ref-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+}
+
+/* 提示词：两行截断，hover 看全文 */
+.lens-task-prompt {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4e5969;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+body[arco-theme='dark'] .lens-task-prompt,
+:root[data-mantine-color-scheme='dark'] .lens-task-prompt {
+  color: #c9cdd4;
+}
+
+/* 结果区（三态） */
+.lens-task-result-area {
+  min-height: 0;
+}
+.lens-task-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.lens-task-result-item {
+  display: block;
+  line-height: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.1);
+}
+.lens-task-result-media {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  display: block;
+}
+/* 失败原因直接展示在结果区（失败任务本就没有图/视频） */
+.lens-task-failed-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.lens-task-generating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  font-size: 12px;
+  color: #e6a23c;
+}
+.lens-task-no-result {
+  padding: 14px 10px;
+  font-size: 12px;
+  color: #86909c;
+}
+
+/* 底部操作区 */
+.lens-task-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 查看参数弹窗 */
+.lens-task-reqpar {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+/* 采纳结果弹窗（多结果显式选择；单层圆角边框，仅选中项带边框） */
+.lens-task-adopt-confirm {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4e5969;
+}
+:root[data-mantine-color-scheme='dark'] .lens-task-adopt-confirm {
+  color: #c9cdd4;
+}
+.lens-task-adopt-picker-label {
+  color: #86909c;
+  margin-bottom: 6px;
+}
+.lens-task-adopt-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 42vh;
+  overflow: auto;
+}
+.lens-task-adopt-option {
+  display: block;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(127, 127, 127, 0.1);
+  cursor: pointer;
+  overflow: hidden;
+  line-height: 0;
+}
+.lens-task-adopt-option--active {
+  border-color: #165dff;
+}
+.lens-task-adopt-option-thumb {
+  width: 100%;
+  height: 88px;
+  object-fit: cover;
+  display: block;
+}
+.lens-task-adopt-option-text {
+  display: block;
+  padding: 4px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  color: #4e5969;
+}
+:root[data-mantine-color-scheme='dark'] .lens-task-adopt-option-text {
+  color: #c9cdd4;
+}
+
+/* 结果抽屉入口按钮（分镜节点顶部栏） */
+.lens-shot-task-result-btn {
+  color: inherit;
+}
