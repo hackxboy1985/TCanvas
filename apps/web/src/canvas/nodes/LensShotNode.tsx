@@ -11,10 +11,14 @@
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Handle, Position, NodeToolbar, useReactFlow, type Node, type NodeProps } from '@xyflow/react'
-import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip } from '@mantine/core'
+import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip, Menu } from '@mantine/core'
 import { IconListSearch, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react'
 import { useRFStore } from '../../canvas/store'
 import { useMantineColorScheme } from '@mantine/core'
+import { LensReferencePicker } from '../components/LensReferencePicker'
+import { connectShotReferences, referenceFromNode, referenceKey } from './lensShotReferences'
+import { useUIStore } from '../../ui/uiStore'
+import { collectOrderedUpstreamReferenceItems } from './taskNode/upstreamReferences'
 import { useModelOptions } from '../../config/useModelOptions'
 import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
@@ -165,6 +169,21 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   const { colorScheme } = useMantineColorScheme()
   const isDark = colorScheme === 'dark'
   const rf = useReactFlow()
+  const [assetPickerOpened, setAssetPickerOpened] = useState(false)
+  const openCanvasPicker = useCallback(() => {
+    const store = useRFStore.getState()
+    useUIStore.getState().openCanvasReferencePicker({ targetNodeId: id,
+      blockedSourceNodeIds: store.edges.filter((edge) => edge.target === id).map((edge) => edge.source),
+      onSelect: async (sourceId) => {
+        const source = useRFStore.getState().nodes.find((node) => node.id === sourceId)
+        if (!source) throw new Error('参考节点已不存在')
+        await connectShotReferences(id, [referenceFromNode(source)], sourceId)
+      },
+    })
+  }, [id])
+  useEffect(() => () => {
+    if (useUIStore.getState().canvasReferencePicker?.targetNodeId === id) useUIStore.getState().closeCanvasReferencePicker()
+  }, [id])
   // 自绘视频控制（去掉原生 controls，避免双击原生全屏；双击节点=放大到该节点）
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [isPlaying, setIsPlaying] = useState<boolean>(false)
@@ -351,7 +370,10 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         aspectRatio: aspectValue,
         resolution: resolutionValue,
         duration,
-        refImages: JSON.stringify(refs.map((r) => r.imgUrl).filter(Boolean)),
+        refImages: JSON.stringify(Array.from(new Set([
+          ...refs.map((ref) => ref.imgUrl).filter(Boolean),
+          ...collectOrderedUpstreamReferenceItems(useRFStore.getState().nodes, useRFStore.getState().edges, id).map((item) => item.previewUrl),
+        ]))),
       })
       setSaveState('已提交生视频任务')
     } catch (err) {
@@ -611,14 +633,13 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                 )) : (
                   <Text size="xs" c="dimmed">暂无引用资产</Text>
                 )}
-                <Tooltip label="添加参考（后续支持从画布选取）" position="top" withArrow>
-                  <span
-                    style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px dashed rgba(127,127,127,0.4)', fontSize: 16, color: 'rgba(127,127,127,0.75)', cursor: 'pointer', transition: 'all 0.15s ease' }}
-                    title="添加参考"
-                  >
-                    +
-                  </span>
-                </Tooltip>
+                <Menu trigger="click-hover" openDelay={100} closeDelay={180} withinPortal zIndex={3500}>
+                  <Menu.Target><ActionIcon className="lens-shot-reference-add nodrag nopan" variant="subtle" size={44} aria-label="添加参考">+</ActionIcon></Menu.Target>
+                  <Menu.Dropdown className="lens-shot-reference-menu nodrag nopan">
+                    <Menu.Item className="lens-shot-reference-menu__canvas" onClick={openCanvasPicker}>从画布选择参考</Menu.Item>
+                    <Menu.Item className="lens-shot-reference-menu__library" onClick={() => { useUIStore.getState().closeCanvasReferencePicker(); setAssetPickerOpened(true) }}>从资产库选择参考</Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
               </div>
 
               {/* 编辑区：时间/模型 参数行 + 剧本 / 提示词 切换（默认剧本；提示词为分镜生视频提示词 data.prompt） */}
@@ -660,11 +681,11 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                   />
                 </Group>
               </Group>
+              {/* 两种内容共用固定高度，避免切换到长提示词时撑出工具栏滚动条。 */}
               <Textarea
+                className="lens-shot-prompt-editor"
                 size="sm"
-                autosize
-                minRows={4}
-                maxRows={7}
+                rows={4}
                 value={promptMode === 'prompt' ? promptDraft : scriptDraft}
                 onChange={(e) => {
                   const next = e.currentTarget.value
@@ -716,6 +737,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
         </NodeToolbar>
       )}
 
+      <LensReferencePicker opened={assetPickerOpened} dramaId={String(data.sourceProjectId || '')} existingKeys={(data.refs || []).map(referenceKey)} onClose={() => setAssetPickerOpened(false)} onConfirm={(assets) => connectShotReferences(id, assets)} />
     </div>
   )
 }

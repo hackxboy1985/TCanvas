@@ -1,12 +1,12 @@
 import type { Node } from '@xyflow/react'
 import { addShotReferenceRelations, type LensAssetImage, type LensRole } from '../../api/lens'
 import { useRFStore } from '../store'
-import { resolveNodePrimaryImageUrl } from './taskNode/upstreamReferences'
+import { pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import type { LensShotRef } from './LensShotNode'
 
 /** 分类与 Lens 资产关联表一致。 */
 export enum ReferenceCategory { Role = 1, Scene = 2, Prop = 3 }
-export interface ReferenceAsset extends LensShotRef { parentId?: string; variantName?: string }
+export interface ReferenceAsset extends LensShotRef { parentId?: string; variantName?: string; subType?: string }
 export interface ReferenceGroup { id: string; name: string; items: ReferenceAsset[] }
 export const referenceKey = (item: LensShotRef): string => item.category + ':' + item.id
 
@@ -16,7 +16,7 @@ export function groupReferenceAssets(category: ReferenceCategory, rows: LensRole
   const images = rows as LensAssetImage[]
   const assets: ReferenceAsset[] = category === ReferenceCategory.Role
     ? roles.map((row) => ({ category, id: String(row.id), name: row.roleName || '未命名角色', imgUrl: row.threeImg, parentId: row.roleType === 1 && row.parentId ? String(row.parentId) : undefined, variantName: row.cloneName }))
-    : images.map((row) => ({ category, id: String(row.id), name: row.name || '未命名资产', imgUrl: row.url, parentId: row.parentId ? String(row.parentId) : undefined, variantName: row.variantName }))
+    : images.map((row) => ({ category, id: String(row.id), name: row.name || '未命名资产', imgUrl: row.url, parentId: row.parentId ? String(row.parentId) : undefined, variantName: row.variantName, subType: row.subType }))
   const groups = new Map<string, ReferenceGroup>()
   assets.forEach((asset) => {
     const groupId = asset.parentId || asset.id
@@ -32,7 +32,7 @@ export function groupReferenceAssets(category: ReferenceCategory, rows: LensRole
 export function referenceFromNode(node: Node): ReferenceAsset {
   const category = Number(node.data.assetCategory)
   const entityId = String(node.data.entityId || '')
-  const imgUrl = resolveNodePrimaryImageUrl(node)
+  const imgUrl = pickPrimaryImageFromNode(node)
   if (!imgUrl) throw new Error('所选节点尚无可用参考图片')
   return { category: entityId && [ReferenceCategory.Role, ReferenceCategory.Scene, ReferenceCategory.Prop].includes(category) ? category : 0,
     id: entityId || node.id, name: String(node.data.label || '参考图片'), imgUrl }
@@ -53,6 +53,19 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
   const existing = new Set(currentRefs.map(referenceKey))
   const unique = Array.from(new Map(assets.map((asset) => [referenceKey(asset), asset])).values())
   const additions = unique.filter((asset) => asset.category > 0 && !existing.has(referenceKey(asset)))
+  if (sourceNodeId) {
+    const source = state.nodes.find((node) => node.id === sourceNodeId)
+    if (!source || (source.data.sourceProjectId && String(source.data.sourceProjectId) !== dramaId)) throw new Error('参考节点不属于当前剧集')
+    const reachable = [targetId]
+    const visited = new Set<string>()
+    while (reachable.length) {
+      const next = reachable.pop()
+      if (!next || visited.has(next)) continue
+      if (next === sourceNodeId) throw new Error('该连接会形成循环')
+      visited.add(next)
+      state.edges.filter((edge) => edge.source === next).forEach((edge) => reachable.push(edge.target))
+    }
+  }
   savingTargets.add(targetId)
   try {
     if (additions.length) await addShotReferenceRelations(dramaId, storyboardId, additions.map((asset) => ({ assetId: asset.id, assetCategory: asset.category })))
@@ -61,10 +74,13 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
     unique.forEach((asset, index) => {
       let source = useRFStore.getState().nodes.find((node) => sourceNodeId ? node.id === sourceNodeId : Number(node.data.assetCategory) === asset.category && String(node.data.entityId) === asset.id)
       if (!source) {
-        const before = new Set(useRFStore.getState().nodes.map((node) => node.id))
-        useRFStore.getState().addNode('taskNode', asset.name, { kind: 'image', autoLabel: false, source: 'lens_projection', sourceProjectId: dramaId, entityId: asset.id,
-          assetCategory: asset.category, imageUrl: asset.imgUrl, position: { x: target.position.x - 420, y: target.position.y + index * 240 } })
-        source = useRFStore.getState().nodes.find((node) => !before.has(node.id))
+        // 使用投影相同的稳定 ID，重新打开后由业务快照补齐展示字段。
+        const prefix = asset.category === ReferenceCategory.Role ? 'role' : asset.category === ReferenceCategory.Scene ? 'scene' : 'prop'
+        source = { id: prefix + '-' + asset.id, type: 'taskNode', position: { x: target.position.x - 420, y: target.position.y + index * 240 },
+          data: { label: asset.name, kind: 'image', source: 'lens_projection', sourceProjectId: dramaId, entityId: asset.id,
+            assetCategory: asset.category, imageUrl: asset.imgUrl } }
+        const newNode = source
+        useRFStore.setState((current) => ({ nodes: [...current.nodes, newNode] }))
       }
       if (!source) throw new Error('创建参考节点失败')
       const store = useRFStore.getState()
