@@ -1306,21 +1306,78 @@ export interface LensPromptPolishBillingPreview {
   credit: number
 }
 
+/** 计费预览请求缓存的有效期（毫秒）：期内直接复用结果，实现「刷新页面每个节点各请求一次」的收敛 */
+const PROMPT_POLISH_BILLING_TTL_MS = 30_000
+/** 进行中的计费预览请求：同 key 的并发调用共享同一个 Promise，避免一屏节点同时挂载时打 N 次接口 */
+const promptPolishBillingInFlight = new Map<string, Promise<LensPromptPolishBillingPreview>>()
+/** 已完成的计费预览结果缓存（key → 结果与过期时刻） */
+const promptPolishBillingCache = new Map<string, { preview: LensPromptPolishBillingPreview; expiresAt: number }>()
+
+/**
+ * 计算计费预览的缓存 key。
+ *
+ * <p>预览数据按后端登录用户维度统计，不同用户不得共享缓存；登录身份取不到时
+ * 退回统一 key —— 此时后端本来也会按当前 cookie 判定用户，同浏览器内仍是同一份数据。
+ *
+ * @returns 缓存 key（形如 {@code billing:<身份>}）
+ */
+function buildPromptPolishBillingCacheKey(): string {
+  const identity = readCookie('Admin-Token') || readCookie('admin-token') || ''
+  return `billing:${identity}`
+}
+
 /**
  * 查询提示词润色的计费预览（只读接口，不占用免费额度、不扣积分）。
  *
  * <p>画布「AI润色」按钮据此展示本次润色是否免费以及消耗多少积分；
  * 真实计费仍以后端润色接口成功后返回的 billing 为准。
  *
+ * <p>同一用户在一次刷新内的所有调用共享结果：进行中的请求去重（并发只发一次），
+ * 完成后缓存 {@link PROMPT_POLISH_BILLING_TTL_MS}，期间页面上的多个节点不会再各请求一次。
+ * 润色成功后需要实时数字时，调用方传 {@code forceRefresh = true} 跳过缓存。
+ *
+ * @param forceRefresh 是否跳过缓存强制请求（默认 false）
  * @returns 计费预览（free / freeRemain / freeLimit / credit）
  */
-export async function fetchPromptPolishBillingPreview(): Promise<LensPromptPolishBillingPreview> {
-  const data = await lensFetch<Record<string, unknown>>('/api/canvas/promptPolish/billing')
-  const preview = normalizeLensPromptPolishBillingPreview(data)
-  if (!preview) {
-    throw new Error('AI润色计费预览失败：后端返回字段缺失或类型不符')
+export async function fetchPromptPolishBillingPreview(
+  forceRefresh = false,
+): Promise<LensPromptPolishBillingPreview> {
+  const cacheKey = buildPromptPolishBillingCacheKey()
+  const cached = promptPolishBillingCache.get(cacheKey)
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+    return cached.preview
   }
-  return preview
+  // 先看有没有同一 key 的在途请求：有则共享，避免节点集中挂载时并发打同一接口
+  const inFlight = promptPolishBillingInFlight.get(cacheKey)
+  if (inFlight) return inFlight
+
+  const request = (async (): Promise<LensPromptPolishBillingPreview> => {
+    const data = await lensFetch<Record<string, unknown>>('/api/canvas/promptPolish/billing')
+    const preview = normalizeLensPromptPolishBillingPreview(data)
+    if (!preview) {
+      throw new Error('AI润色计费预览失败：后端返回字段缺失或类型不符')
+    }
+    // 失败不写缓存（异常直接抛给调用方），成功才登记 TTL，保证失败后重试能真实发请求
+    promptPolishBillingCache.set(cacheKey, { preview, expiresAt: Date.now() + PROMPT_POLISH_BILLING_TTL_MS })
+    return preview
+  })()
+
+  promptPolishBillingInFlight.set(cacheKey, request)
+  try {
+    return await request
+  } finally {
+    // 无论成功失败都移除在途登记，避免失败后后续调用永远复用同一个 reject 的 Promise
+    promptPolishBillingInFlight.delete(cacheKey)
+  }
+}
+
+/**
+ * 作废计费预览缓存（润色成功后调用，保证下一次预览读到最新的免费次数与积分）。
+ *
+ * <p>只清结果缓存、不动在途请求：在途请求完成后会写入新的结果。
+ */
+export function invalidatePromptPolishBillingPreviewCache(): void {
+  promptPolishBillingCache.clear()
 }
 
 /**

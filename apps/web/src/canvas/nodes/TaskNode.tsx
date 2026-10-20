@@ -190,6 +190,7 @@ import { PromptPolishPreview } from './taskNode/components/PromptPolishPreview'
 import { usePromptEditorAdmin } from '../../auth/usePromptEditorAdmin'
 import {
   fetchPromptPolishBillingPreview,
+  invalidatePromptPolishBillingPreviewCache,
   saveLensAssetPrompt,
   type LensPromptPolishBilling,
   type LensPromptPolishBillingPreview,
@@ -4083,12 +4084,16 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
    * <p>只在 lens 模式下请求（非 lens 模式没有 lens 计费）；失败时保持 null 且不打断用户，
    * 按钮照常可用，真实扣费结果仍以润色成功后的 billing 为准。
    *
+   * <p>接口层已做「并发去重 + 结果短期缓存」，画布上一屏多个生图节点同时挂载时只会真正请求一次；
+   * 润色成功（计费已变化）时传 {@code forceRefresh = true} 跳过缓存再取最新数字。
+   *
+   * @param forceRefresh 是否跳过缓存强制请求（仅润色成功后需要）
    * @returns 计费预览；非 lens 模式或请求失败时返回 null
    */
-  const refreshPolishBillingPreview = React.useCallback(async () => {
+  const refreshPolishBillingPreview = React.useCallback(async (forceRefresh = false) => {
     if (!isLensMode()) return null
     try {
-      const preview = await fetchPromptPolishBillingPreview()
+      const preview = await fetchPromptPolishBillingPreview(forceRefresh)
       setPolishBillingPreview(preview)
       return preview
     } catch (error) {
@@ -4151,8 +4156,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       toast(message, 'error')
     } finally {
       setStructuredPromptRefineLoading(false)
-      // 计费真实发生后重新拉取预览：按钮文案立刻反映「剩余免费次数」或「改为扣积分」
-      void refreshPolishBillingPreview()
+      // 计费真实发生后重新拉取预览：按钮文案立刻反映「剩余免费次数」或「改为扣积分」。
+      // 先作废缓存再强制刷新，避免读到润色前的旧免费次数。
+      invalidatePromptPolishBillingPreviewCache()
+      void refreshPolishBillingPreview(true)
     }
   }, [
     canUseStructuredPromptEditor,
