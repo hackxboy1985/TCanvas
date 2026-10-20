@@ -3,9 +3,11 @@ import { Button, Group, Modal, Stack, Text, Textarea, Badge, Tooltip, SegmentedC
 import { IconAdjustments } from '@tabler/icons-react'
 
 import { runPublicTask, uploadServerAssetFile } from '../../../api/server'
+import { understandImage } from '../../../api/lens'
+import { isLensMode } from '../../../config/useModelOptions'
 import { toast } from '../../../ui/toast'
 import { useUIStore } from '../../../ui/uiStore'
-import { extractTextFromTaskResult, tryParseJsonLike } from '../taskNodeHelpers'
+import { extractTextFromTaskResult } from '../taskNodeHelpers'
 import { isRemoteUrl } from './utils'
 import { getAuthToken } from '../../../auth/store'
 import {
@@ -596,78 +598,89 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     }
   }, [activeBaseImageUrl, options, maskDirty, promptInput, editMode, depthPrompt, selectedImageEditSize, exportResizedImage, maskEnabled, createDepthFocusGuideUrl, uploadCanvasAsset])
 
+  /**
+   * 把上游给的节点图片地址解析成服务端可直接拉取的 http(s) 地址。
+   *
+   * <p>lens 模式下画布节点里的图片可能以 `asset://<id>` 形式保存（资源运行时标识）。
+   * 这里只做**协议识别**：`asset://` 视为「与节点主图同一个资源」，主图是 http(s) 时才取其地址；
+   * 其它非 http(s) 协议一律不猜，返回空串交给调用方显式失败。
+   *
+   * @param targetUrl 节点图片地址（可能为 asset:// 等运行时标识）
+   * @returns 可用于图像理解的 http(s) 地址；无法确定时返回空串
+   */
+  const resolveUnderstandImageUrl = React.useCallback((targetUrl: string): string => {
+    const trimmed = (targetUrl || '').trim()
+    if (isRemoteUrl(trimmed)) return trimmed
+    if (/^asset:\/\//i.test(trimmed)) {
+      const base = (activeBaseImageUrl || '').trim()
+      return isRemoteUrl(base) ? base : ''
+    }
+    return ''
+  }, [activeBaseImageUrl])
+
+  /**
+   * 反推画面描述：按运行模式请求「图片 → 自然语言画面描述」。
+   *
+   * <p>lens 模式调用 lens 后端同步接口 {@link understandImage}（由后端按智能分析数据源池做多模态理解，
+   * 成功后才计费，返回自然语言正文）；非 lens 模式保持原 `/public/tasks`（kind=image_to_prompt）链路。
+   *
+   * @param rawImageUrl 节点图片地址（可含 asset:// 等运行时标识）
+   * @returns 模型输出的画面描述正文（自然语言）
+   */
+  const requestDepthDescription = React.useCallback(async (rawImageUrl: string): Promise<string> => {
+    const ui = useUIStore.getState()
+    const apiKey = (ui.publicApiKey || '').trim()
+    const token = getAuthToken()
+    // 服务端只能拉取可访问的在线图片；local/blob/asset 未解析成 http(s) 时显式失败，不做本地猜测
+    const imageUrl = resolveUnderstandImageUrl(rawImageUrl)
+    if (!imageUrl) {
+      throw new Error('当前图片不是可访问的在线地址，请先上传主图后再反推画面描述')
+    }
+    if (!isLensMode() && !apiKey && !token) {
+      throw new Error('请先登录后再试')
+    }
+    if (isLensMode()) {
+      const result = await understandImage({ imageUrl })
+      return result.text
+    }
+    const taskRes = await runPublicTask(apiKey, {
+      request: {
+        kind: 'image_to_prompt',
+        prompt:
+          '请仔细观察这张图片，用一段自然语言把它反推成可以直接用于生图的画面描述，依次覆盖：主体（人物/物体及外观特征）、动作与姿态、场景与环境、空间层次（前景/中景/背景）、构图与机位、光影与色调、材质与质感、风格与画质。语言通顺具体，只输出这段描述正文，不要输出 JSON、键值对、解释或代码块。',
+        extras: {
+          imageUrl,
+          nodeId: options.nodeId,
+          persistAssets: ui.assetPersistenceEnabled,
+        },
+      },
+    })
+    return extractTextFromTaskResult(taskRes.result)
+  }, [options.nodeId, resolveUnderstandImageUrl])
+
   const handleGenerateDepth = React.useCallback(async () => {
     if (!isRemoteUrl(activeBaseImageUrl)) {
-      toast('请先上传主图到可访问的链接再进行深度调整', 'error')
+      toast('请先上传主图到可访问的链接再进行局部修改', 'error')
       return
     }
     setDepthLoading(true)
     setDepthError(null)
     try {
-      const ui = useUIStore.getState()
-      const apiKey = (ui.publicApiKey || '').trim()
-      const token = getAuthToken()
-      if (!apiKey && !token) {
-        toast('请先登录后再试', 'error')
-        return
+      // 与图片节点工具栏的「AI 润色」一致：直接使用模型返回的自然语言正文，
+      // 不再做 JSON 解析/格式化，也不再发起二次「结构化细分」请求。
+      const text = (await requestDepthDescription(activeBaseImageUrl)).trim()
+      if (!text) {
+        throw new Error('未返回可用的画面描述')
       }
-      const persist = ui.assetPersistenceEnabled
-      const taskRes = await runPublicTask(apiKey, {
-        request: {
-        kind: 'image_to_prompt',
-          prompt: '请从输入图像中智能、全面地提取视觉风格信息，并将结果以严格有效的 JSON 格式输出。字段数量不做限制，可根据图像特征灵活增减，但需保持结构清晰、语义明确、分类合理。以下为建议的通用结构，请在此基础上根据实际情况动态调整、增删字段。',
-        extras: {
-          imageUrl: activeBaseImageUrl,
-          nodeId: options.nodeId,
-          persistAssets: persist,
-        },
-        },
-      })
-      const task = taskRes.result
-      const rawText = extractTextFromTaskResult(task)
-      const parsed = tryParseJsonLike(rawText)
-      const baseText = parsed ? JSON.stringify(parsed, null, 2) : (rawText || '')
-      if (!baseText.trim()) {
-        throw new Error('未返回可用的 JSON 数据')
-      }
-      const refinePrompt = parsed
-        ? [
-            '请将下面的 JSON 进行更细维度的拆分与归类，保持严格有效的 JSON 输出。',
-            '字段数量不做限制，但要结构清晰、语义明确、分类合理。',
-            '只输出 JSON，不要额外文字或代码块。',
-            '原始 JSON：',
-            baseText,
-          ].join('\n')
-        : [
-            '请将下面的描述转换为结构化的 JSON（严格有效）。',
-            '字段数量不做限制，但要结构清晰、语义明确、分类合理。',
-            '只输出 JSON，不要额外文字或代码块。',
-            '原始描述：',
-            baseText,
-          ].join('\n')
-
-      const refineRes = await runPublicTask(apiKey, {
-        request: {
-          kind: 'prompt_refine',
-          prompt: refinePrompt,
-          extras: {
-            nodeId: options.nodeId,
-            persistAssets: persist,
-          },
-        },
-      })
-      const refinedText = extractTextFromTaskResult(refineRes.result)
-      const refinedParsed = tryParseJsonLike(refinedText)
-      const nextText = refinedParsed ? JSON.stringify(refinedParsed, null, 2) : baseText
-      setDepthPrompt(nextText)
+      setDepthPrompt(text)
     } catch (err: any) {
-      const message = err?.message || '深度调整失败'
+      const message = err?.message || '局部修改失败'
       setDepthError(message)
       toast(message, 'error')
     } finally {
       setDepthLoading(false)
     }
-  }, [activeBaseImageUrl, options.nodeId])
+  }, [activeBaseImageUrl, requestDepthDescription])
 
   const modal = open ? (
     <Modal
@@ -686,7 +699,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
             onChange={(value) => setEditMode(value as 'pose' | 'depth' | 'size')}
             data={[
               { value: 'pose', label: '姿势调整' },
-              { value: 'depth', label: '深度调整' },
+              { value: 'depth', label: '局部修改' },
               { value: 'size', label: '尺寸调整' },
             ]}
             styles={{
@@ -705,7 +718,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
           {editMode === 'pose'
             ? '使用方法：拖动火柴人指定新的动作参考，再补充提示词。姿势模式只使用火柴人参考，不支持局部圈选。'
             : editMode === 'depth'
-              ? '使用方法：先在原图上圈出需要修改的区域，再编辑深度描述 JSON。圈选会转成高亮引导图，模型只应修改该区域。'
+              ? '使用方法：先在原图上圈出需要修改的区域，再编辑画面描述（可点「反推画面描述」自动生成）。圈选会转成高亮引导图，模型只修改该区域，其余保持原样。'
               : '使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。'}
         </Text>
         <Group className="pose-editor__panels" align="flex-start" gap="md" grow>
@@ -863,7 +876,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 <>
                   <Stack className="pose-editor__panel-stack" gap={8}>
                     <Text className="pose-editor__panel-title" size="sm" fw={600}>
-                      深度描述（JSON，可编辑）
+                      画面描述（可编辑）
                     </Text>
                     <Text
                       className="pose-editor__depth-hint"
@@ -871,7 +884,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       c="dimmed"
                       style={{ color: options.isDarkUi ? 'rgba(226,232,240,0.7)' : '#475569' }}
                     >
-                      先生成 JSON，再按需要修改内容；保存后会把最后一张参考图作为局部编辑区域引导。
+                      点「反推画面描述」可让模型按当前图片生成一段自然语言描述（与「AI 润色」同类型），再按需要修改文字；保存后会把圈选高亮图作为局部编辑区域引导。「保存并生成」才会调用生图模型。
                     </Text>
                     <Group className="pose-editor__panel-actions" gap={6}>
                       <Button
@@ -881,7 +894,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         loading={depthLoading}
                         onClick={handleGenerateDepth}
                       >
-                        生成深度描述
+                        反推画面描述
                       </Button>
                       {depthError && (
                         <Text className="pose-editor__depth-error" size="xs" c="red">
@@ -891,8 +904,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     </Group>
                     <Textarea
                       className="pose-editor__depth-textarea"
-                      label="JSON 内容"
-                      placeholder="点击“生成深度描述”后在此编辑"
+                      label="画面描述"
+                      placeholder="点击“反推画面描述”后在此编辑，也可以直接手写"
                       autosize
                       minRows={4}
                       maxRows={7}
@@ -902,7 +915,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                   </Stack>
                   <div className="pose-editor__spacer" style={{ flex: 1 }} />
                   <Group className="pose-editor__panel-actions" gap={6}>
-                    <Tooltip className="pose-editor__save-tooltip" label="保存局部编辑引导和深度描述，并原位更新当前镜头">
+                    <Tooltip className="pose-editor__save-tooltip" label="保存圈选引导和画面描述，并原位生图更新当前镜头">
                       <Button
                         className="pose-editor__save"
                         size="xs"
