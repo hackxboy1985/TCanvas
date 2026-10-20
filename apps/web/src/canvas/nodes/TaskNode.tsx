@@ -165,6 +165,7 @@ import {
   inferProductionNodeMeta,
   readChapterGroundedProductionMetadata,
 } from '../productionMeta'
+import { getEditTypeLabel } from '../utils/node'
 import {
   DEFAULT_CANVAS_RESIZE_SIZE,
   DEFAULT_IMAGE_EDIT_SIZE,
@@ -7593,9 +7594,14 @@ const rewritePromptWithCharacters = React.useCallback(
 
   // 衍生节点专属信息：主标题显示「原节点名 · 操作类型」，副标题显示能力名（图片编辑）。
   // 非衍生节点返回 null，走原有 subtitle 逻辑，行为不变。
+  //
+  // 覆盖范围：所有由 createDerivedImageNode 创建、带 refNodeId 的节点（imageEdit 与尺寸调整产出的 image）。
+  // 以前只认角度/打光，局部修改与尺寸调整没有角度打光 → 返回 null → 标题栏被隐藏，表现为「衍生节点没有标题」。
   const derivedSubtitle = React.useMemo(() => {
-    if (kind !== 'imageEdit') return null
     const selfData = data as Record<string, unknown> | undefined
+    const isDerivedNode = Boolean(String(selfData?.refNodeId || '').trim())
+    // 非衍生节点返回 null；衍生节点里尺寸调整产出的是 image，其余图片编辑是 imageEdit
+    if (kind !== 'imageEdit' && !(kind === 'image' && isDerivedNode)) return null
 
     /** 相机 presetId → 中文角度描述 */
     const cameraPresetLabels: Record<string, string> = {
@@ -7623,7 +7629,6 @@ const rewritePromptWithCharacters = React.useCallback(
       const activeLight = lightMain?.enabled ? lightMain : lightFill
       parts.push(lightPresetLabels[String(activeLight?.presetId || '')] || '打光')
     }
-    if (!parts.length) return null
 
     // 原节点名：anchorBindings 的 label（生成时从源节点复制而来）→ 上游连线节点标题
     let sourceLabel = ''
@@ -7636,6 +7641,18 @@ const rewritePromptWithCharacters = React.useCallback(
       const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, id)
       const sourceNode = orderedItems.length ? nodes.find((n) => n.id === orderedItems[0].sourceNodeId) : undefined
       if (sourceNode) sourceLabel = getNodeLabel(sourceNode)
+    }
+
+    // 没有任何角度/打光时（局部修改、尺寸调整）用编辑类型兜底，
+    // 保证衍生节点一定有标题，不再因为 parts 为空而整条标题栏被隐藏。
+    // 文案复用 getEditTypeLabel，避免这里再维护一份 editType 映射。
+    if (!parts.length) {
+      const editTypeLabel = getEditTypeLabel(String(selfData?.editType || '').trim())
+      if (editTypeLabel) {
+        parts.push(editTypeLabel)
+      } else {
+        parts.push(kind === 'image' ? '尺寸调整' : '图片编辑')
+      }
     }
 
     const typeText = parts.join('+')
