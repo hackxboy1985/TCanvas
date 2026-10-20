@@ -1381,13 +1381,13 @@ export default function LensCanvasApp(): JSX.Element {
             data={episodeOptions.length > 0 ? episodeOptions : [{ value: String(episodeNum), label: `第${episodeNum}集` }]}
             w={180}
           />
-          <Switch
+          {/* <Switch
             className="lens-canvas-refs-switch"
             size="xs"
             label="引用"
             checked={showRefs}
             onChange={(e) => toggleShowRefs(e.currentTarget.checked)}
-          />
+          /> */}
           <Switch
             className="lens-canvas-shot-group-switch"
             size="xs"
@@ -1395,8 +1395,13 @@ export default function LensCanvasApp(): JSX.Element {
             checked={shotGroupOn}
             onChange={(e) => {
               const on = e.currentTarget.checked
+              // 手动切换开关时必须作废「已加载布局元信息」，否则下方布局恢复 effect 会因
+              // meta.groupOn 与开关状态一致而只重排父子分组、不重建分镜组，
+              // 导致关闭后重新打开分镜组无法恢复（组框不出现）。
+              loadedLayoutMetaRef.current = null
               setShotGroupOn(on)
               window.localStorage.setItem('lens_shot_group', on ? '1' : '0')
+              // 关闭时立即解除分镜组，让节点先恢复可拖动，再由布局 effect 重排
               if (!on) clearShotGroup()
             }}
           />
