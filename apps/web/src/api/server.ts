@@ -9,6 +9,7 @@ import {
   createLensNodePreset,
   deleteLensNodePreset,
   listLensNodePresets,
+  uploadLensCanvasAssetFile,
   type LensNodePresetDto,
   type LensNodePresetType,
 } from './lens'
@@ -5411,6 +5412,36 @@ export async function uploadServerAssetFile(file: File, name?: string, meta?: Up
   })
 
   const uploadPromise = (async (): Promise<ServerAssetDto> => {
+    // lens 画布模式：tapcanvas 的 /assets/upload 接口在 lens 部署下不存在（/canvas/ 只是静态产物），
+    // 画布生成的临时图片（圈选引导图/火柴人/拼图等）改走 lens 自己的图片上传链路：
+    // /api/oss/upload/img/policy 取 OSS PostObject 凭证 → 浏览器直传 OSS。
+    if (isLensCanvasMode()) {
+      const uploaded = await uploadLensCanvasAssetFile(file, effectiveFileName)
+      const nowIso = new Date().toISOString()
+      const originalName = typeof file.name === 'string' && file.name.trim() ? file.name.trim() : effectiveFileName
+      return {
+        // lens 侧没有 tapcanvas 的 server asset 记录，用 OSS key 派生一个只读标识，
+        // 仅供节点 serverAssetId 展示/追溯，不代表可回查的业务主键。
+        id: `lens-oss:${uploaded.key}`,
+        name: effectiveFileName,
+        data: {
+          kind: 'upload',
+          url: uploaded.url,
+          objectKey: uploaded.key,
+          originalName,
+          size: file.size,
+          contentType: normalizeMimeType(file.type),
+          storage: 'lens-oss',
+          ...(trimmedProjectId ? { projectId: trimmedProjectId } : {}),
+          ...(ownerNodeId ? { ownerNodeId } : {}),
+        },
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        userId: '',
+        projectId: trimmedProjectId || null,
+      }
+    }
+
     const trimmedPrompt = typeof meta?.prompt === 'string' && meta.prompt.trim() ? meta.prompt.trim() : ''
     const trimmedVendor = typeof meta?.vendor === 'string' && meta.vendor.trim() ? meta.vendor.trim() : ''
     const trimmedModelKey = typeof meta?.modelKey === 'string' && meta.modelKey.trim() ? meta.modelKey.trim() : ''
@@ -5507,6 +5538,10 @@ export async function recoverUploadedServerAssetFile(
 ): Promise<ServerAssetDto | null> {
   const withinMsRaw = options?.withinMs
   const withinMs = Number.isFinite(withinMsRaw) ? Math.max(1000, Math.min(10 * 60 * 1000, Math.trunc(withinMsRaw!))) : 2 * 60 * 1000
+
+  // lens 画布模式：图片由 lens OSS 直传，不存在 tapcanvas server asset 记录可回查，
+  // 恢复逻辑无意义（继续查 listServerAssets 只会得到 8788 不可达的噪音），直接返回 null。
+  if (isLensCanvasMode()) return null
 
   const wantedOriginalName = sanitizeServerAssetUploadName((file as any)?.name || '')
   const wantedSize =

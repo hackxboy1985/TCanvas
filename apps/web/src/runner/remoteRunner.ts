@@ -1363,8 +1363,11 @@ async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Pr
     throw new Error(`lens 任务轮询失败：非法 taskId ${taskId}`)
   }
   const status = await getCanvasTaskStatus(numericTaskId)
-  if (status.status === 'FAILED') {
-    const message = status.resMsg?.trim() || status.remark?.trim() || 'lens 图像任务失败'
+  // 失败终态有三种：FAILED（渠道失败）、ERROR（多次重试后的最终失败）、CANCEL（已取消）。
+  // 都必须转成 failed 显式终止轮询：漏判会被当成「排队中」无限轮询到超时。
+  if (status.status === 'FAILED' || status.status === 'ERROR' || status.status === 'CANCEL') {
+    const fallback = status.status === 'CANCEL' ? 'lens 图像任务已取消' : 'lens 图像任务失败'
+    const message = status.resMsg?.trim() || status.remark?.trim() || fallback
     return { id: taskId, kind: taskKind, status: 'failed', assets: [], raw: { ...status, failureReason: message } }
   }
   if (status.status !== 'SUCCESS') {
@@ -3453,18 +3456,40 @@ async function runVideoTask(ctx: RunnerContext) {
 }
 
 /**
+ * 图片任务接续查询的连续失败计数（key = 节点ID + 任务ID）。
+ *
+ * <p>刷新后接续查询时，若任务记录不存在 / 越权 / 会话过期，请求会一直抛错；
+ * 若每次抛错都只记日志，画布定时器会每 4 秒无限重试。连续失败达到上限后
+ * 置失败终态停止重试，保证接续查询一定能收敛。
+ */
+const imageSyncFailureCounts = new Map<string, number>()
+/** 接续查询允许的连续失败次数（达到后置失败终态，不再重试） */
+const IMAGE_SYNC_MAX_CONSECUTIVE_FAILURES = 3
+
+/**
  * 单次同步图片节点任务状态（页面加载后恢复轮询用）。
  *
- * <p>画布刷新后内存中的轮询协程会丢失，节点若停在 running/queued 就永远不会再更新。
- * 由画布定时器扫描到 running/queued 且带 imageTaskId 的图片节点后调用本函数，
- * 查一次 lens 任务状态并把结果写回节点（成功 / 失败 / 继续等待）。</p>
+ * <p>画布刷新后内存中的轮询协程会丢失，节点若停在 queued/running 就永远不会再更新。
+ * 由画布定时器扫描「带 imageTaskId 且结果未回写」的图片节点后调用本函数，
+ * 查一次任务状态并把结果写回节点（成功 / 失败 / 继续等待）。</p>
+ *
+ * <p><b>收敛与幂等</b>：查询连续失败达上限后置失败终态；成功结果按 URL 去重，
+ * 已回写过的结果不重复追加，重复调用不会改变节点数据。</p>
+ *
+ * <p><b>竞态</b>：进入时记录节点 runToken，若期间用户重跑/取消（runToken 变化），
+ * 丢弃本次回写，避免旧任务结果覆盖新运行的状态。</p>
  */
 export async function syncImageNodeOnce(id: string, get: Getter) {
   const ctx = buildRunnerContext(id, get)
   if (!ctx) return
+  // 只接续图片任务；storyboard 节点的产出结构不同（走 buildStoryboardEditorPatch），
+  // 用普通生图字段回写会把节点数据写坏，不在本函数处理。
+  if (!ctx.isImageTask) return
+  if (ctx.kind === 'storyboard') return
 
-  const { data, setNodeStatus, appendLog } = ctx
-  const rawTaskId = (data as any)?.imageTaskId
+  const { data, setNodeStatus, appendLog, isCanceled } = ctx
+  const dataRecord = (data || {}) as Record<string, unknown>
+  const rawTaskId = dataRecord.imageTaskId
   const taskId = typeof rawTaskId === 'string'
     ? rawTaskId.trim()
     : typeof rawTaskId === 'number'
@@ -3474,26 +3499,47 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
   const numericTaskId = Number(taskId)
   if (!Number.isFinite(numericTaskId) || numericTaskId <= 0) return
 
+  // 竞态保护：进入时的 runToken 与查询返回后不一致，说明用户已重跑/取消本次任务
+  const runTokenAtStart = readNodeRunToken(get, id)
+  const isAborted = () => isCanceled(id) || readNodeRunToken(get, id) !== runTokenAtStart
+  if (isAborted()) return
+
+  const failureKey = `${id}:${taskId}`
   let snapshot: Awaited<ReturnType<typeof getCanvasTaskStatus>>
   try {
     snapshot = await getCanvasTaskStatus(numericTaskId)
   } catch (error: unknown) {
+    if (isAborted()) return
     const message = error instanceof Error && error.message ? error.message : '查询图片任务状态失败'
+    const failures = (imageSyncFailureCounts.get(failureKey) || 0) + 1
+    if (failures >= IMAGE_SYNC_MAX_CONSECUTIVE_FAILURES) {
+      // 连续失败达上限：置失败终态停止重试，避免定时器每 4 秒无限重查
+      imageSyncFailureCounts.delete(failureKey)
+      setNodeStatus(id, 'error', { progress: 0, lastError: message })
+      appendLog(id, `[${nowLabel()}] error: ${message}（连续 ${failures} 次查询失败，已停止接续）`)
+      return
+    }
+    imageSyncFailureCounts.set(failureKey, failures)
     appendLog(id, `[${nowLabel()}] error: ${message}`)
     return
   }
+  if (isAborted()) return
+  // 查询成功（不论任务是否成功）：重置连续失败计数
+  imageSyncFailureCounts.delete(failureKey)
 
   const statusUpper = String(snapshot.status || '').toUpperCase()
 
-  if (statusUpper === 'FAILED') {
-    const message = snapshot.resMsg?.trim() || snapshot.remark?.trim() || '图片任务执行失败'
+  // 失败终态：FAILED=渠道失败、ERROR=多次重试后最终失败、CANCEL=已取消
+  if (statusUpper === 'FAILED' || statusUpper === 'ERROR' || statusUpper === 'CANCEL') {
+    const fallback = statusUpper === 'CANCEL' ? '图片任务已取消' : '图片任务执行失败'
+    const message = snapshot.resMsg?.trim() || snapshot.remark?.trim() || fallback
     setNodeStatus(id, 'error', { progress: 0, lastError: message })
     appendLog(id, `[${nowLabel()}] error: ${message}`)
     return
   }
 
   if (statusUpper !== 'SUCCESS') {
-    const currentProgress = typeof (data as any)?.progress === 'number' ? (data as any).progress : 10
+    const currentProgress = typeof dataRecord.progress === 'number' ? dataRecord.progress : 10
     setNodeStatus(id, statusUpper === 'RUNNING' ? 'running' : 'queued', {
       progress: Math.max(10, currentProgress),
       imageTaskId: taskId,
@@ -3510,16 +3556,30 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
     return
   }
 
-  const existingResults = Array.isArray((data as any)?.imageResults)
-    ? ((data as any).imageResults as Array<Record<string, unknown>>)
+  const existingResults = Array.isArray(dataRecord.imageResults)
+    ? (dataRecord.imageResults as Array<Record<string, unknown>>)
     : []
   const existingUrls = new Set(
     existingResults.map((item) => String(item?.url || '').trim()).filter(Boolean),
   )
-  const nodeLabel = String((data as any)?.label || '图片').trim()
+  const nodeLabel = String(dataRecord.label || '图片').trim()
   const appendedResults = fileUrls
     .filter((url) => !existingUrls.has(url))
-    .map((url) => ({ url, title: nodeLabel, assetName: nodeLabel, assetRefId: nodeLabel }))
+    .map((url, index) => {
+      const ordinal = existingResults.length + index + 1
+      return buildImageAssetResultItem({
+        url,
+        title: `${nodeLabel} ${ordinal}`,
+        assetName: nodeLabel,
+        assetRefId: nodeLabel,
+      })
+    })
+  // 幂等：结果已全部回写过时只同步状态，不重写节点数据。
+  // 否则 lastResult.at 每次都会变，导致 flow 每次刷新都被判定为「有变更」而重复保存。
+  if (!appendedResults.length) {
+    setNodeStatus(id, 'success', { progress: 100, imageTaskId: taskId })
+    return
+  }
   const imageResults = [...existingResults, ...appendedResults]
   const primaryIndex = imageResults.findIndex(
     (item) => String(item?.url || '').trim() === primaryUrl,
@@ -3527,13 +3587,15 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
 
   setNodeStatus(id, 'success', {
     progress: 100,
+    imageTaskId: taskId,
     imageUrl: primaryUrl,
     imageResults,
     imagePrimaryIndex: primaryIndex >= 0 ? primaryIndex : imageResults.length - 1,
     lastResult: {
       id: taskId,
       at: Date.now(),
-      kind: String((data as any)?.imageTaskKind || 'image'),
+      // 与实时运行成功路径保持同一语义：kind 用节点 kind（image/imageEdit），不是任务类型
+      kind: ctx.kind,
       preview: { type: 'image', src: primaryUrl },
     },
   })

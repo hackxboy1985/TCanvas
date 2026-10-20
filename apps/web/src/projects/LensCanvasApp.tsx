@@ -651,6 +651,8 @@ export default function LensCanvasApp(): JSX.Element {
   // 最近一次「已成功保存」内容的签名：与当前内容一致时跳过保存，避免空写入。
   // 加载新集时置 null，保证新集的首次保存一定落库。
   const lastSavedSignatureRef = useRef<string | null>(null)
+  /** 刷新后尚未建立「已保存」签名基准：首次自动保存只记录基准，不写库 */
+  const pendingInitialSignatureRef = useRef(false)
   // 父子分组（分身/子场景）创建出的组框ID：整理画布时先解除、再重建
   const childGroupIdsRef = useRef<string[]>([])
   // 最近一次投影结果缓存：整理画布时恢复默认布局
@@ -1086,7 +1088,7 @@ export default function LensCanvasApp(): JSX.Element {
   const saveNow = useCallback(async (targetEpisode: number, snapshot: { nodes: Node[]; edges: Edge[] }): Promise<boolean> => {
     if (!dramaId || savingRef.current) return false
     const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
-    // 无实质变更则跳过：避免每 3 秒定时器、切换开关、加载后重排等场景产生大量空写入
+    // 无实质变更则跳过：避免定时器、切换开关、加载后重排等场景产生大量空写入
     const { signature, data } = buildFlowSignature({
       nodes: snapshot.nodes,
       edges: snapshot.edges,
@@ -1141,68 +1143,7 @@ export default function LensCanvasApp(): JSX.Element {
     window.setTimeout(() => { canvasApiRef.current?.fitView() }, 60)
   }, [load])
 
-  /**
- * 衍生节点尺寸对齐（flow 加载时执行）。
- *
- * <p>图片编辑节点（角度/打光等衍生节点）的历史 data 里可能存着旧尺寸（如 384x250），
- * 与派生来源的角色/场景节点（如 382x461）不一致，渲染出来就会明显矮一截。
- * 这里沿入边逐级追溯到最源头的投影节点，把它的尺寸写进衍生节点 data；
- * 用户手动缩放过的节点（nodeSizeManual）保持用户设置不动。</p>
- */
-function alignDerivedNodeSizes(nodes: Node[], edges: Edge[]): Node[] {
-  const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
-
-  /** 判断节点是否带有效尺寸 */
-  const readSize = (node: Node | undefined): { width: number; height: number } | null => {
-    const data = node?.data as Record<string, unknown> | undefined
-    const width = Number(data?.nodeWidth)
-    const height = Number(data?.nodeHeight)
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
-    return { width, height }
-  }
-
-  // 兜底基准：页面上的投影资产节点（角色/场景/道具）尺寸。
-  // 入边追溯失败时（例如 flow 里连线丢失）用它保证衍生节点仍与投影节点同尺寸。
-  const referenceSize = nodes.reduce<{ width: number; height: number } | null>((acc, node) => {
-    if (acc) return acc
-    const data = node.data as Record<string, unknown> | undefined
-    if (data?.source !== 'lens_projection') return acc
-    return readSize(node)
-  }, null)
-
-  return nodes.map((node) => {
-    const data = node.data as Record<string, unknown> | undefined
-    if (String(data?.kind || '') !== 'imageEdit') return node
-    // 用户手动缩放过的节点保留自己尺寸
-    if (data?.nodeSizeManual) return node
-
-    // 优先沿入边逐级追溯到最源头的投影节点
-    let cursor = node.id
-    const visited = new Set<string>()
-    while (cursor && !visited.has(cursor)) {
-      visited.add(cursor)
-      const inbound = edges.find((edge) => edge.target === cursor)
-      if (!inbound) break
-      const sourceNode = nodeById.get(inbound.source)
-      if (!sourceNode) break
-      const sourceData = sourceNode.data as Record<string, unknown> | undefined
-      if (String(sourceData?.kind || '') !== 'imageEdit') {
-        const size = readSize(sourceNode)
-        if (size) return { ...node, data: { ...(data || {}), nodeWidth: size.width, nodeHeight: size.height } }
-        break
-      }
-      cursor = inbound.source
-    }
-
-    // 追溯失败：用页面投影节点尺寸兜底
-    if (referenceSize) {
-      return { ...node, data: { ...(data || {}), nodeWidth: referenceSize.width, nodeHeight: referenceSize.height } }
-    }
-    return node
-  })
-}
-
-/** 加载某集数据（投影节点 + 恢复编排） */
+  /** 加载某集数据（投影节点 + 恢复编排） */
   const loadEpisode = useCallback(async (targetEpisode: number) => {
     if (!dramaId) return
     const key = `${dramaId}:${targetEpisode}`
@@ -1255,11 +1196,15 @@ function alignDerivedNodeSizes(nodes: Node[], edges: Edge[]): Node[] {
                 const nData = n.data as Record<string, unknown>
                 const freshData = fresh.data as Record<string, unknown>
                 // 业务展示字段以最新投影快照为准；引用行开关（showRefs）是编排 UI 状态，以 flow 为准避免被覆盖丢失
+                // 节点尺寸例外：用户拖拽调整过的宽高必须保留（以 flow 为准），
+                // 否则每次刷新都会被投影默认值（384x250）重置，导致与衍生节点视觉不一致
                 const merged = {
                   ...n,
                   data: {
                     ...nData,
                     ...freshData,
+                    ...(typeof nData.nodeWidth === 'number' ? { nodeWidth: nData.nodeWidth } : null),
+                    ...(typeof nData.nodeHeight === 'number' ? { nodeHeight: nData.nodeHeight } : null),
                     showRefs: typeof nData.showRefs === 'boolean' ? nData.showRefs : Boolean(freshData.showRefs),
                   },
                 }
@@ -1275,7 +1220,7 @@ function alignDerivedNodeSizes(nodes: Node[], edges: Edge[]): Node[] {
             const restoredEdges = useFlowLayout
               ? (Array.isArray(parsed.edges) ? parsed.edges : [])
               : projected.edges
-            load({ nodes: alignDerivedNodeSizes(restored, restoredEdges), edges: restoredEdges })
+            load({ nodes: restored, edges: restoredEdges })
             if (parsed.viewport) {
               const vp = parsed.viewport
               window.setTimeout(() => { canvasApiRef.current?.setViewport(vp) }, 0)
@@ -1286,14 +1231,36 @@ function alignDerivedNodeSizes(nodes: Node[], edges: Edge[]): Node[] {
           // flow data 损坏：用默认投影（错误已在 getFlow 阶段捕获过，这里走兜底布局）
         }
       }
-      load({ nodes: alignDerivedNodeSizes(projected.nodes, projected.edges), edges: projected.edges })
+      load({ nodes: projected.nodes, edges: projected.edges })
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载失败'
       setError(`画布加载失败：${msg}（可刷新重试或返回分镜板）`)
     } finally {
       setLoading(false)
+      // 刷新后延迟建立「已保存」签名基准：此时布局重排与 viewport 恢复已完成，
+      // 基准准确后 30s 的自动保存会因签名相同而跳过，不再每次刷新都白写一次库。
+      // 5s 窗口内刷新/关闭页面也不保存（见 visibilitychange 守卫）。
+      pendingInitialSignatureRef.current = true
+      window.setTimeout(() => {
+        if (!pendingInitialSignatureRef.current) return
+        try {
+          const state = useRFStore.getState()
+          const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
+          const { signature } = buildFlowSignature({
+            nodes: state.nodes,
+            edges: state.edges,
+            viewport,
+            arrangeDirection: shotArrange,
+            shotGroupOn,
+          })
+          lastSavedSignatureRef.current = signature
+        } catch {
+          // 基准建立失败只影响「少存一次」，不影响功能
+        }
+        pendingInitialSignatureRef.current = false
+      }, 5000)
     }
-  }, [dramaId, load])
+  }, [dramaId, load, buildFlowSignature, shotArrange, shotGroupOn])
 
   // 加载集列表（选集下拉）
   useEffect(() => {
@@ -1329,17 +1296,102 @@ function alignDerivedNodeSizes(nodes: Node[], edges: Edge[]): Node[] {
     return () => window.clearTimeout(timer)
   }, [shotGroupOn, shotArrange, loading, arrangeByDirection, applyParentChildGroups])
 
-  // 编排自动保存（debounce 3s）
+  // 编排自动保存（debounce 30s：任务进度/日志会频繁更新节点，间隔过短会反复写库；
+  // 新建节点、切集、页面切后台都有独立的立即保存兜底）
   useEffect(() => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
     if (loading || loadedForRef.current !== `${dramaId}:${episodeNum}`) return
     saveTimerRef.current = setTimeout(() => {
-      void saveNow(episodeNum, { nodes: useRFStore.getState().nodes, edges: useRFStore.getState().edges })
-    }, 3000)
+      const state = useRFStore.getState()
+      // 刷新后的首次自动保存：只记录当前签名作为「已保存」基准，不写库，
+      // 避免每次刷新都无意义地保存一次
+      if (pendingInitialSignatureRef.current) {
+        pendingInitialSignatureRef.current = false
+        const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
+        const { signature } = buildFlowSignature({
+          nodes: state.nodes,
+          edges: state.edges,
+          viewport,
+          arrangeDirection: shotArrange,
+          shotGroupOn,
+        })
+        lastSavedSignatureRef.current = signature
+        return
+      }
+      void saveNow(episodeNum, { nodes: state.nodes, edges: state.edges })
+    }, 30000)
     return () => {
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
     }
-  }, [nodes, edges, loading, episodeNum, dramaId, saveNow])
+  }, [nodes, edges, loading, episodeNum, dramaId, saveNow, buildFlowSignature, shotArrange, shotGroupOn])
+
+  /**
+   * 页面切到后台立即保存：自动保存间隔拉长到 15s 后，直接关闭标签页可能丢失
+   * 最近改动（拖拽位置、提示词编辑等）。visibilitychange 比 beforeunload 可靠，
+   * 页面隐藏时异步请求通常能完成。
+   */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') return
+      if (loading) return
+      if (loadedForRef.current !== `${dramaId}:${episodeNum}`) return
+      // 基准还没建立（刚加载完）时直接跳过：刷新/关闭页面不应触发保存
+      if (pendingInitialSignatureRef.current) return
+      // 刷新/关闭页面同样会触发 hidden，若内容没变不能白发一次保存请求
+      const state = useRFStore.getState()
+      const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
+      const { signature } = buildFlowSignature({
+        nodes: state.nodes,
+        edges: state.edges,
+        viewport,
+        arrangeDirection: shotArrange,
+        shotGroupOn,
+      })
+      if (signature === lastSavedSignatureRef.current) return
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+      void saveNow(episodeNum, { nodes: state.nodes, edges: state.edges })
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [loading, episodeNum, dramaId, saveNow, buildFlowSignature, shotArrange, shotGroupOn])
+
+  /**
+   * 新建节点立即落库：自动保存是 debounce，用户新建节点（尤其还没生成图）
+   * 后 3 秒内刷新会直接丢失。这里监听「纯新增」（节点集合多了 id、没有删除），
+   * 立即保存一次；切集/重投影会伴随大量 id 变化，不触发。
+   */
+  const prevNodeIdSetRef = useRef<Set<string> | null>(null)
+  // 加载完成后短暂冷却：加载期间与紧随其后的布局重排/分组会新增节点，
+  // 这些不是用户操作，不能触发「新建节点立即保存」
+  const nodeIdSetArmedAtRef = useRef(0)
+  useEffect(() => {
+    if (loading) {
+      prevNodeIdSetRef.current = null
+      nodeIdSetArmedAtRef.current = Date.now() + 2000
+      return
+    }
+    const currentNodes = useRFStore.getState().nodes
+    const idSet = new Set(currentNodes.map((node) => node.id))
+    const prevIdSet = prevNodeIdSetRef.current
+    prevNodeIdSetRef.current = idSet
+    if (!prevIdSet || prevIdSet.size === 0) return
+    if (Date.now() < nodeIdSetArmedAtRef.current) return
+    let hasAdded = false
+    let hasRemoved = false
+    idSet.forEach((id) => { if (!prevIdSet.has(id)) hasAdded = true })
+    prevIdSet.forEach((id) => { if (!idSet.has(id)) hasRemoved = true })
+    if (!hasAdded || hasRemoved) return
+    if (loading) return
+    if (loadedForRef.current !== `${dramaId}:${episodeNum}`) return
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    void saveNow(episodeNum, { nodes: currentNodes, edges: useRFStore.getState().edges })
+  }, [nodes.length, loading, episodeNum, dramaId, saveNow])
 
   const episodeOptions = episodes.map((e) => ({
     value: String(e.episodeNumber),

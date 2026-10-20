@@ -934,14 +934,32 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           continue
         }
 
+        // 图片任务接续：只在「持久化数据表明任务未完成」时才查。
+        // flow 不持久化运行期 status（刷新后没有终态可用），若只按「非终态」筛选，
+        // 会把所有历史任务每次刷新都重查一遍。这里用持久化字段判据：
+        // 有 imageTaskId，且（没有产出结果 或 lastResult 仍是提交时的文本占位）。
         const imageTaskId = typeof data.imageTaskId === 'string' ? data.imageTaskId.trim() : ''
-        if (imageTaskId) {
-          if (imageSyncingRef.current.has(nodeId)) continue
-          imageSyncingRef.current.add(nodeId)
-          void syncImageNodeOnce(nodeId, useRFStore.getState).finally(() => {
+        if (!imageTaskId) continue
+        const imageResults = Array.isArray(data.imageResults) ? data.imageResults : []
+        const lastPreviewType = String(data?.lastResult?.preview?.type || '')
+        if (imageResults.length > 0 && lastPreviewType !== 'text') continue
+        // 本会话正在运行的任务由 runner 内联轮询负责（runToken 是运行期标记），
+        // 这里不重复查询，避免同一任务被两套轮询同时写状态。
+        const liveRunInProgress =
+          (status === 'running' || status === 'queued') && String(data.runToken || '').trim().length > 0
+        if (liveRunInProgress) continue
+        if (imageSyncingRef.current.has(nodeId)) continue
+        imageSyncingRef.current.add(nodeId)
+        void syncImageNodeOnce(nodeId, useRFStore.getState)
+          .catch((error: unknown) => {
+            // 接续查询异常不能静默：显式置失败状态，同时避免未处理的 Promise 拒绝
+            const message = error instanceof Error && error.message ? error.message : '图片任务接续查询失败'
+            console.error('[canvas] sync image node task failed', message)
+            useRFStore.getState().setNodeStatus?.(nodeId, 'error', { progress: 0, lastError: message })
+          })
+          .finally(() => {
             imageSyncingRef.current.delete(nodeId)
           })
-        }
       }
     }
 

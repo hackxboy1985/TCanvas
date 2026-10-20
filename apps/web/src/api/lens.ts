@@ -1041,8 +1041,14 @@ export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promi
   return data
 }
 
-/** lens task_queue 状态枚举的 name（对应后端 com.zsapps.api.enums.TaskQueueStatusEnum） */
-export type LensTaskQueueStatus = 'CREATE' | 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED'
+/**
+ * lens task_queue 状态枚举的 name（对应后端 com.zsapps.api.enums.TaskQueueStatusEnum）。
+ *
+ * <p>必须与后端枚举完全一致：后端还有 {@code ERROR}（多次重试后的失败终态）与
+ * {@code CANCEL}（已取消）。漏掉这两个会让 {@link getCanvasTaskStatus} 把「终态失败」
+ * 当成「未知状态」抛错，进而使画布恢复轮询把已结束的任务当成未完成、每 4 秒无限重查。
+ */
+export type LensTaskQueueStatus = 'CREATE' | 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'ERROR' | 'CANCEL'
 
 /** 画布任务状态查询结果（/api/taskQueue/status 的 data 字段） */
 export interface LensCanvasTaskStatus {
@@ -1065,6 +1071,8 @@ const LENS_TASK_QUEUE_STATUSES: readonly LensTaskQueueStatus[] = [
   'RUNNING',
   'SUCCESS',
   'FAILED',
+  'ERROR',
+  'CANCEL',
 ]
 
 /**
@@ -1427,5 +1435,184 @@ function normalizeLensPromptPolishBilling(raw: unknown): LensPromptPolishBilling
     freeLimit,
     freeRemain,
     charged,
+  }
+}
+
+// ============ 画布临时资产上传（lens OSS 直传） ============
+
+/**
+ * lens OSS PostObject 上传凭证（`POST /api/oss/upload/img/policy` 返回体）。
+ *
+ * <p>字段与阿里云 PostObject 表单直传一一对应：把 key/policy/OSSAccessKeyId/
+ * signature/file 以 multipart 提交到 {@link LensOssPostObjectPolicy.host}，
+ * 成功后文件访问地址为 `backurl + key`。与 lens 现有画布上传
+ * （LeaferCanvas / ImageCropDialog）使用同一套凭证协议。
+ */
+export interface LensOssPostObjectPolicy {
+  /** 临时 AccessKeyId（表单字段 OSSAccessKeyId） */
+  accessid: string
+  /** Base64 编码的上传策略（表单字段 policy） */
+  policy: string
+  /** 策略签名（表单字段 signature） */
+  signature: string
+  /** 允许写入的目录前缀（末尾带 /） */
+  dir: string
+  /** OSS 上传地址（PostObject 表单提交目标） */
+  host: string
+  /** 文件访问域前缀（最终 URL = backurl + key） */
+  backurl: string
+}
+
+/** 画布临时图片上传结果 */
+export interface LensCanvasUploadedAsset {
+  /** 公网可访问的文件 URL（可直接作为生图参考图） */
+  url: string
+  /** OSS 对象 key（用于追溯，不参与业务） */
+  key: string
+}
+
+/**
+ * 归一化 OSS 上传凭证：字段缺失或非法时直接报错。
+ *
+ * <p>不做字段补默认值 —— 拿残缺凭证去传只会在 OSS 侧得到 403，
+ * 错误现场不可诊断（违反「显式失败」原则）。
+ *
+ * @param raw lens 接口返回的 data 字段
+ * @returns 校验通过的 OSS PostObject 凭证
+ */
+function normalizeLensOssPostObjectPolicy(raw: unknown): LensOssPostObjectPolicy {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('获取 OSS 上传凭证失败：lens 返回结构不合法')
+  }
+  const record = raw as Record<string, unknown>
+  /** 仅接受非空字符串，其余类型一律视为缺失 */
+  const pickString = (key: string): string =>
+    typeof record[key] === 'string' ? (record[key] as string).trim() : ''
+  const policy: LensOssPostObjectPolicy = {
+    accessid: pickString('accessid'),
+    policy: pickString('policy'),
+    signature: pickString('signature'),
+    dir: pickString('dir'),
+    host: pickString('host'),
+    backurl: pickString('backurl'),
+  }
+  const missing = (Object.keys(policy) as Array<keyof LensOssPostObjectPolicy>).filter((key) => !policy[key])
+  if (missing.length > 0) {
+    throw new Error(`获取 OSS 上传凭证失败：lens 返回缺少字段 ${missing.join('/')}`)
+  }
+  if (!/^https?:\/\//i.test(policy.host)) {
+    throw new Error(`获取 OSS 上传凭证失败：上传地址不合法 ${policy.host}`)
+  }
+  return policy
+}
+
+/**
+ * 读取画布上传用的 OSS PostObject 凭证。
+ *
+ * <p>入参与 lens 现有画布上传完全一致（不传 dramaId），后端落到
+ * `general/{userId}/image/{yyyy-MM-dd}/` 通用目录，不写剧集资产目录 ——
+ * 画布生成的引导图/火柴人/拼图属临时参考图，不是业务资产。
+ *
+ * @returns OSS PostObject 上传凭证
+ */
+export async function getLensCanvasOssPostObjectPolicy(): Promise<LensOssPostObjectPolicy> {
+  const raw = await lensFetch<Record<string, unknown>>('/api/oss/upload/img/policy', { method: 'POST' })
+  return normalizeLensOssPostObjectPolicy(raw)
+}
+
+/**
+ * 由文件名 / MIME 推断图片扩展名（OSS 按 key 后缀推断 Content-Type，必须显式带后缀）。
+ *
+ * @param file 上传文件
+ * @param name 调用方指定的文件名（优先于 file.name）
+ * @returns 小写扩展名（不含点），推断不出来时按画布导出的 PNG 处理
+ */
+function resolveLensCanvasUploadExtension(file: File, name?: string): string {
+  const rawName = `${(name || '').trim() || (file.name || '').trim()}`.toLowerCase()
+  const dotIndex = rawName.lastIndexOf('.')
+  const fromName = dotIndex > 0 ? rawName.slice(dotIndex + 1) : ''
+  if (fromName && /^[a-z0-9]{1,8}$/.test(fromName)) return fromName
+  const fromMime = (file.type || '').toLowerCase().split('/')[1] || ''
+  if (fromMime === 'jpeg') return 'jpg'
+  if (fromMime && /^[a-z0-9]{1,8}$/.test(fromMime)) return fromMime
+  return 'png'
+}
+
+/**
+ * 构造 OSS 对象 key：目录 + canvas/ + 时间戳_随机串_清洗后的文件名。
+ *
+ * <p>时间戳与随机串用于避免同名文件互相覆盖；文件名只做安全清洗，
+ * 保留可读性便于在 OSS 控制台追溯是哪张画布图。
+ *
+ * @param dir   凭证允许的目录前缀
+ * @param file  上传文件
+ * @param name  调用方指定的文件名
+ * @returns 完整 OSS 对象 key
+ */
+function buildLensCanvasUploadKey(dir: string, file: File, name?: string): string {
+  const normalizedDir = dir.endsWith('/') ? dir : `${dir}/`
+  const extension = resolveLensCanvasUploadExtension(file, name)
+  const rawName = (name || '').trim() || (file.name || '').trim() || 'canvas-asset'
+  const dotIndex = rawName.lastIndexOf('.')
+  const rawBase = dotIndex > 0 ? rawName.slice(0, dotIndex) : rawName
+  const safeBase =
+    rawBase.replace(/[\\/:*?"<>|#\s]+/g, '_').slice(0, 60) || 'canvas-asset'
+  const randomToken = Math.random().toString(36).slice(2, 8)
+  return `${normalizedDir}canvas/${Date.now()}_${randomToken}_${safeBase}.${extension}`
+}
+
+/**
+ * 把画布生成的图片上传到 lens 的 OSS（浏览器直传，PostObject 表单）。
+ *
+ * <p>用于姿势/深度/尺寸调整等场景生成的临时参考图（圈选引导图、火柴人、
+ * 导出图、拼图等）。这类文件由浏览器 canvas 实时生成，没有本地文件，
+ * 必须先拿到公网 URL 才能作为 lens 生图任务的参考图。
+ *
+ * @param file 画布生成的图片文件
+ * @param name 文件名（用于生成 OSS key，仅影响可读性）
+ * @returns 公网 URL 与 OSS key
+ */
+export async function uploadLensCanvasAssetFile(file: File, name?: string): Promise<LensCanvasUploadedAsset> {
+  const policy = await getLensCanvasOssPostObjectPolicy()
+  const key = buildLensCanvasUploadKey(policy.dir, file, name)
+
+  const form = new FormData()
+  form.append('key', key)
+  form.append('policy', policy.policy)
+  form.append('OSSAccessKeyId', policy.accessid)
+  form.append('success_action_status', '200')
+  form.append('signature', policy.signature)
+  form.append('file', file)
+
+  const startedAt = Date.now()
+  let response: Response
+  try {
+    response = await fetch(policy.host, { method: 'POST', body: form })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    lensLog('error', '[lens] ✗ 画布图片上传 OSS 失败（请求未到达）', {
+      host: policy.host,
+      key,
+      costMs: Date.now() - startedAt,
+      reason,
+    })
+    throw new Error(`画布图片上传 OSS 失败：${reason}`)
+  }
+  if (response.status !== 200) {
+    lensLog('error', '[lens] ✗ 画布图片上传 OSS 失败（HTTP 状态非 200）', {
+      host: policy.host,
+      key,
+      httpStatus: response.status,
+      costMs: Date.now() - startedAt,
+    })
+    throw new Error(`画布图片上传 OSS 失败：HTTP ${response.status}`)
+  }
+  lensLog('log', `[lens] ✓ 画布图片已上传 OSS ${Date.now() - startedAt}ms`, { key })
+  // 文件名可能含中文/空格：OSS key 保持原样上传，访问 URL 必须做 URI 编码，
+  // 否则下游（浏览器 <img>、lens 后端下载参考图）拿到未编码 URL 会请求失败。
+  const rawUrl = `${policy.backurl.replace(/\/+$/, '')}/${key}`
+  return {
+    url: encodeURI(rawUrl),
+    key,
   }
 }

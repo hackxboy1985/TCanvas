@@ -344,8 +344,13 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
         }
         return fileUrl
       }
-      if (status.status === 'FAILED') {
+      // 失败终态：FAILED=渠道失败、ERROR=多次重试后最终失败、CANCEL=已取消，
+      // 三种都必须立即终止，不能当成「排队中」继续轮询到超时。
+      if (status.status === 'FAILED' || status.status === 'ERROR') {
         throw new Error(status.resMsg?.trim() || status.remark?.trim() || '单镜头微调失败：任务执行失败')
+      }
+      if (status.status === 'CANCEL') {
+        throw new Error(status.resMsg?.trim() || status.remark?.trim() || '单镜头微调失败：任务已取消')
       }
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => window.setTimeout(r, 1500))
@@ -5508,51 +5513,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     return { width: 120, height: 210, minWidth: 110, maxWidth: 560, minHeight: 90, maxHeight: 420 }
   }, [coreKind, isStoryboardEditorNode, kind])
 
-  // 衍生节点（图片编辑）：沿入边找到派生来源节点，取其尺寸作为本节点尺寸。
-  // 这样衍生节点与源节点（角色/场景/道具）宽高完全一致，且经过与源节点相同的
-  // clamp 规则，最终渲染尺寸必然相同；不再依赖创建时写入的 data 快照。
-  const derivedSourceEdges = useRFStore((s) => s.edges)
-  const derivedSourceSize = React.useMemo(() => {
-    if (kind !== 'imageEdit') return null
-    const { nodes, edges } = useRFStore.getState()
-    const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
-    // 沿入边逐级向上追溯：衍生节点可能从另一个衍生节点派生，
-    // 必须找到最源头的投影节点（角色/场景/道具）才能拿到正确尺寸
-    let cursor = id
-    const visited = new Set<string>()
-    while (cursor && !visited.has(cursor)) {
-      visited.add(cursor)
-      const inbound = edges.find((edge) => edge.target === cursor)
-      if (!inbound) return null
-      const sourceNode = nodeById.get(inbound.source)
-      if (!sourceNode) return null
-      const sourceData = sourceNode.data as Record<string, unknown> | undefined
-      const sourceKind = String(sourceData?.kind || '')
-      const width = Number(sourceData?.nodeWidth)
-      const height = Number(sourceData?.nodeHeight)
-      const hasSize = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
-      // 源头节点（非图片编辑）= 投影资产节点，用它的尺寸
-      if (hasSize && sourceKind !== 'imageEdit') {
-        return { width, height }
-      }
-      cursor = inbound.source
-    }
-    return null
-  }, [derivedSourceEdges, id, kind])
-
-  // 衍生节点：用户未手动缩放时，宽高直接跟随派生来源节点（角色/场景/道具），
-  // 保证两者渲染尺寸完全一致；手动缩放后以 data 为准，不再覆盖用户设置。
-  const followSourceSize = kind === 'imageEdit'
-    && Boolean(derivedSourceSize)
-    && !(data as Record<string, unknown> | undefined)?.nodeSizeManual
-
   const nodeWidth = isResizableVisualNode
-    ? clampFinite(
-        followSourceSize && derivedSourceSize ? derivedSourceSize.width : (data as any)?.nodeWidth,
-        visualNodeDefaults.minWidth,
-        visualNodeDefaults.maxWidth,
-        visualNodeDefaults.width,
-      )
+    ? clampFinite((data as any)?.nodeWidth, visualNodeDefaults.minWidth, visualNodeDefaults.maxWidth, visualNodeDefaults.width)
     : isPlainTextNode
       ? clampFinite((data as any)?.nodeWidth, 340, 620, TEXT_NODE_DEFAULT_WIDTH)
     : typeof (data as any)?.nodeWidth === 'number' && Number.isFinite((data as any)?.nodeWidth)
@@ -5560,12 +5522,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       : coreKind === 'video' ? 400 : 360
 
   const nodeHeight = isResizableVisualNode
-    ? clampFinite(
-        followSourceSize && derivedSourceSize ? derivedSourceSize.height : (data as any)?.nodeHeight,
-        visualNodeDefaults.minHeight,
-        visualNodeDefaults.maxHeight,
-        visualNodeDefaults.height,
-      )
+    ? clampFinite((data as any)?.nodeHeight, visualNodeDefaults.minHeight, visualNodeDefaults.maxHeight, visualNodeDefaults.height)
     : null
   const toolbarBaseWidth = useMediaFocusToolbar ? 650 : 380
   // 弹窗固定 100% 显示，不随画布缩放缩小（始终可读；宽度仅受视口宽度约束）
@@ -6419,7 +6376,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     variantsBaseWidth,
     variantsBaseHeight,
     // lens 投影节点：主图按原始宽高比完整显示（contain），tapCanvas 原生节点保持 cover 裁切
-    objectFit: isLensProjectionNode ? 'contain' : 'cover',
+    // 图片编辑节点（衍生节点）同样 contain，保证图片完整展示不被裁切
+    objectFit: isLensProjectionNode || kind === 'imageEdit' ? 'contain' : 'cover',
     // lens 投影节点：无图时把提示词展示在图片位置（对齐分镜节点行为）
     emptyPromptText: isLensProjectionNode ? String((data as { prompt?: string })?.prompt ?? '').trim() || null : null,
     // lens 投影节点：双击图片不打开大图预览（放大预览有专门按钮），事件冒泡给画布做「放大到该节点」
@@ -6904,8 +6862,6 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     ]
       .filter(Boolean)
       .join('\n')
-
-
 
     try {
       setStoryboardImageScriptLoading(true)
@@ -7518,8 +7474,6 @@ const rewritePromptWithCharacters = React.useCallback(
 
     return results.slice(0, 20)
   }, [isVideoNode, resolvedVideoVendor, veoImageModalMode])
-
-
 
   React.useEffect(() => {
     if (!suggestionsAllowed && suggestionsEnabled) {
