@@ -179,6 +179,7 @@ import { appendImageEditFocusGuidePrompt } from './taskNode/imageEditFocusGuide'
 import {
   collectOrderedUpstreamReferenceItems,
   extractNodePrimaryAssetReference,
+  getNodeLabel,
   type OrderedUpstreamReferenceItem,
 } from './taskNode/upstreamReferences'
 import { collectUpstreamVideoTextContext } from './taskNode/videoPromptGeneration'
@@ -3048,6 +3049,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         imageModelVendor: null,
         imageEditSize: nextImageEditSize,
         size: nextImageEditSize,
+        // 继承源节点的实际宽高：衍生节点从哪个节点派生，尺寸就与它保持一致，
+        // 不使用固定常量，避免源节点被调整过尺寸后两者对不齐
+        ...(Number.isFinite(Number(sourceDataRecord.nodeWidth)) && Number(sourceDataRecord.nodeWidth) > 0
+          ? { nodeWidth: Number(sourceDataRecord.nodeWidth) }
+          : null),
+        ...(Number.isFinite(Number(sourceDataRecord.nodeHeight)) && Number(sourceDataRecord.nodeHeight) > 0
+          ? { nodeHeight: Number(sourceDataRecord.nodeHeight) }
+          : null),
         referenceImages: [normalizedBaseImageUrl],
         ...(Array.isArray(sourceDataRecord.anchorBindings) ? { anchorBindings: sourceDataRecord.anchorBindings } : null),
         ...(Array.isArray(sourceDataRecord.assetInputs) ? { assetInputs: sourceDataRecord.assetInputs } : null),
@@ -5496,12 +5505,54 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const visualNodeDefaults = React.useMemo(() => {
     if (coreKind === 'video') return { width: 400, height: 225, minWidth: 240, maxWidth: 960, minHeight: 160, maxHeight: 720 }
     if (isStoryboardEditorNode) return { width: 560, height: 470, minWidth: 360, maxWidth: 960, minHeight: 260, maxHeight: 760 }
-    if (kind === 'imageEdit') return { width: 320, height: 220, minWidth: 180, maxWidth: 420, minHeight: 120, maxHeight: 420 }
     return { width: 120, height: 210, minWidth: 110, maxWidth: 560, minHeight: 90, maxHeight: 420 }
   }, [coreKind, isStoryboardEditorNode, kind])
 
+  // 衍生节点（图片编辑）：沿入边找到派生来源节点，取其尺寸作为本节点尺寸。
+  // 这样衍生节点与源节点（角色/场景/道具）宽高完全一致，且经过与源节点相同的
+  // clamp 规则，最终渲染尺寸必然相同；不再依赖创建时写入的 data 快照。
+  const derivedSourceEdges = useRFStore((s) => s.edges)
+  const derivedSourceSize = React.useMemo(() => {
+    if (kind !== 'imageEdit') return null
+    const { nodes, edges } = useRFStore.getState()
+    const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
+    // 沿入边逐级向上追溯：衍生节点可能从另一个衍生节点派生，
+    // 必须找到最源头的投影节点（角色/场景/道具）才能拿到正确尺寸
+    let cursor = id
+    const visited = new Set<string>()
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor)
+      const inbound = edges.find((edge) => edge.target === cursor)
+      if (!inbound) return null
+      const sourceNode = nodeById.get(inbound.source)
+      if (!sourceNode) return null
+      const sourceData = sourceNode.data as Record<string, unknown> | undefined
+      const sourceKind = String(sourceData?.kind || '')
+      const width = Number(sourceData?.nodeWidth)
+      const height = Number(sourceData?.nodeHeight)
+      const hasSize = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+      // 源头节点（非图片编辑）= 投影资产节点，用它的尺寸
+      if (hasSize && sourceKind !== 'imageEdit') {
+        return { width, height }
+      }
+      cursor = inbound.source
+    }
+    return null
+  }, [derivedSourceEdges, id, kind])
+
+  // 衍生节点：用户未手动缩放时，宽高直接跟随派生来源节点（角色/场景/道具），
+  // 保证两者渲染尺寸完全一致；手动缩放后以 data 为准，不再覆盖用户设置。
+  const followSourceSize = kind === 'imageEdit'
+    && Boolean(derivedSourceSize)
+    && !(data as Record<string, unknown> | undefined)?.nodeSizeManual
+
   const nodeWidth = isResizableVisualNode
-    ? clampFinite((data as any)?.nodeWidth, visualNodeDefaults.minWidth, visualNodeDefaults.maxWidth, visualNodeDefaults.width)
+    ? clampFinite(
+        followSourceSize && derivedSourceSize ? derivedSourceSize.width : (data as any)?.nodeWidth,
+        visualNodeDefaults.minWidth,
+        visualNodeDefaults.maxWidth,
+        visualNodeDefaults.width,
+      )
     : isPlainTextNode
       ? clampFinite((data as any)?.nodeWidth, 340, 620, TEXT_NODE_DEFAULT_WIDTH)
     : typeof (data as any)?.nodeWidth === 'number' && Number.isFinite((data as any)?.nodeWidth)
@@ -5509,7 +5560,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       : coreKind === 'video' ? 400 : 360
 
   const nodeHeight = isResizableVisualNode
-    ? clampFinite((data as any)?.nodeHeight, visualNodeDefaults.minHeight, visualNodeDefaults.maxHeight, visualNodeDefaults.height)
+    ? clampFinite(
+        followSourceSize && derivedSourceSize ? derivedSourceSize.height : (data as any)?.nodeHeight,
+        visualNodeDefaults.minHeight,
+        visualNodeDefaults.maxHeight,
+        visualNodeDefaults.height,
+      )
     : null
   const toolbarBaseWidth = useMediaFocusToolbar ? 650 : 380
   // 弹窗固定 100% 显示，不随画布缩放缩小（始终可读；宽度仅受视口宽度约束）
@@ -5558,6 +5614,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       updateNodeData(id, {
         nodeWidth: nextWidth,
         nodeHeight: nextHeight,
+        // 用户手动缩放：标记后不再自动校正为源节点尺寸
+        nodeSizeManual: true,
       })
     },
     [clampFinite, id, nodeHeight, nodeWidth, updateNodeData, visualNodeDefaults.height, visualNodeDefaults.maxHeight, visualNodeDefaults.maxWidth, visualNodeDefaults.minHeight, visualNodeDefaults.minWidth],
@@ -6367,7 +6425,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     // lens 投影节点：双击图片不打开大图预览（放大预览有专门按钮），事件冒泡给画布做「放大到该节点」
     disableDoubleClickPreview: isLensProjectionNode,
     // lens 投影节点：按画布缩放选 OSS 响应式图档位
-    responsiveOss: isLensProjectionNode,
+    // 图片编辑节点同样走响应式 OSS，按显示宽度拉缩略图，避免直接加载原图导致很慢
+    responsiveOss: isLensProjectionNode || kind === 'imageEdit',
     hasPrimaryImage,
     imageResults,
     imagePrimaryIndex,
@@ -7569,6 +7628,57 @@ const rewritePromptWithCharacters = React.useCallback(
   const shellOutline = 'none'
   const shellShadow = selected ? `${nodeShellShadow}, ${nodeShellGlow}` : nodeShellShadow
   const subtitle = schema.label || defaultLabel
+
+  // 衍生节点专属信息：主标题显示「原节点名 · 操作类型」，副标题显示能力名（图片编辑）。
+  // 非衍生节点返回 null，走原有 subtitle 逻辑，行为不变。
+  const derivedSubtitle = React.useMemo(() => {
+    if (kind !== 'imageEdit') return null
+    const selfData = data as Record<string, unknown> | undefined
+
+    /** 相机 presetId → 中文角度描述 */
+    const cameraPresetLabels: Record<string, string> = {
+      front: '正面角度', left: '左侧角度', right: '右侧角度', back: '背面角度',
+      left45: '左45°角度', right45: '右45°角度', topDown: '俯视角度', lowAngle: '仰视角度',
+    }
+    /** 灯光 presetId → 中文打光描述 */
+    const lightPresetLabels: Record<string, string> = {
+      left: '左侧打光', top: '顶部打光', right: '右侧打光', topLeft: '左上打光',
+      front: '前方打光', topRight: '右上打光', bottom: '底部打光', back: '后方打光',
+    }
+
+    const cameraRaw = selfData?.imageCameraControl as Record<string, unknown> | undefined
+    const lightingRaw = selfData?.imageLightingRig as Record<string, unknown> | undefined
+    const lightMain = lightingRaw?.main as Record<string, unknown> | undefined
+    const lightFill = lightingRaw?.fill as Record<string, unknown> | undefined
+
+    // 与 hasActiveImageLightingRig 一致：主光或辅光任一启用即为打光
+    const cameraEnabled = Boolean(cameraRaw?.enabled)
+    const lightingEnabled = Boolean(lightMain?.enabled) || Boolean(lightFill?.enabled)
+
+    const parts: string[] = []
+    if (cameraEnabled) parts.push(cameraPresetLabels[String(cameraRaw?.presetId || '')] || '角度')
+    if (lightingEnabled) {
+      const activeLight = lightMain?.enabled ? lightMain : lightFill
+      parts.push(lightPresetLabels[String(activeLight?.presetId || '')] || '打光')
+    }
+    if (!parts.length) return null
+
+    // 原节点名：anchorBindings 的 label（生成时从源节点复制而来）→ 上游连线节点标题
+    let sourceLabel = ''
+    const bindings = Array.isArray(selfData?.anchorBindings) ? selfData.anchorBindings : []
+    const firstBinding = bindings[0] as Record<string, unknown> | undefined
+    sourceLabel = String(firstBinding?.label || '').trim()
+
+    if (!sourceLabel) {
+      const { nodes, edges } = useRFStore.getState()
+      const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, id)
+      const sourceNode = orderedItems.length ? nodes.find((n) => n.id === orderedItems[0].sourceNodeId) : undefined
+      if (sourceNode) sourceLabel = getNodeLabel(sourceNode)
+    }
+
+    const typeText = parts.join('+')
+    return sourceLabel ? `${sourceLabel} · ${typeText}` : typeText
+  }, [id, kind, data])
   const inferredProductionMeta = React.useMemo(() => inferProductionNodeMeta(kind), [kind])
   const isExplicitAnchor = productionMeta.productionLayer === 'anchors'
   const canToggleAnchor = UI_ANCHOR_ELIGIBLE_KINDS.has(String(kind || '').trim())
@@ -8323,13 +8433,19 @@ const rewritePromptWithCharacters = React.useCallback(
         progress={(data as any)?.progress}
       />
       {productionMetadata && <ChapterGroundedBadge metadata={productionMetadata} />}
-      {((!hideImageMeta && !isCanvasMediaNode && !isStoryboardEditorNode && !isCameraRefNode) || isLensProjectionNode) && (
+      {((!hideImageMeta && !isCanvasMediaNode && !isStoryboardEditorNode && !isCameraRefNode) || isLensProjectionNode || Boolean(derivedSubtitle)) && (
         <TaskNodeHeader
           NodeIcon={NodeIcon}
           editing={editing}
           labelDraft={labelDraft}
-          currentLabel={currentLabel}
-          subtitle={isLensProjectionNode ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel) : subtitle}
+          currentLabel={derivedSubtitle || currentLabel}
+          subtitle={
+            derivedSubtitle
+              ? (schema.label || '图片编辑')
+              : (isLensProjectionNode
+                ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel)
+                : subtitle)
+          }
           actions={<AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} onOpen={openAssetTaskPanel} />}
           metaBadges={headerMetaBadges}
           statusLabel={statusLabel}
@@ -8343,7 +8459,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showMeta={false}
         showIcon={false}
         showStatus={false}
-        showSubtitle={isLensProjectionNode}
+        showSubtitle={isLensProjectionNode || Boolean(derivedSubtitle)}
           onLabelDraftChange={setLabelDraft}
           onCommitLabel={commitLabel}
           onCancelEdit={() => {
@@ -8526,6 +8642,16 @@ const rewritePromptWithCharacters = React.useCallback(
           keepAspectRatio={!isStoryboardEditorNode}
           minWidth={visualNodeDefaults.minWidth}
           minHeight={visualNodeDefaults.minHeight}
+          // 拖拽开始：把当前视觉尺寸固化进 data 并标记为手动尺寸，
+          // 避免拖拽过程中尺寸被「跟随源节点」逻辑拉回
+          onResizeStart={() => {
+            if (kind !== 'imageEdit') return
+            updateNodeData(id, {
+              nodeWidth,
+              nodeHeight: nodeHeight ?? visualNodeDefaults.height,
+              nodeSizeManual: true,
+            })
+          }}
           onResizeEnd={handleMediaResizeEnd}
         >
           <div className="tc-task-node__media-resize-handle" style={{ width: 10, height: 10, borderRight: '2px solid rgba(255,255,255,0.55)', borderBottom: '2px solid rgba(255,255,255,0.55)' }} />

@@ -902,7 +902,9 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
   }, [authToken, handleTaskProgress])
 
   useEffect(() => {
-    if (!authToken) return
+    // lens 画布模式的任务查询走 lens 接口（cookie 鉴权），不依赖 TapCanvas 登录 token，
+    // 因此没有 tapcanvas token 时也要运行，否则刷新后任务状态不会恢复轮询
+    if (!authToken && !isLensMode()) return
     if (viewOnly) return
 
     const tick = () => {
@@ -912,7 +914,9 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         const data: any = n?.data || {}
         const kind = String(data.kind || '')
         const status = String(data.status || '')
-        if (status !== 'running' && status !== 'queued') continue
+        // 终态节点不再查询；running/queued 以及「刷新后 status 丢失」的节点都要继续查，
+        // 否则页面刷新后未完成的任务永远不会再更新
+        if (status === 'success' || status === 'error' || status === 'canceled') continue
 
         const nodeId = String(n.id || '')
         if (!nodeId) continue
@@ -2091,8 +2095,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     if (target && typeof target.closest === 'function'
       && (target.closest('.react-flow__node-toolbar') || target.closest('[data-no-node-dblclick="1"]'))) return
     // lens 节点（分镜/资产/剧本台本）双击：放大到该节点（不进入子图聚焦模式）；位置异常时回退原聚焦行为
+    // 图片编辑节点（角度/打光等衍生节点）也按业务节点处理，双击=放大到节点，而不是查看大图
     const source = String((node.data as { source?: string })?.source ?? '')
-    if (node.type === 'lensShot' || source === 'lens_projection') {
+    const nodeKind = String((node.data as { kind?: string })?.kind ?? '')
+    if (node.type === 'lensShot' || source === 'lens_projection' || nodeKind === 'imageEdit') {
       const w = Number(node.measured?.width ?? node.width ?? 400)
       const h = Number(node.measured?.height ?? node.height ?? 300)
       // 组内节点 position 为相对坐标：累加父链得到绝对坐标

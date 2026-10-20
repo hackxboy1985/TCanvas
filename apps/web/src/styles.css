@@ -6119,6 +6119,16 @@ body {
   min-width: 0;
 }
 
+/* 媒体节点缩放手柄：底部工具栏(z-index 3001)会盖住节点右下角的手柄，
+   这里把手柄提到工具栏之上，并外扩一点，保证选中节点后仍能看到和拖拽 */
+.tc-task-node__media-resize {
+  z-index: 3002;
+}
+.tc-task-node__media-resize-handle {
+  /* 贴着节点右下角边缘，向右下各外扩 2px，避免被描边盖住 */
+  transform: translate(2px, 2px);
+}
+
 .tc-task-node__toolbar,
 .tc-task-node__text-inline-toolbar,
 .top-toolbar {
@@ -6253,8 +6263,9 @@ body {
 .tc-task-node__upstream-reference-strip-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  /* 标题与说明紧挨着左对齐，不把说明推到右上角 */
+  justify-content: flex-start;
+  gap: 8px;
   min-width: 0;
 }
 

@@ -1141,7 +1141,68 @@ export default function LensCanvasApp(): JSX.Element {
     window.setTimeout(() => { canvasApiRef.current?.fitView() }, 60)
   }, [load])
 
-  /** 加载某集数据（投影节点 + 恢复编排） */
+  /**
+ * 衍生节点尺寸对齐（flow 加载时执行）。
+ *
+ * <p>图片编辑节点（角度/打光等衍生节点）的历史 data 里可能存着旧尺寸（如 384x250），
+ * 与派生来源的角色/场景节点（如 382x461）不一致，渲染出来就会明显矮一截。
+ * 这里沿入边逐级追溯到最源头的投影节点，把它的尺寸写进衍生节点 data；
+ * 用户手动缩放过的节点（nodeSizeManual）保持用户设置不动。</p>
+ */
+function alignDerivedNodeSizes(nodes: Node[], edges: Edge[]): Node[] {
+  const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
+
+  /** 判断节点是否带有效尺寸 */
+  const readSize = (node: Node | undefined): { width: number; height: number } | null => {
+    const data = node?.data as Record<string, unknown> | undefined
+    const width = Number(data?.nodeWidth)
+    const height = Number(data?.nodeHeight)
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+    return { width, height }
+  }
+
+  // 兜底基准：页面上的投影资产节点（角色/场景/道具）尺寸。
+  // 入边追溯失败时（例如 flow 里连线丢失）用它保证衍生节点仍与投影节点同尺寸。
+  const referenceSize = nodes.reduce<{ width: number; height: number } | null>((acc, node) => {
+    if (acc) return acc
+    const data = node.data as Record<string, unknown> | undefined
+    if (data?.source !== 'lens_projection') return acc
+    return readSize(node)
+  }, null)
+
+  return nodes.map((node) => {
+    const data = node.data as Record<string, unknown> | undefined
+    if (String(data?.kind || '') !== 'imageEdit') return node
+    // 用户手动缩放过的节点保留自己尺寸
+    if (data?.nodeSizeManual) return node
+
+    // 优先沿入边逐级追溯到最源头的投影节点
+    let cursor = node.id
+    const visited = new Set<string>()
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor)
+      const inbound = edges.find((edge) => edge.target === cursor)
+      if (!inbound) break
+      const sourceNode = nodeById.get(inbound.source)
+      if (!sourceNode) break
+      const sourceData = sourceNode.data as Record<string, unknown> | undefined
+      if (String(sourceData?.kind || '') !== 'imageEdit') {
+        const size = readSize(sourceNode)
+        if (size) return { ...node, data: { ...(data || {}), nodeWidth: size.width, nodeHeight: size.height } }
+        break
+      }
+      cursor = inbound.source
+    }
+
+    // 追溯失败：用页面投影节点尺寸兜底
+    if (referenceSize) {
+      return { ...node, data: { ...(data || {}), nodeWidth: referenceSize.width, nodeHeight: referenceSize.height } }
+    }
+    return node
+  })
+}
+
+/** 加载某集数据（投影节点 + 恢复编排） */
   const loadEpisode = useCallback(async (targetEpisode: number) => {
     if (!dramaId) return
     const key = `${dramaId}:${targetEpisode}`
@@ -1214,7 +1275,7 @@ export default function LensCanvasApp(): JSX.Element {
             const restoredEdges = useFlowLayout
               ? (Array.isArray(parsed.edges) ? parsed.edges : [])
               : projected.edges
-            load({ nodes: restored, edges: restoredEdges })
+            load({ nodes: alignDerivedNodeSizes(restored, restoredEdges), edges: restoredEdges })
             if (parsed.viewport) {
               const vp = parsed.viewport
               window.setTimeout(() => { canvasApiRef.current?.setViewport(vp) }, 0)
@@ -1225,7 +1286,7 @@ export default function LensCanvasApp(): JSX.Element {
           // flow data 损坏：用默认投影（错误已在 getFlow 阶段捕获过，这里走兜底布局）
         }
       }
-      load({ nodes: projected.nodes, edges: projected.edges })
+      load({ nodes: alignDerivedNodeSizes(projected.nodes, projected.edges), edges: projected.edges })
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载失败'
       setError(`画布加载失败：${msg}（可刷新重试或返回分镜板）`)

@@ -3452,8 +3452,92 @@ async function runVideoTask(ctx: RunnerContext) {
   }
 }
 
-export async function syncImageNodeOnce(_id: string, _get: Getter) {
-  return
+/**
+ * 单次同步图片节点任务状态（页面加载后恢复轮询用）。
+ *
+ * <p>画布刷新后内存中的轮询协程会丢失，节点若停在 running/queued 就永远不会再更新。
+ * 由画布定时器扫描到 running/queued 且带 imageTaskId 的图片节点后调用本函数，
+ * 查一次 lens 任务状态并把结果写回节点（成功 / 失败 / 继续等待）。</p>
+ */
+export async function syncImageNodeOnce(id: string, get: Getter) {
+  const ctx = buildRunnerContext(id, get)
+  if (!ctx) return
+
+  const { data, setNodeStatus, appendLog } = ctx
+  const rawTaskId = (data as any)?.imageTaskId
+  const taskId = typeof rawTaskId === 'string'
+    ? rawTaskId.trim()
+    : typeof rawTaskId === 'number'
+      ? String(rawTaskId)
+      : ''
+  if (!taskId) return
+  const numericTaskId = Number(taskId)
+  if (!Number.isFinite(numericTaskId) || numericTaskId <= 0) return
+
+  let snapshot: Awaited<ReturnType<typeof getCanvasTaskStatus>>
+  try {
+    snapshot = await getCanvasTaskStatus(numericTaskId)
+  } catch (error: unknown) {
+    const message = error instanceof Error && error.message ? error.message : '查询图片任务状态失败'
+    appendLog(id, `[${nowLabel()}] error: ${message}`)
+    return
+  }
+
+  const statusUpper = String(snapshot.status || '').toUpperCase()
+
+  if (statusUpper === 'FAILED') {
+    const message = snapshot.resMsg?.trim() || snapshot.remark?.trim() || '图片任务执行失败'
+    setNodeStatus(id, 'error', { progress: 0, lastError: message })
+    appendLog(id, `[${nowLabel()}] error: ${message}`)
+    return
+  }
+
+  if (statusUpper !== 'SUCCESS') {
+    const currentProgress = typeof (data as any)?.progress === 'number' ? (data as any).progress : 10
+    setNodeStatus(id, statusUpper === 'RUNNING' ? 'running' : 'queued', {
+      progress: Math.max(10, currentProgress),
+      imageTaskId: taskId,
+    })
+    return
+  }
+
+  const fileUrlRaw = typeof snapshot.fileUrl === 'string' ? snapshot.fileUrl.trim() : ''
+  const fileUrls = fileUrlRaw.split(',').map((item) => item.trim()).filter(Boolean)
+  const primaryUrl = fileUrls[0] || ''
+  if (!primaryUrl) {
+    setNodeStatus(id, 'error', { progress: 0, lastError: '图片任务已完成但未返回图片地址' })
+    appendLog(id, `[${nowLabel()}] error: 任务已完成但未返回图片地址`)
+    return
+  }
+
+  const existingResults = Array.isArray((data as any)?.imageResults)
+    ? ((data as any).imageResults as Array<Record<string, unknown>>)
+    : []
+  const existingUrls = new Set(
+    existingResults.map((item) => String(item?.url || '').trim()).filter(Boolean),
+  )
+  const nodeLabel = String((data as any)?.label || '图片').trim()
+  const appendedResults = fileUrls
+    .filter((url) => !existingUrls.has(url))
+    .map((url) => ({ url, title: nodeLabel, assetName: nodeLabel, assetRefId: nodeLabel }))
+  const imageResults = [...existingResults, ...appendedResults]
+  const primaryIndex = imageResults.findIndex(
+    (item) => String(item?.url || '').trim() === primaryUrl,
+  )
+
+  setNodeStatus(id, 'success', {
+    progress: 100,
+    imageUrl: primaryUrl,
+    imageResults,
+    imagePrimaryIndex: primaryIndex >= 0 ? primaryIndex : imageResults.length - 1,
+    lastResult: {
+      id: taskId,
+      at: Date.now(),
+      kind: String((data as any)?.imageTaskKind || 'image'),
+      preview: { type: 'image', src: primaryUrl },
+    },
+  })
+  appendLog(id, `[${nowLabel()}] 已同步任务 ${taskId} 的图片结果`)
 }
 
 async function runGenericVideoTask(ctx: RunnerContext, options: GenericVideoTaskOptions) {
