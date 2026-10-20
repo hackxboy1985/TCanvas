@@ -611,7 +611,7 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
    */
   const handleClip = useCallback(() => {
     const src = String(data.selectedImageUrl || '').trim()
-    if (!src || data.selectFileType !== 1) {
+    if (!src) {
       toast('当前分镜没有可剪辑的视频', 'error')
       return
     }
@@ -651,7 +651,7 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
         toast('剪辑结果已生成新视频节点', 'success')
       },
     })
-  }, [data.selectFileType, data.selectedImageUrl, data.storyboardOrder, id])
+  }, [data.selectedImageUrl, data.storyboardOrder, id])
 
   /** 抽帧预览的提示出口：抽帧逻辑在公共组件 VideoFramePreview 内，回调统一走节点 toast */
   const handleFramePreviewNotify = useCallback((message: string, level: 'success' | 'error') => {

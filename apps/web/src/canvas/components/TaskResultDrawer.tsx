@@ -24,6 +24,7 @@
  * <b>懒加载</b>：展开才查。
  */
 import React from 'react'
+import type { Node } from '@xyflow/react'
 import {
   ActionIcon,
   Badge,
@@ -43,6 +44,7 @@ import { IconAlertTriangle, IconCheck, IconCopy, IconEye, IconRefresh } from '@t
 import {
   adoptShotResult,
   listAssetImageTasks,
+  listCanvasFreeNodeTasks,
   LensAssetTaskStatus,
   listShotVideoTasks,
   type LensShotFileType,
@@ -52,6 +54,7 @@ import {
 import { toast } from '../../ui/toast'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
 import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
+import { getNodeWithDerivatives, getEditTypeLabel } from '../utils/node'
 
 /** 轮询间隔（毫秒），对齐 §5.2 的 5s */
 const POLL_INTERVAL_MS = 5000
@@ -149,6 +152,8 @@ export interface TaskResultDrawerProps {
    * 避免同一个采纳动作出现两条落库链路。
    */
   onAdoptResult?: (payload: TaskResultAdoptedPayload) => void
+  /** 画布所有节点（用于查询衍生节点的任务） */
+  allNodes?: Node<any>[]
 }
 
 /** 节点类型 → 展示文案 */
@@ -440,6 +445,7 @@ export function TaskResultDrawer({
   onClose,
   canViewParams = false,
   onAdoptResult,
+  allNodes,
 }: TaskResultDrawerProps) {
   const [records, setRecords] = React.useState<LensTaskRecord[]>([])
   const [total, setTotal] = React.useState(0)
@@ -506,17 +512,57 @@ export function TaskResultDrawer({
         if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
         if (requestVersion !== requestVersionRef.current) return
         const res = await listAssetImageTasks({
-          applicationIds,
-          taskStatus,
-          dramaId: target.dramaId,
-          assetType,
-          assetId: identity.assetId,
-          pageNum: targetPage,
-          pageSize: PAGE_SIZE,
-        })
-        if (requestVersion !== requestVersionRef.current) return
-        setRecords(Array.isArray(res.rows) ? res.rows : [])
-        setTotal(res.total ?? 0)
+           applicationIds,
+           taskStatus,
+           dramaId: target.dramaId,
+           assetType,
+           assetId: identity.assetId,
+           pageNum: targetPage,
+           pageSize: PAGE_SIZE,
+         })
+         if (requestVersion !== requestVersionRef.current) return
+         
+         // 查询原节点任务
+         let allRecords = Array.isArray(res.rows) ? res.rows : []
+         
+         // 查询衍生节点任务（仅图片类资产，不查视频）
+         if (allNodes && target.kind !== 'storyboard') {
+           const { derivedNodeIds } = getNodeWithDerivatives(target.nodeId, allNodes)
+           for (const derivedNodeId of derivedNodeIds) {
+             const derivedNode = allNodes.find(n => n.id === derivedNodeId)
+             if (!derivedNode?.data?.canvasNodeAssetId) continue
+             try {
+               const derivedRes = await listCanvasFreeNodeTasks({
+                 dramaId: target.dramaId,
+                 canvasNodeAssetId: derivedNode.data.canvasNodeAssetId,
+                 pageNum: 1,
+                 pageSize: 1000,
+               })
+               if (requestVersion !== requestVersionRef.current) return
+               if (Array.isArray(derivedRes.rows)) {
+                 const markedRows = derivedRes.rows.map(row => ({
+                   ...row,
+                   _sourceNodeId: derivedNodeId,
+                   _editType: derivedNode.data.editType,
+                   _isDerivedTask: true,
+                 }))
+                 allRecords = allRecords.concat(markedRows)
+               }
+             } catch (err) {
+               console.warn(`查询衍生节点任务失败: ${derivedNodeId}`, err)
+             }
+           }
+         }
+         
+         // 按时间排序（新的在前）
+         allRecords.sort((a, b) => {
+           const timeA = new Date(a.createTime || a.createDate || 0).getTime()
+           const timeB = new Date(b.createTime || b.createDate || 0).getTime()
+           return timeB - timeA
+         })
+         
+         setRecords(allRecords.slice(0, PAGE_SIZE))
+         setTotal(allRecords.length)
       } catch (err) {
         if (requestVersion !== requestVersionRef.current) return
         setRecords([])
@@ -526,7 +572,7 @@ export function TaskResultDrawer({
         if (requestVersion === requestVersionRef.current) setLoading(false)
       }
     },
-    [target, opened, taskStatus],
+    [target, opened, taskStatus, allNodes],
   )
 
   // 关闭抽屉 / 切换目标时丢弃未确认的采纳草稿（避免残留上一次的上下文）

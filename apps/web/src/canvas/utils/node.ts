@@ -30,6 +30,12 @@ export interface NodeData {
   inputs?: string[];
   outputs?: string[];
   parameters?: Record<string, any>;
+  /** 引用的原节点ID（用于衍生节点指向其源节点） */
+  refNodeId?: string;
+  /** 编辑类型标记（角度/打光/自定义等） */
+  editType?: 'angle' | 'lighting' | 'custom' | string;
+  /** 画布节点资产ID（用于自由节点任务归属） */
+  canvasNodeAssetId?: number;
   [key: string]: any;
 }
 
@@ -449,4 +455,47 @@ export const NodeConfigTemplates = {
  */
 export function getNodeDefaultConfig(kind: string): Record<string, any> {
   return NodeConfigTemplates[kind as keyof typeof NodeConfigTemplates] || {};
+}
+
+/**
+ * 根据节点ID查询该节点及其所有衍生节点
+ * @param nodeId 节点ID
+ * @param allNodes 所有节点数组（从 flow 中提取）
+ * @returns 返回 { primaryNodeId, derivedNodeIds } 结构
+ */
+export function getNodeWithDerivatives(
+  nodeId: string,
+  allNodes: Node<NodeData>[]
+): { primaryNodeId: string; derivedNodeIds: string[] } {
+  const derivedNodeIds = allNodes
+    .filter((node) => node.data?.refNodeId === nodeId && node.type === 'taskNode')
+    .map((node) => node.id);
+
+  return {
+    primaryNodeId: nodeId,
+    derivedNodeIds,
+  };
+}
+
+/**
+ * 获取节点的编辑类型标签
+ * @param editType 编辑类型
+ * @returns 中文标签
+ */
+export function getEditTypeLabel(editType?: string): string {
+  const labels: Record<string, string> = {
+    angle: '角度修改',
+    lighting: '打光调整',
+    custom: '自定义编辑',
+  };
+  return labels[editType || ''] || editType || '';
+}
+
+/**
+ * 检查节点是否是衍生节点
+ * @param node 节点
+ * @returns 是否是衍生节点
+ */
+export function isDerivedNode(node: Node<NodeData>): boolean {
+  return !!node.data?.refNodeId;
 }
