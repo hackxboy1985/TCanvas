@@ -165,7 +165,6 @@ import {
   inferProductionNodeMeta,
   readChapterGroundedProductionMetadata,
 } from '../productionMeta'
-import { getEditTypeLabel } from '../utils/node'
 import {
   DEFAULT_CANVAS_RESIZE_SIZE,
   DEFAULT_IMAGE_EDIT_SIZE,
@@ -7643,16 +7642,17 @@ const rewritePromptWithCharacters = React.useCallback(
       if (sourceNode) sourceLabel = getNodeLabel(sourceNode)
     }
 
-    // 没有任何角度/打光时（局部修改、尺寸调整）用编辑类型兜底，
+    // 没有任何角度/打光时（局部修改、尺寸调整），按「节点来源」兜底，
     // 保证衍生节点一定有标题，不再因为 parts 为空而整条标题栏被隐藏。
-    // 文案复用 getEditTypeLabel，避免这里再维护一份 editType 映射。
+    //
+    // 文案必须与界面上用户看到的操作名一致，不能暴露内部 editType 字面量
+    // （custom 对用户无意义，getEditTypeLabel 的「自定义编辑」就是被误显示的内部叫法）。
+    // 判定只按创建处 createDerivedImageNode 的产物类型：
+    //   - 尺寸调整产出 kind='image'
+    //   - 局部修改产出 kind='imageEdit'
+    // 不读 editType：历史节点可能没有这个字段，按它判定会把局部修改误显示成「图片编辑」。
     if (!parts.length) {
-      const editTypeLabel = getEditTypeLabel(String(selfData?.editType || '').trim())
-      if (editTypeLabel) {
-        parts.push(editTypeLabel)
-      } else {
-        parts.push(kind === 'image' ? '尺寸调整' : '图片编辑')
-      }
+      parts.push(kind === 'image' ? '尺寸调整' : '局部修改')
     }
 
     const typeText = parts.join('+')
