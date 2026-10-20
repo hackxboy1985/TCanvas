@@ -24,7 +24,6 @@
  * <b>懒加载</b>：展开才查。
  */
 import React from 'react'
-import type { Node } from '@xyflow/react'
 import {
   ActionIcon,
   Badge,
@@ -44,7 +43,6 @@ import { IconAlertTriangle, IconCheck, IconCopy, IconEye, IconRefresh } from '@t
 import {
   adoptShotResult,
   listAssetImageTasks,
-  listCanvasFreeNodeTasks,
   LensAssetTaskStatus,
   listShotVideoTasks,
   type LensShotFileType,
@@ -52,9 +50,11 @@ import {
   type LensModelOption,
 } from '../../api/lens'
 import { toast } from '../../ui/toast'
+import { useUIStore } from '../../ui/uiStore'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
 import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
-import { getNodeWithDerivatives, getEditTypeLabel } from '../utils/node'
+import { getLensCanvasFlowId } from '../utils/canvasNodeAssetId'
+import { collectDerivedTaskRows } from '../utils/derivedTasks'
 
 /** 轮询间隔（毫秒），对齐 §5.2 的 5s */
 const POLL_INTERVAL_MS = 5000
@@ -152,8 +152,6 @@ export interface TaskResultDrawerProps {
    * 避免同一个采纳动作出现两条落库链路。
    */
   onAdoptResult?: (payload: TaskResultAdoptedPayload) => void
-  /** 画布所有节点（用于查询衍生节点的任务） */
-  allNodes?: Node<any>[]
 }
 
 /** 节点类型 → 展示文案 */
@@ -203,6 +201,8 @@ interface TaskCardModel {
   createTime: string
   /** 提示词 */
   prompt: string
+  /** 衍生节点任务的来源标签（角度修改/打光调整/自定义编辑）；空串表示原资产任务 */
+  derivedLabel: string
   /** 失败原因 */
   resMsg: string
   /** Ultra 模式标识（序列任务ID 非空） */
@@ -357,6 +357,8 @@ function parseMeta(raw: unknown): { ratio: string; duration: string; refImages: 
  * @returns 卡片视图模型
  */
 function toCardModel(record: LensTaskRecord, index: number): TaskCardModel {
+  // 衍生节点任务在 fetchTasks 里合并进来时打了 derivedLabel；原资产任务没有该字段
+  const derivedLabel = String((record as LensTaskRecord & { derivedLabel?: string }).derivedLabel || '')
   const status = String(record.taskStatus || record.status || '').trim().toUpperCase()
   // 两类节点的「完整请求参数」字段名不同，必须都认：
   //   分镜节点（/api/storyboardTask/list）→ taskParams
@@ -389,6 +391,7 @@ function toCardModel(record: LensTaskRecord, index: number): TaskCardModel {
     ratio: meta.ratio,
     createTime: String(record.createTime || ''),
     prompt: String(record.prompt || ''),
+    derivedLabel,
     resMsg: String(record.resMsg || record.errorMsg || ''),
     seqJobId: String(record.seqJobId || ''),
     refImages,
@@ -445,7 +448,6 @@ export function TaskResultDrawer({
   onClose,
   canViewParams = false,
   onAdoptResult,
-  allNodes,
 }: TaskResultDrawerProps) {
   const [records, setRecords] = React.useState<LensTaskRecord[]>([])
   const [total, setTotal] = React.useState(0)
@@ -521,48 +523,19 @@ export function TaskResultDrawer({
            pageSize: PAGE_SIZE,
          })
          if (requestVersion !== requestVersionRef.current) return
-         
-         // 查询原节点任务
-         let allRecords = Array.isArray(res.rows) ? res.rows : []
-         
-         // 查询衍生节点任务（仅图片类资产，不查视频）
-         if (allNodes && target.kind !== 'storyboard') {
-           const { derivedNodeIds } = getNodeWithDerivatives(target.nodeId, allNodes)
-           for (const derivedNodeId of derivedNodeIds) {
-             const derivedNode = allNodes.find(n => n.id === derivedNodeId)
-             if (!derivedNode?.data?.canvasNodeAssetId) continue
-             try {
-               const derivedRes = await listCanvasFreeNodeTasks({
-                 dramaId: target.dramaId,
-                 canvasNodeAssetId: derivedNode.data.canvasNodeAssetId,
-                 pageNum: 1,
-                 pageSize: 1000,
-               })
-               if (requestVersion !== requestVersionRef.current) return
-               if (Array.isArray(derivedRes.rows)) {
-                 const markedRows = derivedRes.rows.map(row => ({
-                   ...row,
-                   _sourceNodeId: derivedNodeId,
-                   _editType: derivedNode.data.editType,
-                   _isDerivedTask: true,
-                 }))
-                 allRecords = allRecords.concat(markedRows)
-               }
-             } catch (err) {
-               console.warn(`查询衍生节点任务失败: ${derivedNodeId}`, err)
-             }
-           }
-         }
-         
-         // 按时间排序（新的在前）
-         allRecords.sort((a, b) => {
-           const timeA = new Date(a.createTime || a.createDate || 0).getTime()
-           const timeB = new Date(b.createTime || b.createDate || 0).getTime()
-           return timeB - timeA
-         })
-         
-         setRecords(allRecords.slice(0, PAGE_SIZE))
-         setTotal(allRecords.length)
+         const assetRows: LensTaskRecord[] = Array.isArray(res.rows) ? res.rows : []
+         // 与节点就地任务面板口径对齐：业务资产节点的任务 = 自身任务 + 它衍生出的图片编辑节点任务。
+         // 衍生任务按 sceneId(画布flowId)+assetType=10+assetId 批量查询，一次请求取回后合并展示。
+         const flowId = getLensCanvasFlowId()
+         const derivedRows = targetPage === 1 && flowId !== undefined
+           ? await collectDerivedTaskRows({ dramaId: target.dramaId, flowId, nodeId: target.nodeId, matchStatus: taskStatus })
+           : []
+         if (requestVersion !== requestVersionRef.current) return
+         const merged = [...assetRows, ...derivedRows].sort(
+           (a, b) => new Date(b.createTime || 0).getTime() - new Date(a.createTime || 0).getTime(),
+         )
+         setRecords(merged)
+         setTotal((res.total ?? 0) + derivedRows.length)
       } catch (err) {
         if (requestVersion !== requestVersionRef.current) return
         setRecords([])
@@ -572,7 +545,7 @@ export function TaskResultDrawer({
         if (requestVersion === requestVersionRef.current) setLoading(false)
       }
     },
-    [target, opened, taskStatus, allNodes],
+    [target, opened, taskStatus],
   )
 
   // 关闭抽屉 / 切换目标时丢弃未确认的采纳草稿（避免残留上一次的上下文）
@@ -786,6 +759,8 @@ export function TaskResultDrawer({
                   {card.storyboardOrder !== null && (
                     <span className="lens-task-shot-tag">分镜{card.storyboardOrder}</span>
                   )}
+                  {/* 衍生节点任务（图片编辑/角度/打光）：标明来源，和原资产任务区分开 */}
+                  {card.derivedLabel && <span className="lens-task-derived-tag">{card.derivedLabel}</span>}
                   <span className={`lens-task-status-pill lens-task-status-pill--${card.statusClass}`}>
                     {card.statusText}
                   </span>
@@ -815,19 +790,25 @@ export function TaskResultDrawer({
                 </div>
               )}
 
-              {/* 参考图缩略图 */}
+              {/* 参考图缩略图：点击打开站内大图预览（原先是新标签打开，和结果图行为不一致） */}
               {card.refImages.length > 0 && (
                 <div className="lens-task-ref-imgs">
                   {card.refImages.map((img, i) => (
-                    <a
+                    <button
                       key={`${img}-${i}`}
-                      href={img}
-                      target="_blank"
-                      rel="noreferrer"
+                      type="button"
                       className="lens-task-ref-link"
+                      aria-label={`预览参考图 ${i + 1}`}
+                      onClick={() =>
+                        useUIStore.getState().openPreview({
+                          url: img,
+                          kind: 'image',
+                          name: `参考图 ${i + 1}`,
+                        })
+                      }
                     >
                       <img className="lens-task-ref-thumb" src={ossThumb(img, 200)} alt="" loading="lazy" />
-                    </a>
+                    </button>
                   ))}
                 </div>
               )}
@@ -868,15 +849,21 @@ export function TaskResultDrawer({
                           />
                         </div>
                       ) : (
-                        <a
+                        <button
                           key={`${r.url}-${i}`}
-                          href={r.url}
-                          target="_blank"
-                          rel="noreferrer"
+                          type="button"
                           className="lens-task-result-item"
+                          aria-label={`预览结果 ${i + 1}`}
+                          onClick={() =>
+                            useUIStore.getState().openPreview({
+                              url: r.url,
+                              kind: 'image',
+                              name: card.modelName || `结果 ${i + 1}`,
+                            })
+                          }
                         >
                           <img className="lens-task-result-media" src={ossThumb(r.url, 350)} alt="" loading="lazy" />
-                        </a>
+                        </button>
                       ),
                     )}
                   </div>

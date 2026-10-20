@@ -458,22 +458,56 @@ export function getNodeDefaultConfig(kind: string): Record<string, any> {
 }
 
 /**
- * 根据节点ID查询该节点及其所有衍生节点
+ * 判断节点是否可能承载衍生任务（图片类节点）。
+ *
+ * @param node 节点
+ * @returns 是图片/图片编辑节点返回 true
+ */
+function isDerivedTaskCandidate(node: Node<NodeData>): boolean {
+  if (node.type !== 'taskNode') return false;
+  const kind = String(node.data?.kind || '');
+  return kind === 'image' || kind === 'imageEdit';
+}
+
+/**
+ * 根据节点ID查询该节点及其所有衍生节点。
+ *
+ * <p><b>两条识别路径，缺一不可</b>：
+ * <ol>
+ *   <li>{@code data.refNodeId}：新版本创建衍生节点时写入的派生来源；</li>
+ *   <li><b>连线兜底</b>：旧版本（写入 refNodeId 之前）创建的衍生节点没有该字段，
+ *       但它们与来源节点之间一直有 {@code 来源节点 → 衍生节点} 的连线，
+ *       早期数据只能靠连线识别，否则会一直查不到它们的任务。</li>
+ * </ol>
+ *
  * @param nodeId 节点ID
  * @param allNodes 所有节点数组（从 flow 中提取）
+ * @param allEdges 所有连线（传入后才启用连线兜底）
  * @returns 返回 { primaryNodeId, derivedNodeIds } 结构
  */
 export function getNodeWithDerivatives(
   nodeId: string,
-  allNodes: Node<NodeData>[]
+  allNodes: Node<NodeData>[],
+  allEdges?: Array<{ source?: string; target?: string }>
 ): { primaryNodeId: string; derivedNodeIds: string[] } {
-  const derivedNodeIds = allNodes
-    .filter((node) => node.data?.refNodeId === nodeId && node.type === 'taskNode')
-    .map((node) => node.id);
+  const derivedIds = new Set<string>();
+  for (const node of allNodes) {
+    if (!isDerivedTaskCandidate(node)) continue;
+    if (node.data?.refNodeId === nodeId) derivedIds.add(node.id);
+  }
+  if (Array.isArray(allEdges)) {
+    for (const edge of allEdges) {
+      if (!edge || edge.source !== nodeId || typeof edge.target !== 'string') continue;
+      if (derivedIds.has(edge.target)) continue;
+      const targetNode = allNodes.find((node) => node.id === edge.target);
+      if (!targetNode || !isDerivedTaskCandidate(targetNode)) continue;
+      derivedIds.add(edge.target);
+    }
+  }
 
   return {
     primaryNodeId: nodeId,
-    derivedNodeIds,
+    derivedNodeIds: Array.from(derivedIds),
   };
 }
 

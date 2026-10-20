@@ -1366,7 +1366,7 @@ async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Pr
   // 失败终态有三种：FAILED（渠道失败）、ERROR（多次重试后的最终失败）、CANCEL（已取消）。
   // 都必须转成 failed 显式终止轮询：漏判会被当成「排队中」无限轮询到超时。
   if (status.status === 'FAILED' || status.status === 'ERROR' || status.status === 'CANCEL') {
-    const fallback = status.status === 'CANCEL' ? 'lens 图像任务已取消' : 'lens 图像任务失败'
+    const fallback = status.status === 'CANCEL' ? 'lens 任务已取消' : 'lens 任务失败'
     const message = status.resMsg?.trim() || status.remark?.trim() || fallback
     return { id: taskId, kind: taskKind, status: 'failed', assets: [], raw: { ...status, failureReason: message } }
   }
@@ -1383,18 +1383,20 @@ async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Pr
   const fileUrl = typeof status.fileUrl === 'string' ? status.fileUrl.trim() : ''
   if (!fileUrl) {
     // SUCCESS 但无产出 URL：属于后端契约违约，显式失败，不静默兜底
-    throw new Error(`lens 图像任务已完成但未返回产出地址（taskId=${taskId}）`)
+    throw new Error(`lens 任务已完成但未返回产出地址（taskId=${taskId}）`)
   }
+  // 产出媒体类型必须按任务类型归一：视频任务若标成 image，视频节点的成功回写会拿不到视频资产
+  const assetType = taskKind === 'text_to_video' ? 'video' : 'image'
   return {
     id: taskId,
     kind: taskKind,
     status: 'succeeded',
-    // fileUrl 可能是逗号分隔的多图，逐个拆成资产，保持与 /public/tasks 的结果形态一致
+    // fileUrl 可能是逗号分隔的多文件，逐个拆成资产，保持与 /public/tasks 的结果形态一致
     assets: fileUrl
       .split(',')
       .map((url) => url.trim())
       .filter(Boolean)
-      .map((url) => ({ type: 'image' as const, url })),
+      .map((url) => ({ type: assetType as 'image' | 'video', url })),
     raw: { ...status },
   }
 }
@@ -3458,13 +3460,14 @@ async function runVideoTask(ctx: RunnerContext) {
 /**
  * 图片任务接续查询的连续失败计数（key = 节点ID + 任务ID）。
  *
- * <p>刷新后接续查询时，若任务记录不存在 / 越权 / 会话过期，请求会一直抛错；
- * 若每次抛错都只记日志，画布定时器会每 4 秒无限重试。连续失败达到上限后
- * 置失败终态停止重试，保证接续查询一定能收敛。
+ * <p><b>接口异常不等于任务失败</b>：网络中断 / 服务重启 / 会话过期都会让查询抛错，
+ * 但任务在服务端可能早已成功（实测出现过「接口 Failed to fetch，任务其实已 SUCCESS」）。
+ * 因此接续查询遇到异常时**绝不置终态**，只按指数退避放慢重试（上限见
+ * {@link SYNC_RETRY_MAX_DELAY_MS}），只有拿到明确的失败状态才停止。
  */
-const imageSyncFailureCounts = new Map<string, number>()
-/** 接续查询允许的连续失败次数（达到后置失败终态，不再重试） */
-const IMAGE_SYNC_MAX_CONSECUTIVE_FAILURES = 3
+const imageSyncRetryStates = new Map<string, { failures: number; nextAt: number }>()
+/** 接续查询异常时的退避上限：最慢每 30 秒重试一次，不放弃 */
+const SYNC_RETRY_MAX_DELAY_MS = 30_000
 
 /**
  * 单次同步图片节点任务状态（页面加载后恢复轮询用）。
@@ -3473,8 +3476,9 @@ const IMAGE_SYNC_MAX_CONSECUTIVE_FAILURES = 3
  * 由画布定时器扫描「带 imageTaskId 且结果未回写」的图片节点后调用本函数，
  * 查一次任务状态并把结果写回节点（成功 / 失败 / 继续等待）。</p>
  *
- * <p><b>收敛与幂等</b>：查询连续失败达上限后置失败终态；成功结果按 URL 去重，
- * 已回写过的结果不重复追加，重复调用不会改变节点数据。</p>
+ * <p><b>幂等</b>：成功结果按 URL 去重，已回写过的结果不重复追加，重复调用不会改变节点数据。</p>
+ *
+ * <p><b>接口异常</b>：查询抛错时保持非终态并退避重试，避免把「接口暂时不可用」误判成任务失败。</p>
  *
  * <p><b>竞态</b>：进入时记录节点 runToken，若期间用户重跑/取消（runToken 变化），
  * 丢弃本次回写，避免旧任务结果覆盖新运行的状态。</p>
@@ -3504,28 +3508,29 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
   const isAborted = () => isCanceled(id) || readNodeRunToken(get, id) !== runTokenAtStart
   if (isAborted()) return
 
-  const failureKey = `${id}:${taskId}`
+  const retryKey = `${id}:${taskId}`
+  const retryState = imageSyncRetryStates.get(retryKey)
+  // 退避中：本轮跳过网络请求（定时器每 4 秒会再进来一次）
+  if (retryState && Date.now() < retryState.nextAt) return
+
   let snapshot: Awaited<ReturnType<typeof getCanvasTaskStatus>>
   try {
     snapshot = await getCanvasTaskStatus(numericTaskId)
   } catch (error: unknown) {
     if (isAborted()) return
     const message = error instanceof Error && error.message ? error.message : '查询图片任务状态失败'
-    const failures = (imageSyncFailureCounts.get(failureKey) || 0) + 1
-    if (failures >= IMAGE_SYNC_MAX_CONSECUTIVE_FAILURES) {
-      // 连续失败达上限：置失败终态停止重试，避免定时器每 4 秒无限重查
-      imageSyncFailureCounts.delete(failureKey)
-      setNodeStatus(id, 'error', { progress: 0, lastError: message })
-      appendLog(id, `[${nowLabel()}] error: ${message}（连续 ${failures} 次查询失败，已停止接续）`)
-      return
-    }
-    imageSyncFailureCounts.set(failureKey, failures)
-    appendLog(id, `[${nowLabel()}] error: ${message}`)
+    const failures = (retryState?.failures ?? 0) + 1
+    const delay = Math.min(SYNC_RETRY_MAX_DELAY_MS, 4000 * 2 ** Math.min(failures - 1, 3))
+    imageSyncRetryStates.set(retryKey, { failures, nextAt: Date.now() + delay })
+    // 接口异常不是任务失败：保持非终态、放慢重试，只把原因写进节点日志。
+    // 注意绝不能在这里 setNodeStatus('error')：终态会被持久化到 flow，节点就永远不会再查了。
+    setNodeStatus(id, 'queued', { progress: 0 })
+    appendLog(id, `[${nowLabel()}] error: ${message}（${Math.round(delay / 1000)} 秒后重试接续）`)
     return
   }
   if (isAborted()) return
-  // 查询成功（不论任务是否成功）：重置连续失败计数
-  imageSyncFailureCounts.delete(failureKey)
+  // 查询成功（不论任务是否成功）：清掉退避状态
+  imageSyncRetryStates.delete(retryKey)
 
   const statusUpper = String(snapshot.status || '').toUpperCase()
 
@@ -3713,12 +3718,21 @@ export async function syncGenericVideoNodeOnce(id: string, get: Getter) {
     if (isAborted()) return
     appendLogRaw(nodeId, line)
   }
-  const taskId = resolveActiveVideoTaskIdByVendor(data)
+  // lens 画布模式：任务状态查询走 lens 的 /api/taskQueue/status（非 lens 走 /public/tasks）
+  const lensUrlParams = readLensCanvasUrlParams()
+  const lensEnabled = Boolean(lensUrlParams)
+  // 活动任务判定：正常运行态按 status=running/queued 判定；
+  // 刷新后 lens flow 不持久化运行期 status（只有终态会保留），此时退化为「有 videoTaskId
+  // 且状态不是终态」即接续，否则刷新后视频任务永远不会再被查询。
+  const rawStatus = String((data as any)?.status || '')
+  const terminalStatus = rawStatus === 'success' || rawStatus === 'error' || rawStatus === 'canceled'
+  const rawVideoTaskId = typeof (data as any)?.videoTaskId === 'string' ? ((data as any).videoTaskId as string).trim() : ''
+  const taskId = resolveActiveVideoTaskIdByVendor(data) || (lensEnabled && !terminalStatus ? rawVideoTaskId : '')
   if (!taskId) return
 
   let snapshot: TaskResultDto
   try {
-    snapshot = await fetchTaskResult(taskId, 'text_to_video', prompt)
+    snapshot = await fetchTaskResultByRuntime(taskId, 'text_to_video', prompt, lensEnabled)
   } catch (error: unknown) {
     const message = error instanceof Error && error.message ? error.message : '查询视频任务进度失败'
     appendLog(id, `[${nowLabel()}] error: ${message}`)

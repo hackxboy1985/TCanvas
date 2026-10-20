@@ -334,9 +334,20 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
       canvasFlowId: lensUrlParams.flowId,
       canvasNodeAssetId: poseNodeAssetId === null ? undefined : poseNodeAssetId,
     })
+    // 最后一次查询异常：接口失败（网络中断/服务重启/会话过期）不代表任务失败，
+    // 只有在轮询次数用尽时才把该原因抛出，期间继续查询。
+    let lastQueryError = ''
     for (let i = 0; i < 24; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      const status = await getCanvasTaskStatus(submitted.taskId)
+      let status: Awaited<ReturnType<typeof getCanvasTaskStatus>>
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        status = await getCanvasTaskStatus(submitted.taskId)
+      } catch (error: unknown) {
+        lastQueryError = error instanceof Error && error.message ? error.message : '查询任务状态失败'
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => window.setTimeout(r, 1500))
+        continue
+      }
       if (status.status === 'SUCCESS') {
         const fileUrl = typeof status.fileUrl === 'string' ? status.fileUrl.split(',')[0].trim() : ''
         if (!fileUrl) {
@@ -355,7 +366,11 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => window.setTimeout(r, 1500))
     }
-    throw new Error('单镜头微调失败：任务轮询超时')
+    throw new Error(
+      lastQueryError
+        ? `单镜头微调失败：任务仍在执行但状态查询失败（${lastQueryError}），请稍后在任务记录中确认结果`
+        : '单镜头微调失败：任务轮询超时',
+    )
   }
 
   const taskRes = await runPublicTask(input.apiKey, {
@@ -3015,6 +3030,64 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     },
     [modelList, modelMenuOptions],
   )
+  /**
+   * 创建图片编辑衍生产出节点（打光/角度、尺寸调整、姿势/深度三个入口共用）。
+   *
+   * <p>统一处理各分支都必须做、但以前各写一套容易漏掉的事：
+   * 1）写入派生来源 refNodeId，供任务结果抽屉把衍生任务挂到来源资产节点下；
+   * 2）继承来源节点 data 里的实际宽高，来源节点被调过尺寸时衍生节点也与之对齐；只在来源值是正数时带上，不写死常量；
+   * 3）放到来源节点右侧并自动连线来源节点的 out-image。
+   *
+   * @param nodeKind 节点类型（打光/角度、姿势/深度产出为 imageEdit；纯尺寸调整为 image）
+   * @param nodeData 该分支特有的业务字段，不含 kind/refNodeId/宽高（这些由本方法统一注入）
+   * @param failureMessage 创建失败时给用户的提示
+   * @returns 新节点 id；创建失败时返回 null
+   */
+  const createDerivedImageNode = React.useCallback(
+    (nodeKind: 'image' | 'imageEdit', nodeData: Record<string, unknown>, failureMessage: string): string | null => {
+      const stateBefore = useRFStore.getState()
+      const beforeIds = new Set(stateBefore.nodes.map((node) => node.id))
+      const sourceDataRecord = data as Record<string, unknown>
+      addNode('taskNode', undefined, {
+        ...nodeData,
+        kind: nodeKind,
+        refNodeId: id,
+        ...(Number.isFinite(Number(sourceDataRecord.nodeWidth)) && Number(sourceDataRecord.nodeWidth) > 0
+          ? { nodeWidth: Number(sourceDataRecord.nodeWidth) }
+          : null),
+        ...(Number.isFinite(Number(sourceDataRecord.nodeHeight)) && Number(sourceDataRecord.nodeHeight) > 0
+          ? { nodeHeight: Number(sourceDataRecord.nodeHeight) }
+          : null),
+      })
+      const afterAdd = useRFStore.getState()
+      const newNode = afterAdd.nodes.find((node) => !beforeIds.has(node.id))
+      if (!newNode) {
+        toast(failureMessage, 'error')
+        return null
+      }
+      const sourceNode = afterAdd.nodes.find((node) => node.id === id)
+      afterAdd.onNodesChange([
+        {
+          id: newNode.id,
+          type: 'position',
+          position: {
+            x: (sourceNode?.position?.x || 0) + 380,
+            y: sourceNode?.position?.y || 0,
+          },
+          dragging: false,
+        },
+        { id: newNode.id, type: 'select', selected: true },
+      ])
+      afterAdd.onConnect({
+        source: id,
+        sourceHandle: 'out-image',
+        target: newNode.id,
+        targetHandle: 'in-image',
+      })
+      return newNode.id
+    },
+    [addNode, data, id],
+  )
   const handleApplyImageViewEdit = React.useCallback(
     ({ cameraControl, lightingRig }: ImageViewEditorApplyPayload) => {
       const normalizedBaseImageUrl = String(basePoseImage || '').trim()
@@ -3033,8 +3106,6 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         return
       }
 
-      const stateBefore = useRFStore.getState()
-      const beforeIds = new Set(stateBefore.nodes.map((node) => node.id))
       const sourceDataRecord = data as Record<string, unknown>
       const nextImageEditSize = normalizeImageEditSize(
         kind === 'imageEdit'
@@ -3045,60 +3116,36 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const fallbackModel = getDefaultModel('imageEdit')
       const editableModel = String(imageModel || fallbackModel).trim() || fallbackModel
 
-      addNode('taskNode', undefined, {
-        kind: 'imageEdit',
-        prompt: prompt.trim(),
-        aspect: nextImageEditAspect,
-        sampleCount,
-        imageModel: editableModel,
-        imageModelVendor: null,
-        imageEditSize: nextImageEditSize,
-        size: nextImageEditSize,
-        // 继承源节点的实际宽高：衍生节点从哪个节点派生，尺寸就与它保持一致，
-        // 不使用固定常量，避免源节点被调整过尺寸后两者对不齐
-        ...(Number.isFinite(Number(sourceDataRecord.nodeWidth)) && Number(sourceDataRecord.nodeWidth) > 0
-          ? { nodeWidth: Number(sourceDataRecord.nodeWidth) }
-          : null),
-        ...(Number.isFinite(Number(sourceDataRecord.nodeHeight)) && Number(sourceDataRecord.nodeHeight) > 0
-          ? { nodeHeight: Number(sourceDataRecord.nodeHeight) }
-          : null),
-        referenceImages: [normalizedBaseImageUrl],
-        ...(Array.isArray(sourceDataRecord.anchorBindings) ? { anchorBindings: sourceDataRecord.anchorBindings } : null),
-        ...(Array.isArray(sourceDataRecord.assetInputs) ? { assetInputs: sourceDataRecord.assetInputs } : null),
-        ...(shouldPersistCamera ? { imageCameraControl: normalizedCameraControl } : null),
-        ...(shouldPersistLighting ? { imageLightingRig: normalizedLightingRig } : null),
-      })
+      const newDerivedNodeId = createDerivedImageNode(
+        'imageEdit',
+        {
+          // 编辑类型：任务结果抽屉据此展示衍生节点属于角度/打光/自定义编辑
+          editType:
+            shouldPersistCamera && shouldPersistLighting ? 'custom' : shouldPersistCamera ? 'angle' : 'lighting',
+          prompt: prompt.trim(),
+          aspect: nextImageEditAspect,
+          sampleCount,
+          imageModel: editableModel,
+          imageModelVendor: null,
+          imageEditSize: nextImageEditSize,
+          size: nextImageEditSize,
+          referenceImages: [normalizedBaseImageUrl],
+          ...(Array.isArray(sourceDataRecord.anchorBindings) ? { anchorBindings: sourceDataRecord.anchorBindings } : null),
+          ...(Array.isArray(sourceDataRecord.assetInputs) ? { assetInputs: sourceDataRecord.assetInputs } : null),
+          ...(shouldPersistCamera ? { imageCameraControl: normalizedCameraControl } : null),
+          ...(shouldPersistLighting ? { imageLightingRig: normalizedLightingRig } : null),
+        },
+        '图片编辑配置已生成，但未能创建新节点',
+      )
+      if (!newDerivedNodeId) return
 
-      const afterAdd = useRFStore.getState()
-      const newNode = afterAdd.nodes.find((node) => !beforeIds.has(node.id))
-      if (!newNode) {
-        toast('图片编辑配置已生成，但未能创建新节点', 'error')
-        return
-      }
-
-      const sourceNode = afterAdd.nodes.find((node) => node.id === id)
-      const targetPos = {
-        x: (sourceNode?.position?.x || 0) + 380,
-        y: sourceNode?.position?.y || 0,
-      }
-      afterAdd.onNodesChange([
-        { id: newNode.id, type: 'position', position: targetPos, dragging: false },
-        { id: newNode.id, type: 'select', selected: true },
-      ])
-      afterAdd.onConnect({
-        source: id,
-        sourceHandle: 'out-image',
-        target: newNode.id,
-        targetHandle: 'in-image',
-      })
-
-      runNodeDagToTarget(newNode.id, useRFStore.getState, useRFStore.setState, { concurrency: 1 }).catch((error: unknown) => {
+      runNodeDagToTarget(newDerivedNodeId, useRFStore.getState, useRFStore.setState, { concurrency: 1 }).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : '新图片编辑生成启动失败'
         console.error('auto run image view edit failed', error)
         toast(message, 'error')
       })
     },
-    [addNode, basePoseImage, data, id, imageEditSize, imageModel, kind, prompt, sampleCount],
+    [basePoseImage, createDerivedImageNode, data, imageEditSize, imageModel, kind, prompt, sampleCount],
   )
   const { openCameraEditor, openLightingEditor, modal: imageViewEditorModal } = useImageViewEditor({
     baseImageUrl: basePoseImage,
@@ -3572,105 +3619,65 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         return
       }
 
-      const stateBefore = useRFStore.getState()
-      const beforeIds = new Set(stateBefore.nodes.map((n) => n.id))
       if (mode === 'size') {
         if (!normalizedResizedImageUrl) {
           toast('尺寸调整失败：未返回新图地址', 'error')
           return
         }
-        const stateBefore = useRFStore.getState()
-        const beforeIds = new Set(stateBefore.nodes.map((n) => n.id))
-        addNode('taskNode', undefined, {
-          kind: 'image',
-          prompt: effectivePrompt,
-          aspect: nextImageEditAspect,
-          sampleCount: 1,
-          imageUrl: normalizedResizedImageUrl,
-          imageResults: [{ url: normalizedResizedImageUrl }],
-          imagePrimaryIndex: 0,
-          imageModel: String(imageModel || getDefaultModel('image')).trim() || getDefaultModel('image'),
-          imageModelVendor: null,
-          imageEditSize: nextImageEditSize,
-          size: nextImageEditSize,
-        })
-        const afterAdd = useRFStore.getState()
-        const newNode = afterAdd.nodes.find((n) => !beforeIds.has(n.id))
-        if (!newNode) {
-          toast('尺寸调整已完成，但未能创建新图像节点', 'error')
-          return
-        }
-        const sourceNode = afterAdd.nodes.find((n) => n.id === id)
-        const targetPos = {
-          x: (sourceNode?.position?.x || 0) + 380,
-          y: sourceNode?.position?.y || 0,
-        }
-        afterAdd.onNodesChange([
-          { id: newNode.id, type: 'position', position: targetPos, dragging: false },
-          { id: newNode.id, type: 'select', selected: true },
-        ])
-        afterAdd.onConnect({
-          source: id,
-          sourceHandle: 'out-image',
-          target: newNode.id,
-          targetHandle: 'in-image',
-        })
+        const newDerivedNodeId = createDerivedImageNode(
+          'image',
+          {
+            editType: 'custom',
+            prompt: effectivePrompt,
+            aspect: nextImageEditAspect,
+            sampleCount: 1,
+            imageUrl: normalizedResizedImageUrl,
+            imageResults: [{ url: normalizedResizedImageUrl }],
+            imagePrimaryIndex: 0,
+            imageModel: String(imageModel || getDefaultModel('image')).trim() || getDefaultModel('image'),
+            imageModelVendor: null,
+            imageEditSize: nextImageEditSize,
+            size: nextImageEditSize,
+          },
+          '尺寸调整已完成，但未能创建新图像节点',
+        )
+        if (!newDerivedNodeId) return
         toast(`已生成 ${nextImageEditSize} 新图`, 'success')
         return
       }
 
-      const targetKind = 'imageEdit'
       const fallbackModel = getDefaultModel('imageEdit')
       const editableModel = String(imageModel || fallbackModel).trim() || fallbackModel
-
-      addNode('taskNode', undefined, {
-        kind: targetKind,
-        prompt: effectivePrompt,
-        aspect: nextImageEditAspect,
-        sampleCount,
-        imageModel: editableModel,
-        imageModelVendor: null,
-        imageEditSize: nextImageEditSize,
-        size: nextImageEditSize,
-        poseStickmanUrl: stickmanUrl || null,
-        poseReferenceImages: normalizedRefs.slice(0, 8),
-        poseMaskUrl: normalizedMaskGuideUrl || null,
-      })
-
-      const afterAdd = useRFStore.getState()
-      const newNode = afterAdd.nodes.find((n) => !beforeIds.has(n.id))
-      if (!newNode) {
-        toast('图片编辑已保存，但未能创建新图像节点', 'error')
-        return
-      }
-
-      const sourceNode = afterAdd.nodes.find((n) => n.id === id)
-      const targetPos = {
-        x: (sourceNode?.position?.x || 0) + 380,
-        y: sourceNode?.position?.y || 0,
-      }
-      afterAdd.onNodesChange([
-        { id: newNode.id, type: 'position', position: targetPos, dragging: false },
-        { id: newNode.id, type: 'select', selected: true },
-      ])
-      afterAdd.onConnect({
-        source: id,
-        sourceHandle: 'out-image',
-        target: newNode.id,
-        targetHandle: 'in-image',
-      })
+      const newDerivedNodeId = createDerivedImageNode(
+        'imageEdit',
+        {
+          editType: 'custom',
+          prompt: effectivePrompt,
+          aspect: nextImageEditAspect,
+          sampleCount,
+          imageModel: editableModel,
+          imageModelVendor: null,
+          imageEditSize: nextImageEditSize,
+          size: nextImageEditSize,
+          poseStickmanUrl: stickmanUrl || null,
+          poseReferenceImages: normalizedRefs.slice(0, 8),
+          poseMaskUrl: normalizedMaskGuideUrl || null,
+        },
+        '图片编辑已保存，但未能创建新图像节点',
+      )
+      if (!newDerivedNodeId) return
 
       if (!effectivePrompt) {
         toast('已创建新图片编辑节点，请填写提示词后再运行', 'info')
         return
       }
 
-      runNodeDagToTarget(newNode.id, useRFStore.getState, useRFStore.setState, { concurrency: 1 }).catch((err) => {
+      runNodeDagToTarget(newDerivedNodeId, useRFStore.getState, useRFStore.setState, { concurrency: 1 }).catch((err) => {
         console.error('auto run pose image failed', err)
         toast(err?.message || '新图片编辑生成启动失败', 'error')
       })
     },
-    [addNode, currentProject?.id, data, editingShotSourceIndex, findVendorForModel, id, imageEditSize, imageModel, kind, prompt, sampleCount, updateNodeData],
+    [createDerivedImageNode, currentProject?.id, data, editingShotSourceIndex, findVendorForModel, id, imageEditSize, imageModel, kind, prompt, sampleCount, updateNodeData],
   )
 
   const { open: openPoseEditor, modal: poseEditorModal } = usePoseEditor({
@@ -8943,7 +8950,7 @@ const rewritePromptWithCharacters = React.useCallback(
             </div>
           </div>
           {assetTaskPanelOpened && (
-            <AssetTaskPanel key={id} data={data as Record<string, unknown>}
+            <AssetTaskPanel key={id} nodeId={id} data={data as Record<string, unknown>}
               // 扩展复用页面级右侧抽屉，与视频节点共用入口，不在工具栏内创建弹窗。
               onExpand={onOpenTaskResult ? () => onOpenTaskResult(id) : undefined}
               onClose={() => setAssetTaskPanelOpened(false)} />

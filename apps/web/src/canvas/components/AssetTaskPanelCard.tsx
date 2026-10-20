@@ -52,7 +52,14 @@ function safeMediaUrl(value: unknown): string {
 }
 
 /** 资产任务卡片复用原接口关联结果，不改变原固定抽屉或视频采纳链路。 */
-export function AssetTaskPanelCard({ record, canViewParams, target, applicationName }: { record: LensTaskRecord; applicationName: string; canViewParams: boolean; target?: LensAssetTaskAdoptionTarget }) {
+/**
+ * 资产任务卡片复用原接口关联结果，不改变原固定抽屉或视频采纳链路。
+ *
+ * @param derivedLabel 衍生节点任务的来源标签（角度修改/打光调整/自定义编辑）；为空表示原资产任务
+ */
+export function AssetTaskPanelCard({ record, canViewParams, target, applicationName, derivedLabel }: {
+  record: LensTaskRecord; applicationName: string; canViewParams: boolean; target?: LensAssetTaskAdoptionTarget; derivedLabel?: string
+}) {
   const [paramsOpened, setParamsOpened] = React.useState(false)
   const status = record.taskStatus || record.status || ''
   const rawParams = record.reqPar ?? record.taskParams
@@ -105,13 +112,22 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
   return (
     <article className="lens-asset-task-panel__card">
       <Group className="lens-asset-task-panel__meta" gap={6} wrap="nowrap">
+        {/* 衍生节点任务：标明来自该节点的哪类图片编辑，便于和原资产任务区分 */}
+        {derivedLabel && <span className="lens-task-derived-tag">{derivedLabel}</span>}
         <Text className="lens-asset-task-panel__model" size="xs" fw={600} title={applicationName}>{applicationName}</Text>
         <Badge className="lens-asset-task-panel__badge" size="xs" variant="light" color={failed ? 'red' : status === LensAssetTaskStatus.Success ? 'green' : 'blue'}>{STATUS_LABELS[status] || status || '未知状态'}</Badge>
         {submitter && <Text className="lens-asset-task-panel__submitter" size="xs" title={submitter}>{submitter}</Text>}
         {record.channel && <Text className="lens-asset-task-panel__channel" size="xs" title={record.channel}>{record.channel}</Text>}
       </Group>
       <Text className="lens-asset-task-panel__details" size="xs" title={detailText}>{detailText}</Text>
-      {!!details.references.length && <div className="lens-asset-task-panel__references">{details.references.map((url, index) => <img className="lens-asset-task-panel__reference" key={url + index} src={url} alt={'参考图 ' + (index + 1)} loading="lazy" />)}</div>}
+      {/* 参考图：点击打开站内大图预览，与结果图一致（原先只是裸缩略图，点不开） */}
+      {!!details.references.length && <div className="lens-asset-task-panel__references">{details.references.map((url, index) => (
+        <button className="lens-asset-task-panel__reference-btn" type="button" key={url + index}
+          aria-label={'预览参考图 ' + (index + 1)}
+          onClick={() => useUIStore.getState().openPreview({ url, kind: 'image', name: '参考图 ' + (index + 1) })}>
+          <img className="lens-asset-task-panel__reference" src={url} alt={'参考图 ' + (index + 1)} loading="lazy" />
+        </button>
+      ))}</div>}
       {!!record.prompt && <Text className="lens-asset-task-panel__prompt" size="xs" title={record.prompt}>{record.prompt}</Text>}
       <div className="lens-asset-task-panel__results">{details.media.map((media, index) => <button className="lens-asset-task-panel__preview" type="button" key={media.url + index}
         aria-label={'预览结果 ' + (index + 1)} onClick={() => useUIStore.getState().openPreview({ url: media.url, kind: media.type, name: applicationName })}>

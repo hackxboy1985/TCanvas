@@ -2194,7 +2194,16 @@ export const useRFStore = create<RFState>((set, get) => ({
       type: type as any,
       position,
       ...(parentId ? { parentId } : {}),
-      data: normalizeProductionNodeMetaRecord({ label: finalLabel, ...dataExtra }, { kind: dataExtra.kind ?? type }),
+      data: normalizeProductionNodeMetaRecord(
+        {
+          label: finalLabel,
+          // 节点入画布时间：画布节点数字ID 会被复用（删节点后 max+1 回退），
+          // 复用时旧节点留下的历史任务会串到新节点名下；查询任务时用本时间过滤掉更早的任务。
+          ...((dataExtra as Record<string, unknown>).nodeCreatedAt ? null : { nodeCreatedAt: new Date().toISOString() }),
+          ...dataExtra,
+        },
+        { kind: dataExtra.kind ?? type },
+      ),
     }
     const nextNodesRaw = [...s.nodes, enforceNodeSelectability(node)]
     const nextNodes = ensureParentFirstOrder(nextNodesRaw)

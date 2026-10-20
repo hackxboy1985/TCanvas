@@ -87,6 +87,42 @@ export function nextCanvasNodeAssetId(nodes: ReadonlyArray<{ data?: unknown }>):
   return max + 1
 }
 
+/** 本浏览器会话已分配过的节点ID（防止同一毫秒内连续分配拿到同值） */
+const allocatedAssetIds = new Set<number>()
+
+/** 时间戳分配的最大重试次数（同毫秒内本窗口连续分配时逐个 +1 避让） */
+const ALLOCATE_RETRY_LIMIT = 1000
+
+/**
+ * 分配一个新的画布节点数字ID（时间戳量级，永不复用历史小ID）。
+ *
+ * <p><b>为什么不用「当前最大值 +1」</b>：删掉编号最大的节点后最大值会回退，
+ * 新节点就会拿到已删除节点用过的编号，历史任务随之串到新节点上
+ * （实测出现过 assetId=2 先给角色衍生节点、后给场景衍生节点的情况）。
+ *
+ * <p><b>为什么用时间戳</b>：毫秒时间戳天然单调递增，且远超历史小ID（1、2、3……），
+ * 因此永远不可能撞上历史编号；不需要持久化计数器，也就不存在「多窗口各自持有
+ * 计数器副本互相覆盖」的竞态问题。同一窗口同一毫秒内连续分配时用进程内
+ * {@link allocatedAssetIds} 逐个 +1 避让。
+ *
+ * <p><b>残留风险</b>：两个浏览器窗口在同一毫秒各自首次分配（且都还没保存 flow）时
+ * 仍可能拿到同值。要彻底消除只能由后端原子分配（如 flow 表 next_node_id 自增）。
+ *
+ * @param nodes 画布上全部节点（用于取当前最大值兜底）
+ * @returns 新的节点数字ID
+ */
+export function allocateCanvasNodeAssetId(nodes: ReadonlyArray<{ data?: unknown }>): number {
+  const base = Math.max(nextCanvasNodeAssetId(nodes), Date.now())
+  let candidate = base
+  let attempts = 0
+  while (allocatedAssetIds.has(candidate) && attempts < ALLOCATE_RETRY_LIMIT) {
+    candidate += 1
+    attempts += 1
+  }
+  allocatedAssetIds.add(candidate)
+  return candidate
+}
+
 /**
  * 确保节点拥有画布资产数字ID，返回可直接写回节点 data 的补丁。
  *
@@ -106,7 +142,7 @@ export function ensureCanvasNodeAssetId(
   if (existing !== null) {
     return { [CANVAS_NODE_ASSET_ID_FIELD]: existing }
   }
-  return { [CANVAS_NODE_ASSET_ID_FIELD]: nextCanvasNodeAssetId(allNodes) }
+  return { [CANVAS_NODE_ASSET_ID_FIELD]: allocateCanvasNodeAssetId(allNodes) }
 }
 
 /**

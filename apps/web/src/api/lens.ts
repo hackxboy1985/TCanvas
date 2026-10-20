@@ -498,6 +498,12 @@ export interface LensTaskRecord {
   referenceImages?: string | string[]
   /** Ultra 模式标识：序列任务ID 非空即 ultra 链路 */
   seqJobId?: string
+  /** 任务归属：画布编排ID（task_queue.scene_id，自由节点任务是画布flowId） */
+  sceneId?: number | string
+  /** 任务归属：资产类型（0=角色 1=场景 2=道具 10=画布自由节点） */
+  assetType?: number
+  /** 任务归属：资产ID（业务资产是真实主键，自由节点是节点数字ID） */
+  assetId?: number | string
 }
 
 // ============ 类型化函数（全部复用 lens 现有接口） ============
@@ -695,6 +701,14 @@ export interface LensTaskQueryParams {
    * 不传则查该画布（sceneId）下所有自由节点的任务。
    */
   assetId?: string | number
+  /**
+   * 画布节点数字ID集合（批量）。
+   *
+   * <p>一个来源节点可能衍生多个自由节点，逐个 assetId 查询会发 N 次请求；
+   * 传本字段时后端按 {@code task_queue.asset_id IN (...)} 一次查完，
+   * 调用方再按返回行的 assetId 自行分组。与 {@link assetId} 互斥使用。
+   */
+  assetIds?: Array<string | number>
   pageNum?: number
   pageSize?: number
 }
@@ -782,6 +796,14 @@ export async function listCanvasFreeNodeTasks(params: LensTaskQueryParams): Prom
   if (params.sceneId !== undefined) body.sceneId = String(params.sceneId)
   if (params.assetType !== undefined) body.assetType = params.assetType
   if (params.assetId !== undefined) body.assetId = String(params.assetId)
+  // 批量模式：后端 mapper 用 asset_id IN (...) 一次查完多个画布节点
+  if (params.assetIds !== undefined) {
+    if (!params.assetIds.length) {
+      // 空数组会被后端当成“不传”，从而退化为查整张画布；这里显式返回空，避免误查
+      return { rows: [], total: 0 }
+    }
+    body.assetIds = params.assetIds.map((id) => String(id))
+  }
 
   return lensFetchPage<LensTaskRecord>('/api/task/list', {
     method: 'POST',
@@ -1300,6 +1322,77 @@ export async function polishPrompt(params: LensPromptPolishParams): Promise<Lens
     throw new Error('提示词润色失败：接口未返回有效内容')
   }
   return { polishedText, billing: normalizeLensPromptPolishBilling(data?.billing) }
+}
+
+/** 「生成深度描述」（图像理解）结果。 */
+export interface LensImageUnderstandResult {
+  /** 模型输出的原始文本（通常是 JSON 文本，由调用方决定如何解析展示） */
+  text: string
+  /** 计费信息；后端未返回时为 null（不阻断结果的使用） */
+  billing: LensPromptPolishBilling | null
+}
+
+/** 「生成深度描述」（图像理解）入参。 */
+export interface LensImageUnderstandParams {
+  /** 待理解的图片地址，必须是在线 http(s) 链接 */
+  imageUrl: string
+  /** 图像理解提示词（可选；不传由后端使用内置默认提示词） */
+  prompt?: string
+  /** 系统提示词（可选） */
+  systemPrompt?: string
+  /** 模型别名（可选；后端数据源池已配 model 时以池为准） */
+  modelAlias?: string
+}
+
+/**
+ * 生成深度描述（lens 后端同步图像理解接口）。
+ *
+ * <p>背景：画布场景图片节点的「深度调整 → 生成深度描述」原先直连 TapCanvas 的
+ * `POST /public/tasks`（kind=image_to_prompt），而 lens 部署下该路由不存在
+ * （请求被 302 到 `/` 后返回 HTML 200），前端必然报「接口返回 HTML 而非 JSON」。
+ * 本函数改为调用 lens 自己的接口，由后端按「提示词设置 → 智能分析」配置的数据源池
+ * （主 → 备1 → 备2）做多模态图像理解，成功后才计费。
+ *
+ * @param params 图像理解入参（imageUrl / prompt / systemPrompt / modelAlias）
+ * @returns 模型输出文本与计费信息
+ */
+export async function understandImage(params: LensImageUnderstandParams): Promise<LensImageUnderstandResult> {
+  const imageUrl = typeof params.imageUrl === 'string' ? params.imageUrl.trim() : ''
+  if (!imageUrl) {
+    throw new Error('缺少待理解的图片地址')
+  }
+  const body: Record<string, unknown> = { imageUrl }
+  if (params.prompt) body.prompt = params.prompt
+  if (params.systemPrompt) body.systemPrompt = params.systemPrompt
+  if (params.modelAlias) body.modelAlias = params.modelAlias
+
+  const data = await lensFetch<{ text?: unknown; billing?: unknown }>('/api/canvas/imageUnderstand', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  // 显式失败：后端必须返回非空 text，拿不到就直接报错，不做任何兜底
+  const text = typeof data?.text === 'string' ? data.text.trim() : ''
+  if (!text) {
+    throw new Error('生成深度描述失败：接口未返回有效内容')
+  }
+  return { text, billing: normalizeLensPromptPolishBilling(data?.billing) }
+}
+
+/**
+ * 查询「生成深度描述」的计费预览（只读，不占用免费额度、不扣积分）。
+ *
+ * <p>与提示词润色共用「每日免费次数」「润色积分」配置，但后端按独立业务类型
+ * （IMAGE_UNDERSTAND）统计，两者互不占用对方额度。
+ *
+ * @returns 计费预览（free / freeRemain / freeLimit / credit）
+ */
+export async function fetchImageUnderstandBillingPreview(): Promise<LensPromptPolishBillingPreview> {
+  const data = await lensFetch<Record<string, unknown>>('/api/canvas/imageUnderstand/billing')
+  const preview = normalizeLensPromptPolishBillingPreview(data)
+  if (!preview) {
+    throw new Error('生成深度描述计费预览失败：后端返回字段缺失或类型不符')
+  }
+  return preview
 }
 
 /** lens 提示词润色的计费预览（后端 previewChargePromptPolish 返回体，只读不扣分）。 */

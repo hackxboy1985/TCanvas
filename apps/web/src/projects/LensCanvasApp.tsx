@@ -206,9 +206,10 @@ const PROJECTION_KEPT_DATA_KEYS = [
 /**
  * 运行期状态字段：每次运行/轮询都会变化，不属于编排数据，一律不写入 flow。
  *
- * - status/progress/canceled/lastError：任务执行状态，由业务表与轮询重建
- * - runToken：每次执行生成的随机令牌，仅用于本次运行的取消判定，跨会话无意义
- * - logs：运行日志，体积随运行次数无上限增长，不属于编排数据
+ * - progress/canceled/runToken/logs：纯运行期，刷新后无意义
+ * - status/lastError：默认也不写；但自由节点的**终态**（成功/失败/取消）会单独持久化，
+ *   原因见 {@link PERSISTED_TERMINAL_STATUSES}：自由节点没有业务表可重建状态，不持久化的话
+ *   刷新后失败原因会丢、恢复轮询还会把已结束的任务再查一遍。
  */
 const RUNTIME_ONLY_DATA_KEYS = [
   'status',
@@ -218,6 +219,14 @@ const RUNTIME_ONLY_DATA_KEYS = [
   'runToken',
   'logs',
 ] as const
+
+/**
+ * 自由节点需要持久化到 flow 的终态状态。
+ *
+ * <p>投影节点（角色/场景/道具/分镜）的状态由 lens 业务表重建，不在此列；
+ * 自由节点（含衍生出的图片编辑节点）没有业务记录，终态不落库就无法在刷新后恢复。
+ */
+const PERSISTED_TERMINAL_STATUSES = new Set(['success', 'error', 'canceled'])
 
 /** 剔除运行期状态字段（返回新对象，不修改入参） */
 function stripRuntimeFields(data: Record<string, unknown>): Record<string, unknown> {
@@ -253,12 +262,50 @@ function serializeNodeForFlow(n: Node): Node {
     return { ...base, data: kept } as Node
   }
   // 自由节点：保留任务参数（taskId/模型/prompt 等），仅清洗运行期状态
-  return { ...base, data: stripRuntimeFields(data) } as Node
+  const cleaned = stripRuntimeFields(data)
+  const terminalStatus = String(data.status ?? '').trim()
+  if (PERSISTED_TERMINAL_STATUSES.has(terminalStatus)) {
+    // 自由节点没有业务表可重建任务终态：失败/取消后必须把状态与原因落库，
+    // 否则刷新后既看不到失败原因，恢复轮询还会把已结束的任务重新查一遍。
+    cleaned.status = terminalStatus
+    const lastError = typeof data.lastError === 'string' ? data.lastError.trim() : ''
+    if (lastError) cleaned.lastError = lastError
+  }
+  return { ...base, data: cleaned } as Node
 }
 
 /** 序列化整张画布：供 flow 持久化使用，剔除可从 lens 接口重新投影的业务字段 */
 function serializeNodesForFlow(nodes: Node[]): Node[] {
   return nodes.map(serializeNodeForFlow)
+}
+
+/**
+ * 接口层失败（不是任务失败）的提示前缀。
+ *
+ * <p>这类消息由 lens API 层在「请求未到达 / 响应非 JSON」时抛出，任务本身可能早已成功
+ * （实测出现过「接口 Failed to fetch，任务其实已 SUCCESS」）。历史版本曾把这类异常误判成
+ * 任务终态失败并写进 flow，导致节点永远不再查询。加载时把它们复活，让接续查询继续跑。
+ */
+const INTERFACE_ERROR_HINTS = ['lens 接口请求失败', 'lens 接口返回非 JSON'] as const
+
+/**
+ * 复活被「接口层失败」误判成终态的节点（仅自由节点）。
+ *
+ * <p>只清 status/lastError，不碰任务 ID 与结果：清掉后恢复轮询会按 imageTaskId/videoTaskId
+ * 重新接续，任务若已成功就能把结果补回来。
+ */
+function reviveInterfaceErrorNodes(nodes: Node[]): Node[] {
+  return nodes.map((n) => {
+    if (isLensProjectionNode(n)) return n
+    const data = (n.data || {}) as Record<string, unknown>
+    if (String(data.status ?? '').trim() !== 'error') return n
+    const lastError = typeof data.lastError === 'string' ? data.lastError : ''
+    if (!INTERFACE_ERROR_HINTS.some((hint) => lastError.includes(hint))) return n
+    const cleared = { ...data }
+    delete cleared.status
+    delete cleared.lastError
+    return { ...n, data: cleared } as Node
+  })
 }
 
 /** 分镜组基准位置：垂直→图片右侧、水平→剧本列右侧且在图片下方（与组关闭时的分镜区域一致） */
@@ -1220,7 +1267,7 @@ export default function LensCanvasApp(): JSX.Element {
             const restoredEdges = useFlowLayout
               ? (Array.isArray(parsed.edges) ? parsed.edges : [])
               : projected.edges
-            load({ nodes: restored, edges: restoredEdges })
+            load({ nodes: reviveInterfaceErrorNodes(restored), edges: restoredEdges })
             if (parsed.viewport) {
               const vp = parsed.viewport
               window.setTimeout(() => { canvasApiRef.current?.setViewport(vp) }, 0)
@@ -1579,7 +1626,9 @@ export default function LensCanvasApp(): JSX.Element {
           }}
         />
       </div>
-      {/* 任务结果抽屉：点节点上的入口按钮打开，只读展示该节点历史生成结果 */}
+      {/* 任务结果抽屉：点节点上的入口按钮打开，只读展示该节点历史生成结果。
+          必须传 allNodes：抽屉要按 refNodeId 找出该资产节点衍生出的图片编辑节点，
+          再按各衍生节点的 canvasNodeAssetId 查询它们的任务（否则衍生任务永远查不到）。 */}
       <TaskResultDrawer
         opened={taskResultTarget !== null}
         target={taskResultTarget}

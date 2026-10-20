@@ -922,15 +922,31 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         if (!nodeId) continue
 
         if (kind === 'video') {
-          const vendor = String(data.videoModelVendor || data.videoVendor || '').toLowerCase()
           const taskId = typeof data.videoTaskId === 'string' ? data.videoTaskId.trim() : ''
           if (!taskId) continue
+          // 与图片同一判据：已有产出（且不是提交占位）说明任务已结束，不必每次刷新都重查
+          const videoResults = Array.isArray(data.videoResults) ? data.videoResults : []
+          const videoPreviewType = String(data?.lastResult?.preview?.type || '')
+          if (videoResults.length > 0 && videoPreviewType !== 'text') continue
+          // lens 模式下运行中的任务由 runner 内联轮询负责：只在 lens 模式加这道跳过，
+          // TapCanvas 模式的 runToken 会被持久化，加跳过会让刷新后的视频任务无法接续。
+          const videoLiveRun =
+            isLensMode()
+            && (status === 'running' || status === 'queued')
+            && String(data.runToken || '').trim().length > 0
+          if (videoLiveRun) continue
 
           if (soraSyncingRef.current.has(nodeId)) continue
           soraSyncingRef.current.add(nodeId)
-          void syncGenericVideoNodeOnce(nodeId, useRFStore.getState).finally(() => {
-            soraSyncingRef.current.delete(nodeId)
-          })
+          void syncGenericVideoNodeOnce(nodeId, useRFStore.getState)
+            .catch((error: unknown) => {
+              // 同上：接口异常不置终态，只兜住未处理的 Promise 拒绝
+              const message = error instanceof Error && error.message ? error.message : '视频任务接续查询失败'
+              console.error('[canvas] sync video node task failed', message)
+            })
+            .finally(() => {
+              soraSyncingRef.current.delete(nodeId)
+            })
           continue
         }
 
@@ -952,10 +968,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         imageSyncingRef.current.add(nodeId)
         void syncImageNodeOnce(nodeId, useRFStore.getState)
           .catch((error: unknown) => {
-            // 接续查询异常不能静默：显式置失败状态，同时避免未处理的 Promise 拒绝
+            // 接续查询异常只记录，不置终态：终态会被持久化到 flow，一旦误置节点就永远不会再查。
+            // 接口层异常由 syncImageNodeOnce 内部退避重试，这里只兜住未处理的 Promise 拒绝。
             const message = error instanceof Error && error.message ? error.message : '图片任务接续查询失败'
             console.error('[canvas] sync image node task failed', message)
-            useRFStore.getState().setNodeStatus?.(nodeId, 'error', { progress: 0, lastError: message })
           })
           .finally(() => {
             imageSyncingRef.current.delete(nodeId)

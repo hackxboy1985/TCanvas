@@ -9504,7 +9504,9 @@ body {
 .lens-asset-task-panel__model, .lens-asset-task-panel__submitter, .lens-asset-task-panel__channel, .lens-asset-task-panel__details { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lens-asset-task-panel__details { color: var(--mantine-color-text); }
 .lens-asset-task-panel__references { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.lens-asset-task-panel__reference { width: 36px; height: 36px; object-fit: cover; }
+.lens-asset-task-panel__reference { width: 36px; height: 36px; object-fit: cover; display: block; }
+/* 参考图缩略图按钮：清掉默认样式，仅保留可点击放大 */
+.lens-asset-task-panel__reference-btn { padding: 0; border: 0; background: transparent; line-height: 0; cursor: zoom-in; }
 .lens-asset-task-panel__prompt { margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .lens-asset-task-panel__results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
 .lens-asset-task-panel__preview { padding: 0; border: 0; background: transparent; cursor: pointer; }
@@ -9604,6 +9606,15 @@ body {
   background: rgba(230, 81, 0, 0.12);
   color: #e65100;
 }
+/* 衍生节点任务 tag（图片编辑/角度/打光等）：与分镜号 tag 区分色系 */
+.lens-task-derived-tag {
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(123, 97, 255, 0.14);
+  color: #7b61ff;
+}
 /* 状态 pill */
 .lens-task-status-pill {
   padding: 2px 10px;
@@ -9670,6 +9681,11 @@ body {
 .lens-task-ref-link {
   display: block;
   line-height: 0;
+  /* 参考图改成按钮后要清掉浏览器默认按钮样式，保持原缩略图外观，只是可点击 */
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
 }
 .lens-task-ref-thumb {
   width: 48px;
@@ -9712,6 +9728,11 @@ body[arco-theme='dark'] .lens-task-prompt,
   border-radius: 6px;
   overflow: hidden;
   background: rgba(127, 127, 127, 0.1);
+  /* 结果图改成按钮走站内预览后，同样要清掉默认按钮样式 */
+  padding: 0;
+  border: 0;
+  cursor: zoom-in;
+  width: 100%;
 }
 .lens-task-result-media {
   width: 100%;
