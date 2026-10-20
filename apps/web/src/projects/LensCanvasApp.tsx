@@ -1326,6 +1326,31 @@ export default function LensCanvasApp(): JSX.Element {
   }, [nodes, edges, loading, episodeNum, dramaId, saveNow, buildFlowSignature, shotArrange, shotGroupOn])
 
   /**
+   * 任务提交后立即保存编排：runner 提交任务后会调用 window.silentSaveProject 立即落库
+   * （TapCanvas 宿主在 App shell 里挂载该钩子），Lens 画布没有这个宿主壳，此前钩子不存在，
+   * 导致任务提交后若在自动保存 debounce 内刷新，flow 里还没有 imageTaskId / canvasNodeAssetId，
+   * 刷新后无法接续任务（任务结果丢失）。
+   *
+   * <p>这里补一个同名钩子：仅在当前集编排已加载完成时保存，避免把空画布或上一集的内容写错集。
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const win = window as unknown as { silentSaveProject?: () => void }
+    const saver = () => {
+      if (loading) return
+      if (loadedForRef.current !== `${dramaId}:${episodeNum}`) return
+      void saveNow(episodeNum, {
+        nodes: useRFStore.getState().nodes,
+        edges: useRFStore.getState().edges,
+      })
+    }
+    win.silentSaveProject = saver
+    return () => {
+      if (win.silentSaveProject === saver) delete win.silentSaveProject
+    }
+  }, [dramaId, episodeNum, loading, saveNow])
+
+  /**
    * 页面切到后台立即保存：自动保存间隔拉长到 15s 后，直接关闭标签页可能丢失
    * 最近改动（拖拽位置、提示词编辑等）。visibilitychange 比 beforeunload 可靠，
    * 页面隐藏时异步请求通常能完成。
