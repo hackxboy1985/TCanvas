@@ -1324,7 +1324,7 @@ export async function polishPrompt(params: LensPromptPolishParams): Promise<Lens
   return { polishedText, billing: normalizeLensPromptPolishBilling(data?.billing) }
 }
 
-/** 「生成深度描述」（图像理解）结果。 */
+/** 「反推画面描述」（图像理解）结果。 */
 export interface LensImageUnderstandResult {
   /** 模型输出的原始文本（通常是 JSON 文本，由调用方决定如何解析展示） */
   text: string
@@ -1332,7 +1332,7 @@ export interface LensImageUnderstandResult {
   billing: LensPromptPolishBilling | null
 }
 
-/** 「生成深度描述」（图像理解）入参。 */
+/** 「反推画面描述」（图像理解）入参。 */
 export interface LensImageUnderstandParams {
   /** 待理解的图片地址，必须是在线 http(s) 链接 */
   imageUrl: string
@@ -1345,9 +1345,9 @@ export interface LensImageUnderstandParams {
 }
 
 /**
- * 生成深度描述（lens 后端同步图像理解接口）。
+ * 反推画面描述（lens 后端同步图像理解接口）。
  *
- * <p>背景：画布场景图片节点的「深度调整 → 生成深度描述」原先直连 TapCanvas 的
+ * <p>背景：画布场景图片节点的「局部修改 → 反推画面描述」原先直连 TapCanvas 的
  * `POST /public/tasks`（kind=image_to_prompt），而 lens 部署下该路由不存在
  * （请求被 302 到 `/` 后返回 HTML 200），前端必然报「接口返回 HTML 而非 JSON」。
  * 本函数改为调用 lens 自己的接口，由后端按「提示词设置 → 智能分析」配置的数据源池
@@ -1373,13 +1373,13 @@ export async function understandImage(params: LensImageUnderstandParams): Promis
   // 显式失败：后端必须返回非空 text，拿不到就直接报错，不做任何兜底
   const text = typeof data?.text === 'string' ? data.text.trim() : ''
   if (!text) {
-    throw new Error('生成深度描述失败：接口未返回有效内容')
+    throw new Error('反推画面描述失败：接口未返回有效内容')
   }
   return { text, billing: normalizeLensPromptPolishBilling(data?.billing) }
 }
 
 /**
- * 查询「生成深度描述」的计费预览（只读，不占用免费额度、不扣积分）。
+ * 查询「反推画面描述」的计费预览（只读，不占用免费额度、不扣积分）。
  *
  * <p>与提示词润色共用「每日免费次数」「润色积分」配置，但后端按独立业务类型
  * （IMAGE_UNDERSTAND）统计，两者互不占用对方额度。
@@ -1390,7 +1390,7 @@ export async function fetchImageUnderstandBillingPreview(): Promise<LensPromptPo
   const data = await lensFetch<Record<string, unknown>>('/api/canvas/imageUnderstand/billing')
   const preview = normalizeLensPromptPolishBillingPreview(data)
   if (!preview) {
-    throw new Error('生成深度描述计费预览失败：后端返回字段缺失或类型不符')
+    throw new Error('反推画面描述计费预览失败：后端返回字段缺失或类型不符')
   }
   return preview
 }

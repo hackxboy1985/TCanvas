@@ -67,6 +67,7 @@ type UsePoseEditorOptions = {
   poseReferenceImages?: string[]
   poseStickmanUrl?: string
   onPoseSaved?: (payload: {
+    /** 编辑模式：pose=姿势调整，depth=局部修改（历史标识，界面已改名「局部修改」），size=尺寸调整 */
     mode: 'pose' | 'depth' | 'size'
     poseStickmanUrl: string | null
     poseReferenceImages: string[]
@@ -100,10 +101,11 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
   const [maskDrawing, setMaskDrawing] = React.useState(false)
   const [maskDirty, setMaskDirty] = React.useState(false)
   const [promptInput, setPromptInput] = React.useState(() => options.promptValue || '')
+  /** 编辑模式：pose=姿势调整，depth=局部修改（沿用历史标识，节点数据里已存在，不改名），size=尺寸调整 */
   const [editMode, setEditMode] = React.useState<'pose' | 'depth' | 'size'>('pose')
-  const [depthPrompt, setDepthPrompt] = React.useState('')
-  const [depthLoading, setDepthLoading] = React.useState(false)
-  const [depthError, setDepthError] = React.useState<string | null>(null)
+  const [descriptionText, setDescriptionText] = React.useState('')
+  const [descriptionLoading, setDescriptionLoading] = React.useState(false)
+  const [descriptionError, setDescriptionError] = React.useState<string | null>(null)
   const [selectedImageEditSize, setSelectedImageEditSize] = React.useState(() => options.imageEditSize)
   const [selectedCanvasResizePreset, setSelectedCanvasResizePreset] = React.useState<string>(() => {
     const normalized = normalizeCanvasResizeSize(options.canvasResizeSize)
@@ -144,16 +146,16 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     setCustomResizeHeight(parsedCanvasResize.height)
     setMaskDrawing(false)
     setMaskDirty(false)
-    setDepthPrompt('')
-    setDepthError(null)
+    setDescriptionText('')
+    setDescriptionError(null)
     setOpen(true)
   }, [options.baseImageUrl, options.hasImages, options.promptValue])
 
   React.useEffect(() => {
     if (!open) return
     setPromptInput(options.promptValue || '')
-    setDepthPrompt((prev) => prev || options.promptValue || '')
-    setDepthError(null)
+    setDescriptionText((prev) => prev || options.promptValue || '')
+    setDescriptionError(null)
     setSelectedImageEditSize(options.imageEditSize)
     const normalizedCanvasResize = normalizeCanvasResizeSize(options.canvasResizeSize)
     const parsedCanvasResize = parseCanvasResizeSizeDimensions(normalizedCanvasResize) || { width: 1280, height: 720 }
@@ -171,7 +173,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
   React.useEffect(() => {
     if (!open) return
     if (editMode !== 'depth') return
-    setDepthPrompt((prev) => prev || options.promptValue || '')
+    setDescriptionText((prev) => prev || options.promptValue || '')
   }, [editMode, open, options.promptValue])
 
   const lines = React.useMemo(() => POSE_LINES, [])
@@ -427,7 +429,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     }
   }, [])
 
-  const createDepthFocusGuideUrl = React.useCallback(async (): Promise<string | null> => {
+  const createMaskFocusGuideUrl = React.useCallback(async (): Promise<string | null> => {
     const maskCanvas = maskCanvasRef.current
     if (!maskEnabled || !maskDirty || !maskCanvas) return null
     const image = await loadImageElement(activeBaseImageUrl)
@@ -475,7 +477,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     guideCtx.drawImage(scaledMaskCanvas, 0, 0)
     guideCtx.restore()
 
-    return await uploadCanvasAsset(guideCanvas, 'depth-focus-guide.png', '生成局部编辑引导图失败')
+    return await uploadCanvasAsset(guideCanvas, 'mask-focus-guide.png', '生成局部编辑引导图失败')
   }, [activeBaseImageUrl, getContainedImageRect, loadImageElement, maskDirty, maskEnabled, uploadCanvasAsset])
 
   const exportResizedImage = React.useCallback(async (): Promise<string> => {
@@ -527,7 +529,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     }
     setUploading(true)
     try {
-      const mergedPrompt = (editMode === 'depth' ? depthPrompt : promptInput).trim() || (options.promptValue || '')
+      const mergedPrompt = (editMode === 'depth' ? descriptionText : promptInput).trim() || (options.promptValue || '')
       if (mergedPrompt && options.onPromptSave) {
         options.onPromptSave(mergedPrompt)
       }
@@ -560,7 +562,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
 
       let maskUrl: string | null = null
       if (maskEnabled && maskDirty) {
-        maskUrl = await createDepthFocusGuideUrl()
+        maskUrl = await createMaskFocusGuideUrl()
       }
 
       const refs = Array.from(
@@ -596,7 +598,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     } finally {
       setUploading(false)
     }
-  }, [activeBaseImageUrl, options, maskDirty, promptInput, editMode, depthPrompt, selectedImageEditSize, exportResizedImage, maskEnabled, createDepthFocusGuideUrl, uploadCanvasAsset])
+  }, [activeBaseImageUrl, options, maskDirty, promptInput, editMode, descriptionText, selectedImageEditSize, exportResizedImage, maskEnabled, createMaskFocusGuideUrl, uploadCanvasAsset])
 
   /**
    * 把上游给的节点图片地址解析成服务端可直接拉取的 http(s) 地址。
@@ -627,7 +629,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
    * @param rawImageUrl 节点图片地址（可含 asset:// 等运行时标识）
    * @returns 模型输出的画面描述正文（自然语言）
    */
-  const requestDepthDescription = React.useCallback(async (rawImageUrl: string): Promise<string> => {
+  const requestImageDescription = React.useCallback(async (rawImageUrl: string): Promise<string> => {
     const ui = useUIStore.getState()
     const apiKey = (ui.publicApiKey || '').trim()
     const token = getAuthToken()
@@ -658,29 +660,29 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     return extractTextFromTaskResult(taskRes.result)
   }, [options.nodeId, resolveUnderstandImageUrl])
 
-  const handleGenerateDepth = React.useCallback(async () => {
+  const handleGenerateDescription = React.useCallback(async () => {
     if (!isRemoteUrl(activeBaseImageUrl)) {
       toast('请先上传主图到可访问的链接再进行局部修改', 'error')
       return
     }
-    setDepthLoading(true)
-    setDepthError(null)
+    setDescriptionLoading(true)
+    setDescriptionError(null)
     try {
       // 与图片节点工具栏的「AI 润色」一致：直接使用模型返回的自然语言正文，
       // 不再做 JSON 解析/格式化，也不再发起二次「结构化细分」请求。
-      const text = (await requestDepthDescription(activeBaseImageUrl)).trim()
+      const text = (await requestImageDescription(activeBaseImageUrl)).trim()
       if (!text) {
         throw new Error('未返回可用的画面描述')
       }
-      setDepthPrompt(text)
+      setDescriptionText(text)
     } catch (err: any) {
       const message = err?.message || '局部修改失败'
-      setDepthError(message)
+      setDescriptionError(message)
       toast(message, 'error')
     } finally {
-      setDepthLoading(false)
+      setDescriptionLoading(false)
     }
-  }, [activeBaseImageUrl, requestDepthDescription])
+  }, [activeBaseImageUrl, requestImageDescription])
 
   const modal = open ? (
     <Modal
@@ -891,14 +893,14 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         className="pose-editor__generate-depth"
                         size="xs"
                         variant="light"
-                        loading={depthLoading}
-                        onClick={handleGenerateDepth}
+                        loading={descriptionLoading}
+                        onClick={handleGenerateDescription}
                       >
                         反推画面描述
                       </Button>
-                      {depthError && (
+                      {descriptionError && (
                         <Text className="pose-editor__depth-error" size="xs" c="red">
-                          {depthError}
+                          {descriptionError}
                         </Text>
                       )}
                     </Group>
@@ -909,8 +911,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       autosize
                       minRows={4}
                       maxRows={7}
-                      value={depthPrompt}
-                      onChange={(e) => setDepthPrompt(e.currentTarget.value)}
+                      value={descriptionText}
+                      onChange={(e) => setDescriptionText(e.currentTarget.value)}
                     />
                   </Stack>
                   <div className="pose-editor__spacer" style={{ flex: 1 }} />

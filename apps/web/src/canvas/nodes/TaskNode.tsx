@@ -3327,6 +3327,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         ),
       )
       const effectivePrompt = (posePrompt || prompt || (data as any)?.prompt || '').trim()
+      // mode==='depth' 即「局部修改」（历史标识沿用）：只有局部修改才把圈选高亮图作为引导图
       const normalizedMaskGuideUrl = mode === 'depth' ? String(maskUrl || '').trim() : ''
       const normalizedEditRefs = normalizedMaskGuideUrl
         ? [...normalizedRefs.filter((url) => url !== normalizedMaskGuideUrl).slice(0, 7), normalizedMaskGuideUrl]
