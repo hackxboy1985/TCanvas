@@ -4,6 +4,7 @@ import { IconPhotoSearch } from '@tabler/icons-react'
 import { captureFramesAtTimes } from '../../../../utils/videoFrameExtractor'
 import { setTapImageDragData } from '../../../dnd/setTapImageDragData'
 import { MAX_FRAME_ANALYSIS_SAMPLES } from '../../taskNodeHelpers'
+import { isOssVideoUrl, buildOssVideoSnapshotUrl } from '../../../../utils/ossVideoSnapshot'
 import type { FrameSample } from '../types'
 
 type VideoFramePreviewProps = {
@@ -73,7 +74,7 @@ export function VideoFramePreview({
     return times.filter((time, index, arr) => Number.isFinite(time) && time >= 0 && arr.indexOf(time) === index)
   }, [])
 
-  /** 抽帧主流程 */
+  /** 抽帧主流程：优先使用 OSS 参数截帧，降级到浏览器 canvas 截帧 */
   const handleCapture = React.useCallback(async () => {
     const src = String(videoUrl || '').trim()
     if (!src) {
@@ -83,7 +84,25 @@ export function VideoFramePreview({
     setFrameCaptureLoading(true)
     cleanupFrameSamples()
     try {
-      const { frames } = await captureFramesAtTimes({ type: 'url', url: src }, buildSampleTimes(durationSeconds))
+      const times = buildSampleTimes(durationSeconds)
+      
+      // 优先使用 OSS 参数截帧（如果是 OSS 视频）
+      if (isOssVideoUrl(src)) {
+        const ossFrames = times.map((timeSeconds) => ({
+          url: buildOssVideoSnapshotUrl(src, timeSeconds),
+          time: timeSeconds,
+          blob: null as unknown as Blob,
+          remoteUrl: null,
+          description: null,
+          describing: false,
+        }))
+        setFrameSamples(ossFrames)
+        onNotify(`已生成 ${ossFrames.length} 帧截图 URL`, 'success')
+        return
+      }
+      
+      // 降级：使用浏览器 canvas 截帧（仅限非 OSS 视频）
+      const { frames } = await captureFramesAtTimes({ type: 'url', url: src }, times)
       frameSampleUrlsRef.current = frames.map((frame) => frame.objectUrl)
       setFrameSamples(
         frames.map((frame) => ({

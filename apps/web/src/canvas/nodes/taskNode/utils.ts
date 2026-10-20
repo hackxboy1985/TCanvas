@@ -1,8 +1,10 @@
 export const REMOTE_IMAGE_URL_REGEX = /^https?:\/\//i
 
+/** 判断是否为有效的图片 URL（包括远程 https/http、blob 和 data URL） */
 export const isRemoteUrl = (url?: string | null) => {
   if (!url) return false
-  return REMOTE_IMAGE_URL_REGEX.test(url)
+  // 支持远程 URL (http/https)、blob URL 和 data URL
+  return REMOTE_IMAGE_URL_REGEX.test(url) || url.startsWith('blob:') || url.startsWith('data:')
 }
 
 export const normalizeClipRange = (val: unknown): { start: number; end: number } | null => {
