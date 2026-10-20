@@ -60,15 +60,15 @@ export function LensReferencePicker({ opened, dramaId, existingKeys, onClose, on
             const toggle = () => setPicked((previous) => { const next = { ...previous }; if (next[key]) delete next[key]; else next[key] = asset; return next })
             return <article className={'lens-reference-picker__card' + (checked ? ' is-selected' : '')} key={key}>
               <div className={'lens-reference-picker__thumb' + (tab === ReferenceCategory.Role ? ' lens-reference-picker__thumb--role' : '')}>
-                {asset.imgUrl ? <img className="lens-reference-picker__image" src={asset.imgUrl} alt={asset.variantName || asset.name} loading="lazy" /> : <Text className="lens-reference-picker__no-image" size="xs">暂无图片</Text>}
-                {asset.parentId && <span className="lens-reference-picker__badge">{tab === ReferenceCategory.Role ? '其他造型' : asset.variantName || '子场景'}{asset.subType && SCENE_SUBTYPE_LABELS[asset.subType] ? ' · ' + SCENE_SUBTYPE_LABELS[asset.subType] : ''}</span>}
+                {asset.imgUrl ? <img className="lens-reference-picker__image" src={`${asset.imgUrl}${asset.imgUrl.includes('?') ? '&' : '?'}x-oss-process=image/resize,w_200`} alt={asset.variantName || asset.name} loading="lazy" /> : <Text className="lens-reference-picker__no-image" size="xs">暂无图片</Text>}
+                {asset.parentId && <span className="lens-reference-picker__badge">{tab === ReferenceCategory.Role ? '其他造型' : '子场景'}{asset.subType && SCENE_SUBTYPE_LABELS[asset.subType] ? ' · ' + SCENE_SUBTYPE_LABELS[asset.subType] : ''}</span>}
                 {checked && <span className="lens-reference-picker__check">{linked ? '已关联' : '✓'}</span>}
                 <div className="lens-reference-picker__hover">
                   <button className="lens-reference-picker__action" type="button" disabled={disabled} onClick={() => { void confirm([asset]) }}>直接添加</button>
                   <button className="lens-reference-picker__action" type="button" disabled={disabled} aria-pressed={checked} onClick={toggle}>{checked ? '取消' : '选择'}</button>
                 </div>
               </div>
-              <Text className="lens-reference-picker__label" size="xs" title={asset.name}>{tab === ReferenceCategory.Role && asset.parentId ? asset.variantName || '其他造型' : group.name}</Text>
+              <Text className="lens-reference-picker__label" size="xs" title={asset.name}>{asset.parentId ? (tab === ReferenceCategory.Role ? asset.variantName || '其他造型' : asset.variantName || '子场景') : group.name}</Text>
             </article>
           })}</div>
         </section>)}

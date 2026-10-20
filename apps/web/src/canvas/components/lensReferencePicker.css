@@ -24,4 +24,10 @@
 .lens-reference-picker__groups--props .lens-reference-picker__group { padding: 0; background: transparent; }
 .lens-reference-picker__footer { padding-top: 14px; }
 .lens-reference-picker__error { padding-bottom: 8px; }
+/* Tab 选中状态样式 */
+.lens-reference-picker__tab-list { border-bottom: 1px solid var(--mantine-color-gray-3); }
+.lens-reference-picker__tab { position: relative; padding: 10px 16px; font-weight: 500; color: var(--mantine-color-text-secondary); transition: all 200ms ease; border: none; background: transparent; }
+.lens-reference-picker__tab:hover { color: var(--mantine-color-text); }
+.lens-reference-picker__tab[data-active] { color: var(--mantine-primary-color-filled); font-weight: 600; }
+.lens-reference-picker__tab[data-active]::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--mantine-primary-color-filled); }
 @media (max-width: 520px) { .lens-reference-picker__card { flex-basis: 140px; width: 140px; } .lens-reference-picker__groups--props { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); } .lens-reference-picker__hover { visibility: visible; } }
