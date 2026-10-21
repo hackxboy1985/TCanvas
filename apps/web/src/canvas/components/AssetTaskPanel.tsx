@@ -63,6 +63,13 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
   const [records, setRecords] = React.useState<PanelTaskRecord[]>([])
   const [total, setTotal] = React.useState(0)
   const [applications, setApplications] = React.useState<LensModelOption[]>([])
+  /**
+   * 已加载的应用名解析表缓存。
+   *
+   * <p>面板查询会按 5 秒轮询刷新，而应用列表（/api/model/image + image2image）
+   * 在一次面板生命周期内不会变，缓存后避免每轮轮询都重复请求两次。
+   */
+  const applicationsRef = React.useRef<LensModelOption[] | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -74,6 +81,17 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
       setError(null)
       try {
         if (!dramaId) throw new Error('缺少剧信息，无法查询任务')
+        // 应用名解析表必须两个分支都加载：
+        // 自由节点（含局部修改等衍生节点）虽然查询不按应用筛选，但任务卡片要把 originAppId
+        // 显示成用户选择的应用名；此前只在业务资产分支加载，自由节点恒为空数组，
+        // 导致任务显示成「未匹配应用（73）」。loadLensAssetTaskApplications 空列表不抛错。
+        if (!applicationsRef.current) {
+          const loaded = await loadLensAssetTaskApplications()
+          if (disposed) return
+          applicationsRef.current = loaded
+          setApplications(loaded)
+        }
+        const models = applicationsRef.current
         // 画布自由节点（含衍生节点）：按节点自身的归属三元组查询，只查本节点的任务
         const isCanvasFreeNode = canvasNodeAssetId !== null && flowId !== undefined
         if (isCanvasFreeNode) {
@@ -99,11 +117,8 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
           return
         }
         if (!assetId || assetType === undefined) throw new Error('缺少剧或资产信息，无法查询任务')
-        const models = await loadLensAssetTaskApplications()
-        if (disposed) return
         const applicationIds = models.filter((model) => model.enabled === true).map((model) => String(model.value))
         if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
-        setApplications(models)
         const result = await listAssetImageTasks({ dramaId, assetId, assetType, applicationIds,
           taskStatus: status, pageNum: page, pageSize: PAGE_SIZE })
         if (disposed) return
