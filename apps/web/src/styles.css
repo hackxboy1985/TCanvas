@@ -6458,14 +6458,9 @@ body {
 }
 
 .task-node-prompt__root--media-focus .task-node-prompt__textarea .mantine-Textarea-input {
+  /* 与分镜视频节点编辑区样式完全对齐：沿用 Mantine 默认输入框的底色 / 边框 / 圆角 / 内边距 / 字号，
+     仅保留媒体节点工具栏所需的最小高度 */
   min-height: 154px;
-  padding: 0 0 6px !important;
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  font-size: 15px;
-  line-height: 1.6;
 }
 
 .task-node-prompt__root--media-focus .task-node-prompt__textarea .mantine-Textarea-input::placeholder {
