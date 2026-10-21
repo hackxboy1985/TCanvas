@@ -16,6 +16,8 @@
  * <p><b>数据来源按节点类型区分</b>（后端接口与表都不同，必须分开）：
  * <ul>
  *   <li>角色/场景/道具：{@code /api/task/list} + assetType=0/1/2 + assetId=实体ID</li>
+ *   <li>画布自由节点（含局部修改/打光/角度等衍生节点）：{@code /api/task/list}
+ *       + assetType=10 + sceneId(画布flowId) + assetId(节点数字ID)</li>
  *   <li>分镜：{@code /api/storyboardTask/list} + storyboardId</li>
  * </ul>
  *
@@ -45,6 +47,8 @@ import {
   listAssetImageTasks,
   LensAssetTaskStatus,
   listShotVideoTasks,
+  listCanvasFreeNodeTasks,
+  CANVAS_NODE_ASSET_TYPE,
   type LensShotFileType,
   type LensTaskRecord,
   type LensModelOption,
@@ -54,7 +58,7 @@ import { useUIStore } from '../../ui/uiStore'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
 import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
 import { getLensCanvasFlowId } from '../utils/canvasNodeAssetId'
-import { collectDerivedTaskRows } from '../utils/derivedTasks'
+import { collectDerivedTaskRows, filterTasksAfterNodeCreated } from '../utils/derivedTasks'
 
 /** 轮询间隔（毫秒），对齐 §5.2 的 5s */
 const POLL_INTERVAL_MS = 5000
@@ -102,13 +106,19 @@ export interface TaskResultTarget {
   /** 节点显示名（抽屉标题） */
   title: string
   /** 节点类型 */
-  kind: 'role' | 'scene' | 'prop' | 'storyboard'
+  kind: 'role' | 'scene' | 'prop' | 'storyboard' | 'canvas'
   /** 剧ID（后端权限校验用，必传） */
   dramaId: string
   /** 业务实体ID（角色/场景/道具的 lens_role.id / lens_asset_image.id） */
   entityId?: string
   /** 分镜ID（分镜节点必传） */
   storyboardId?: string
+  /** 画布编排ID（画布自由节点必传，对应 task_queue.scene_id） */
+  canvasFlowId?: number
+  /** 画布节点数字ID（画布自由节点必传，对应 task_queue.asset_id） */
+  canvasNodeAssetId?: number
+  /** 节点入画布时间（ISO 字符串，用于过滤节点数字ID 复用产生的历史任务） */
+  nodeCreatedAt?: string
 }
 
 /** 结果媒体类型：图 / 视频 */
@@ -160,6 +170,7 @@ const KIND_LABEL: Record<TaskResultTarget['kind'], string> = {
   scene: '场景',
   prop: '道具',
   storyboard: '分镜',
+  canvas: '画布节点',
 }
 
 /** 资产类型映射：角色=0 场景=1 道具=2（与后端 AssetType 一致） */
@@ -453,7 +464,13 @@ export function TaskResultDrawer({
   const [total, setTotal] = React.useState(0)
   const [page, setPage] = React.useState(1)
   const [taskStatus, setTaskStatus] = React.useState(LensAssetTaskStatus.All)
-  const applicationsRef = React.useRef<LensModelOption[] | null>(null)
+  /**
+   * 应用名解析表（local state 供渲染使用）。
+   *
+   * <p>真正的缓存由 {@link loadLensAssetTaskApplications} 内部维护（并发去重 + 5 分钟 TTL），
+   * 这里只负责把结果放进 state，避免每轮轮询都重复打接口。
+   */
+  const [applications, setApplications] = React.useState<LensModelOption[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   /** 查看参数弹窗内容（空串表示关闭） */
@@ -477,7 +494,7 @@ export function TaskResultDrawer({
   /**
    * 按目标节点类型查询任务。
    *
-   * <p>资产必须携带自身实体ID，子资产不使用父级ID；自由节点不接入。
+   * <p>资产必须携带自身实体ID，子资产不使用父级ID；画布自由节点按画布flowId + 节点数字ID 查询。
    */
   const fetchTasks = React.useCallback(
     async (targetPage: number): Promise<void> => {
@@ -499,6 +516,35 @@ export function TaskResultDrawer({
           setTotal(res.total ?? 0)
           return
         }
+        // 画布自由节点（含局部修改/打光/角度等衍生节点）：没有业务实体ID，
+        // 任务归属是 flowId(scene_id) + 节点数字ID(asset_id)，与节点内嵌任务面板同一口径。
+        if (target.kind === 'canvas') {
+          if (target.canvasFlowId === undefined || !target.canvasNodeAssetId) {
+            throw new Error('画布节点缺少任务归属信息，无法查询任务')
+          }
+          // 任务卡片的模型列按 originAppId 解析用户选择的应用名，必须先加载应用列表；
+          // 此前只在资产分支加载，画布节点任务恒显示「未匹配应用（73）」。
+          // 函数自带会话级缓存，重复调用不会重复请求接口。
+          setApplications(await loadLensAssetTaskApplications())
+          const res = await listCanvasFreeNodeTasks({
+            dramaId: target.dramaId,
+            sceneId: target.canvasFlowId,
+            assetType: CANVAS_NODE_ASSET_TYPE,
+            assetId: target.canvasNodeAssetId,
+            pageNum: targetPage,
+            pageSize: PAGE_SIZE,
+          })
+          if (requestVersion !== requestVersionRef.current) return
+          // 节点数字ID 曾被复用时，同一 assetId 下会混入旧节点的历史任务，按入画布时间过滤
+          const rows = filterTasksAfterNodeCreated(
+            Array.isArray(res.rows) ? res.rows : [],
+            target.nodeCreatedAt,
+          )
+          setRecords(rows)
+          // 与内嵌面板一致：过滤后的条数才是该节点真实任务数，不能直接用后端 total
+          setTotal(rows.length)
+          return
+        }
         // 角色/场景/道具：按业务实体查询（与归一角色界面同口径）
         const assetType = ENTITY_ASSET_TYPE[target.kind]
         if (assetType === undefined || !target.entityId) {
@@ -508,9 +554,9 @@ export function TaskResultDrawer({
         if (!identity) {
           throw new Error(`资产实体ID非法：${target.entityId}`)
         }
-        const applications = applicationsRef.current ?? await loadLensAssetTaskApplications()
-        applicationsRef.current = applications
-        const applicationIds = applications.filter((application) => application.enabled === true).map((application) => String(application.value))
+        const loadedApplications = await loadLensAssetTaskApplications()
+        setApplications(loadedApplications)
+        const applicationIds = loadedApplications.filter((application) => application.enabled === true).map((application) => String(application.value))
         if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
         if (requestVersion !== requestVersionRef.current) return
         const res = await listAssetImageTasks({
@@ -668,9 +714,9 @@ export function TaskResultDrawer({
   const cards = React.useMemo(() => records.map((record, index) => {
     const card = toCardModel(record, index)
     // 资产任务展示用户选择的应用名，内部模型字段仅供分镜任务使用。
-    if (target?.kind !== 'storyboard') card.modelName = resolveLensTaskApplicationName(record.originAppId, applicationsRef.current ?? [])
+    if (target?.kind !== 'storyboard') card.modelName = resolveLensTaskApplicationName(record.originAppId, applications)
     return card
-  }), [records, target?.kind])
+  }), [applications, records, target?.kind])
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   /**
    * 「采纳结果」是否可用。
@@ -709,7 +755,7 @@ export function TaskResultDrawer({
             <Text size="sm" c="dimmed">
               {loading ? '查询中…' : `共 ${total} 条`}
             </Text>
-            {target?.kind !== 'storyboard' && (
+            {target?.kind !== 'storyboard' && target?.kind !== 'canvas' && (
               <Select className="lens-asset-task-status" size="xs" w={140} aria-label="资产任务状态"
                 value={taskStatus} onChange={(value) => setTaskStatus(value as LensAssetTaskStatus)}
                 allowDeselect={false} data={[
