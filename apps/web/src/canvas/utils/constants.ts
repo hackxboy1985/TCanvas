@@ -30,6 +30,15 @@ export const CANVAS_CONFIG = {
   TRANSITION_EASING: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;
 
+/**
+ * 图片类节点默认尺寸（宽×高）。
+ *
+ * <p>与 lens 资产投影节点（角色/场景/道具）保持一致，避免自由节点、衍生节点
+ * 与资产节点在画布上尺寸不统一。
+ */
+export const IMAGE_NODE_DEFAULT_WIDTH = 384
+export const IMAGE_NODE_DEFAULT_HEIGHT = 250
+
 // 节点类型
 export const NODE_TYPES = {
   TASK: 'taskNode',

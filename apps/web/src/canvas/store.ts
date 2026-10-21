@@ -7,6 +7,7 @@ import { runFlowDag } from '../runner/dag'
 import { getTaskNodeCoreType, getTaskNodeSchema, normalizeTaskNodeKind } from './nodes/taskNodeSchema'
 import { formatErrorMessage } from './utils/formatErrorMessage'
 import { getNodeAbsPosition, getNodeSize } from './utils/nodeBounds'
+import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from './utils/constants'
 import type { NodeRect, NodeSize, XY } from './utils/nodeBounds'
 import { validateWorkflowIoForRun } from './workflowIo'
 import { normalizeWorkflowEdgeMeta, normalizeWorkflowNodeMeta } from './workflowMeta'
@@ -2174,9 +2175,7 @@ export const useRFStore = create<RFState>((set, get) => ({
           ? { nodeWidth: 400, nodeHeight: 220 }
           : kindCoreType === 'storyboard'
             ? { nodeWidth: 560, nodeHeight: 470 }
-            : kindValue === 'imageEdit'
-              ? { nodeWidth: 320, nodeHeight: 220 }
-            : { nodeWidth: 120, nodeHeight: 210 }
+            : { nodeWidth: IMAGE_NODE_DEFAULT_WIDTH, nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT }
         dataExtra = {
           ...dataExtra,
           ...(hasNodeWidth ? null : { nodeWidth: defaults.nodeWidth }),

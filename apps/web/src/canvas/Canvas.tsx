@@ -41,7 +41,7 @@ import { useAuth } from '../auth/store'
 import { isLensMode } from '../config/useModelOptions'
 import { createServerAsset, listProjectFlows, listProjects, recoverUploadedServerAssetFile, saveProjectFlow, updateProjectTemplate, upsertProject, uploadServerAssetFile, type ProjectDto } from '../api/server'
 import { genTaskNodeId } from './nodes/taskNodeHelpers'
-import { CANVAS_CONFIG } from './utils/constants'
+import { CANVAS_CONFIG, IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from './utils/constants'
 import { buildEdgeValidator } from './utils/edgeRules'
 import { buildCanvasThemeColors } from './utils/canvasTheme'
 import {
@@ -640,8 +640,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           label,
           kind: 'image',
           imageUrl: localUrl,
-          nodeWidth: 120,
-          nodeHeight: 210,
+          nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
+          nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
         },
         selected: false,
       }))
@@ -750,8 +750,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             imageUrl: preferred,
             imageResults: [{ url: preferred }],
             imagePrimaryIndex: 0,
-            nodeWidth: 120,
-            nodeHeight: 210,
+            nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
+            nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
           },
           selected: false,
         }
@@ -808,8 +808,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           label,
           kind: 'image',
           imageUrl: localUrl,
-          nodeWidth: 120,
-          nodeHeight: 210,
+          nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
+          nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
         },
         selected: false,
       }
@@ -1202,8 +1202,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
               ...(sourceNodeId ? { dragSourceNodeId: sourceNodeId } : {}),
               ...(sourceIndex !== null ? { dragSourceIndex: sourceIndex } : {}),
               ...(shotNo !== null ? { storyboardShotNo: shotNo } : {}),
-              nodeWidth: 120,
-              nodeHeight: 210,
+              nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
+              nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
             },
           }
           return { nodes: [...s.nodes, node], nextId: s.nextId + 1 }

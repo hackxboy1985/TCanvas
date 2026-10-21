@@ -16,7 +16,8 @@ import {
 type PanelTaskRecord = DerivedTaskRecord
 
 const PAGE_SIZE = 20
-const POLL_INTERVAL_MS = 5000
+/** 有未终态任务时的轮询间隔（毫秒）：只在存在排队/生成中任务时续期，全终态即停止 */
+const POLL_INTERVAL_MS = 20000
 const STATUS_OPTIONS = [
   { value: LensAssetTaskStatus.All, label: '默认：隐藏失败' },
   { value: LensAssetTaskStatus.Created, label: '创建' },

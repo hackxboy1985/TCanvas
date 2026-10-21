@@ -60,8 +60,8 @@ import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '.
 import { getLensCanvasFlowId } from '../utils/canvasNodeAssetId'
 import { collectDerivedTaskRows, filterTasksAfterNodeCreated } from '../utils/derivedTasks'
 
-/** 轮询间隔（毫秒），对齐 §5.2 的 5s */
-const POLL_INTERVAL_MS = 5000
+/** 有未终态任务时的轮询间隔（毫秒）：只在存在排队/生成中任务时续期，全终态即停止 */
+const POLL_INTERVAL_MS = 20000
 /** 每页条数 */
 const PAGE_SIZE = 20
 

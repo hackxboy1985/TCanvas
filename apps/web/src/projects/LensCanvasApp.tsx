@@ -33,6 +33,7 @@ import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from 
 import { TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
+import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
 
 /** 读取 URL query 参数 */
 function readQueryParams(): { dramaId: string; episode: number } {
@@ -51,6 +52,28 @@ function readQueryParams(): { dramaId: string; episode: number } {
  *     旧版本 flow 的资产位置不再适用，需按新布局重投影。
  */
 const LAYOUT_VERSION = 5
+
+/**
+ * 图片类节点统一尺寸：加载时把未手动缩放过的图片节点归一为资产节点尺寸（384×250）。
+ *
+ * <p>历史 flow 里自由节点默认 120×210、衍生节点继承旧尺寸，仅修改新建默认值无法修正
+ * 已存在的节点，因此恢复编排时统一校正；用户手动拖拽过尺寸的节点带 nodeSizeManual
+ * 标记，保持原样不动。
+ */
+function normalizeImageNodeSize(nodes: Node[]): Node[] {
+  return nodes.map((node) => {
+    if (node.type !== 'taskNode') return node
+    const data = (node.data || {}) as Record<string, unknown>
+    const kind = String(data.kind || '')
+    if (kind !== 'image' && kind !== 'imageEdit') return node
+    if (data.nodeSizeManual === true) return node
+    if (
+      Number(data.nodeWidth) === IMAGE_NODE_DEFAULT_WIDTH
+      && Number(data.nodeHeight) === IMAGE_NODE_DEFAULT_HEIGHT
+    ) return node
+    return { ...node, data: { ...data, nodeWidth: IMAGE_NODE_DEFAULT_WIDTH, nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT } }
+  })
+}
 
 /** 预加载分镜媒体宽高比：图片用 Image，视频用隐藏 video 的 metadata；失败/无媒体返回 null */
 async function loadShotAspects(storyboards: LensStoryboard[]): Promise<Map<string, number | null>> {
@@ -201,6 +224,8 @@ const PROJECTION_KEPT_DATA_KEYS = [
   'lensTypeLabel',
   'nodeWidth',
   'nodeHeight',
+  // 用户手动拖拽过的尺寸标记：重开画布时据此跳过“图片节点统一尺寸”的归一化
+  'nodeSizeManual',
   'roleCardId',
 ] as const
 
@@ -1269,7 +1294,7 @@ export default function LensCanvasApp(): JSX.Element {
             const restoredEdges = useFlowLayout
               ? (Array.isArray(parsed.edges) ? parsed.edges : [])
               : projected.edges
-            load({ nodes: reviveInterfaceErrorNodes(restored), edges: restoredEdges })
+            load({ nodes: normalizeImageNodeSize(reviveInterfaceErrorNodes(restored)), edges: restoredEdges })
             if (parsed.viewport) {
               const vp = parsed.viewport
               window.setTimeout(() => { canvasApiRef.current?.setViewport(vp) }, 0)
@@ -1280,7 +1305,7 @@ export default function LensCanvasApp(): JSX.Element {
           // flow data 损坏：用默认投影（错误已在 getFlow 阶段捕获过，这里走兜底布局）
         }
       }
-      load({ nodes: projected.nodes, edges: projected.edges })
+      load({ nodes: normalizeImageNodeSize(projected.nodes), edges: projected.edges })
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载失败'
       setError(`画布加载失败：${msg}（可刷新重试或返回分镜板）`)
@@ -1476,7 +1501,8 @@ export default function LensCanvasApp(): JSX.Element {
    * 按节点组装「任务结果」查询目标。
    *
    * <p>数据来源按节点类型区分（后端接口/表都不同）：
-   * 分镜走 storyboardTask；角色/场景/道具走各自业务实体，自由节点不接入。
+   * 分镜走 storyboardTask；角色/场景/道具走各自业务实体；
+   * 画布自由节点（含局部修改/打光/角度等衍生节点）按画布flowId + 节点数字ID 查询。
    * 取不到必要标识时返回 null（不静默降级查全量，避免展示错误结果）。
    */
   const resolveTaskResultTarget = useCallback((nodeId: string): TaskResultTarget | null => {
@@ -1512,7 +1538,28 @@ export default function LensCanvasApp(): JSX.Element {
       }
     }
 
-    // 自由生图节点暂不接入资产任务列表，禁止降级查全量任务。
+    // 画布自由节点（含局部修改/打光/角度等衍生节点）：没有业务实体ID，
+    // 任务归属是 flowId(scene_id) + 节点数字ID(asset_id)，与节点内嵌任务面板同一口径。
+    // 这类节点确实能查到自己的任务，不能因为拿不到 entityId 就提示「没有有效业务资产ID」。
+    const canvasNodeAssetId = readCanvasNodeAssetId(data)
+    const flowId = getLensCanvasFlowId()
+    if (canvasNodeAssetId !== null && flowId !== undefined) {
+      const label =
+        (typeof data.label === 'string' && data.label.trim()) ||
+        (typeof data.title === 'string' && data.title.trim()) ||
+        '画布节点'
+      return {
+        nodeId,
+        title: label,
+        kind: 'canvas',
+        dramaId,
+        canvasFlowId: flowId,
+        canvasNodeAssetId,
+        nodeCreatedAt: typeof data.nodeCreatedAt === 'string' ? data.nodeCreatedAt : undefined,
+      }
+    }
+
+    // 连画布任务归属都没有（未分配节点数字ID / 尚无 flow）：显式提示，禁止降级查全量任务。
     return null
   }, [dramaId])
 

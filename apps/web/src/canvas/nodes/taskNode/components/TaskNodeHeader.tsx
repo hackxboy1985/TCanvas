@@ -20,6 +20,15 @@ type TaskNodeHeaderProps = {
   showIcon?: boolean
   showStatus?: boolean
   showSubtitle?: boolean
+  /** 第二行彩色类型角标（图片节点区分角色/场景/道具/衍生/自由）；传入后替代副标题文字 */
+  subtitleBadge?: {
+    label: string
+    color: string
+    background: string
+    borderColor: string
+  } | null
+  /** 标题栏左侧强调色条（图片节点类别色）；不传则不渲染 */
+  accentColor?: string
   /** 标题右侧的业务操作，不依赖节点是否已有生成结果。 */
   actions?: React.ReactNode
   isNew?: boolean
@@ -52,6 +61,8 @@ export function TaskNodeHeader({
   showIcon = true,
   showStatus = true,
   showSubtitle = false,
+  subtitleBadge,
+  accentColor,
   actions,
   isNew = false,
   metaBadges = [],
@@ -63,7 +74,17 @@ export function TaskNodeHeader({
 }: TaskNodeHeaderProps) {
   if (!showMeta) {
     return (
-      <div className="task-node-header task-node-header--compact" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      <div
+        className="task-node-header task-node-header--compact"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 12,
+          // 类别色条：让图片节点在画布缩放较小、标题被截断时也能靠颜色区分
+          ...(accentColor ? { borderLeft: `3px solid ${accentColor}`, paddingLeft: 8 } : null),
+        }}
+      >
         {showIcon && (
           <div
             className="task-node-header-icon"
@@ -101,7 +122,33 @@ export function TaskNodeHeader({
           >
             {currentLabel}
           </Text>
-          {showSubtitle && subtitle.trim() && (
+          {showSubtitle && (subtitleBadge ? (
+            <span
+              className="task-node-header-subtitle-badge"
+              title={subtitleBadge.label}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                maxWidth: '100%',
+                height: 16,
+                marginTop: 2,
+                padding: '0 7px',
+                borderRadius: 999,
+                border: `1px solid ${subtitleBadge.borderColor}`,
+                background: subtitleBadge.background,
+                color: subtitleBadge.color,
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: '16px',
+                letterSpacing: 0.2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {subtitleBadge.label}
+            </span>
+          ) : subtitle.trim() ? (
             <Text
               className="task-node-header-compact-subtitle"
               size="xs"
@@ -109,7 +156,7 @@ export function TaskNodeHeader({
             >
               {subtitle}
             </Text>
-          )}
+          ) : null)}
         </div>
         {actions}
         {isNew && (
