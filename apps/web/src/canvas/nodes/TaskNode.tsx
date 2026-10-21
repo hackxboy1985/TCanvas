@@ -132,7 +132,7 @@ import { resolveTextNodePlainText, type TextNodeDisplaySource } from './taskNode
 import { VeoImageModal } from './taskNode/components/VeoImageModal'
 import { VideoResultModal } from './taskNode/VideoResultModal'
 import { renderFeatureBlocks } from './taskNode/featureRenderers'
-import { REMOTE_IMAGE_URL_REGEX, normalizeClipRange, pickOnlyBookId, syncDraftWithExternalValue } from './taskNode/utils'
+import { REMOTE_IMAGE_URL_REGEX, isRemoteUrl, normalizeClipRange, pickOnlyBookId, syncDraftWithExternalValue } from './taskNode/utils'
 import { runNodeRemote } from '../../runner/remoteRunner'
 import {
   appendReferenceAliasSlotPrompt,
@@ -1595,6 +1595,17 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const [reversePromptLoading, setReversePromptLoading] = React.useState(false)
   const poseStickmanUrl = (data as any)?.poseStickmanUrl as string | undefined
   const poseReferenceImages = (data as any)?.poseReferenceImages as string[] | undefined
+  /**
+   * 节点本地的局部编辑引导图（圈选高亮图，node.data.poseMaskUrl）。
+   *
+   * <p>它不是连线引用：「上游参考」区里作为只读项展示，提交时作为最后一张参考图。
+   * 必须是可访问的远程 URL 才展示，避免把脏数据渲染成裂图。
+   */
+  const poseMaskGuideUrl = React.useMemo(() => {
+    const raw = (data as Record<string, unknown>)?.poseMaskUrl
+    const url = typeof raw === 'string' ? raw.trim() : ''
+    return url && isRemoteUrl(url) ? url : ''
+  }, [data])
   const imageResults = React.useMemo<TaskNodeImageResult[]>(() => {
     const raw = (data as any)?.imageResults as Array<Record<string, unknown>> | undefined
     if (raw && Array.isArray(raw) && raw.length > 0) {
@@ -3686,6 +3697,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     baseImageUrl: basePoseImage,
     poseReferenceImages,
     poseStickmanUrl,
+    poseMaskUrl: poseMaskGuideUrl,
     promptValue: prompt,
     onPromptSave: (next) => {
       setPrompt(next)
@@ -8848,6 +8860,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     onRemove={handleRemoveUpstreamReference}
                     onToggleCanvasReferencePicker={handleToggleCanvasReferencePicker}
                     canvasReferencePickerActive={canvasReferencePickerActive}
+                    maskGuideUrl={poseMaskGuideUrl}
                   />
                 )}
 

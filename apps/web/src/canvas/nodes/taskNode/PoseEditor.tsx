@@ -9,6 +9,7 @@ import { toast } from '../../../ui/toast'
 import { useUIStore } from '../../../ui/uiStore'
 import { extractTextFromTaskResult } from '../taskNodeHelpers'
 import { isRemoteUrl } from './utils'
+import { resolveMaskGuideUrlOnSave } from './localEditMaskGuide'
 import { getAuthToken } from '../../../auth/store'
 import {
   CANVAS_RESIZE_SIZE_OPTIONS,
@@ -66,6 +67,8 @@ type UsePoseEditorOptions = {
   baseImageUrl: string
   poseReferenceImages?: string[]
   poseStickmanUrl?: string
+  /** 节点上已保存的局部编辑引导图（node.data.poseMaskUrl），用于「不重圈则沿用」 */
+  poseMaskUrl?: string
   onPoseSaved?: (payload: {
     /** 编辑模式：pose=姿势调整，depth=局部修改（历史标识，界面已改名「局部修改」），size=尺寸调整 */
     mode: 'pose' | 'depth' | 'size'
@@ -100,6 +103,13 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
   const [uploading, setUploading] = React.useState(false)
   const [maskDrawing, setMaskDrawing] = React.useState(false)
   const [maskDirty, setMaskDirty] = React.useState(false)
+  /**
+   * 本次是否显式点过「清除圈选」。
+   *
+   * <p>必须与 maskDirty 分开：清除后画布为空、maskDirty 也是 false，
+   * 保存时不能把它当成「没动过」而沿用旧引导图。
+   */
+  const [maskCleared, setMaskCleared] = React.useState(false)
   const [promptInput, setPromptInput] = React.useState(() => options.promptValue || '')
   /** 编辑模式：pose=姿势调整，depth=局部修改（沿用历史标识，节点数据里已存在，不改名），size=尺寸调整 */
   const [editMode, setEditMode] = React.useState<'pose' | 'depth' | 'size'>('pose')
@@ -146,6 +156,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     setCustomResizeHeight(parsedCanvasResize.height)
     setMaskDrawing(false)
     setMaskDirty(false)
+    setMaskCleared(false)
     setDescriptionText('')
     setDescriptionError(null)
     setOpen(true)
@@ -168,6 +179,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     setCustomResizeHeight(parsedCanvasResize.height)
     setMaskDrawing(false)
     setMaskDirty(false)
+    setMaskCleared(false)
   }, [open, options.canvasResizeSize, options.imageEditSize, options.promptValue])
 
   React.useEffect(() => {
@@ -286,6 +298,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     if (maskEnabled) return
     maskCtxRef.current = null
     resetMaskState(false)
+    // 离开「局部修改」时丢弃本次的「已清除」意图，重新进入时按「沿用已保存引导图」处理
+    setMaskCleared(false)
   }, [maskEnabled, open, resetMaskState])
 
   const handleMaskPointer = React.useCallback(
@@ -302,6 +316,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         setMaskDrawing(true)
         maskDrawingRef.current = true
         setMaskDirty(true)
+        setMaskCleared(false)
         lastMaskPointRef.current = { x, y }
         ctx.beginPath()
         ctx.moveTo(x, y)
@@ -330,6 +345,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       initMaskCanvas()
     }
     resetMaskState(false)
+    // 显式清除：保存时要移除节点上已存在的引导图，而不是沿用
+    setMaskCleared(true)
   }, [initMaskCanvas, resetMaskState])
 
   const handlePointer = React.useCallback(
@@ -560,10 +577,18 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         remoteUrl = await uploadCanvasAsset(canvas!, 'pose-stickman.png', '生成参考图失败')
       }
 
-      let maskUrl: string | null = null
+      // 只有本次重新圈选才生成新引导图；否则沿用节点上已保存的图（见 localEditMaskGuide 语义）
+      let createdMaskUrl: string | null = null
       if (maskEnabled && maskDirty) {
-        maskUrl = await createMaskFocusGuideUrl()
+        createdMaskUrl = await createMaskFocusGuideUrl()
       }
+      const maskUrl = resolveMaskGuideUrlOnSave({
+        maskEnabled,
+        maskDirty,
+        maskCleared,
+        newMaskGuideUrl: createdMaskUrl,
+        existingMaskGuideUrl: options.poseMaskUrl,
+      })
 
       const refs = Array.from(
         new Set(
@@ -598,7 +623,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     } finally {
       setUploading(false)
     }
-  }, [activeBaseImageUrl, options, maskDirty, promptInput, editMode, descriptionText, selectedImageEditSize, exportResizedImage, maskEnabled, createMaskFocusGuideUrl, uploadCanvasAsset])
+  }, [activeBaseImageUrl, options, maskDirty, maskCleared, promptInput, editMode, descriptionText, selectedImageEditSize, exportResizedImage, maskEnabled, createMaskFocusGuideUrl, uploadCanvasAsset])
 
   /**
    * 把上游给的节点图片地址解析成服务端可直接拉取的 http(s) 地址。
@@ -795,11 +820,28 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               ) : null}
             </div>
             {maskEnabled ? (
-              <Group className="pose-editor__panel-actions" gap={6}>
-                <Button className="pose-editor__clear-mask" variant="subtle" size="xs" onClick={clearMask} disabled={!maskDirty}>
-                  清除圈选
-                </Button>
-              </Group>
+              <>
+                {maskCleared ? (
+                  <Text className="pose-editor__mask-hint" size="xs" c="dimmed">
+                    已清除圈选：保存后将移除该节点上的局部编辑引导图。
+                  </Text>
+                ) : options.poseMaskUrl && !maskDirty ? (
+                  <Text className="pose-editor__mask-hint" size="xs" c="dimmed">
+                    已保存过圈选引导图：不重新圈选将沿用，重新圈选会覆盖。
+                  </Text>
+                ) : null}
+                <Group className="pose-editor__panel-actions" gap={6}>
+                  <Button
+                    className="pose-editor__clear-mask"
+                    variant="subtle"
+                    size="xs"
+                    onClick={clearMask}
+                    disabled={!maskDirty && (!options.poseMaskUrl || maskCleared)}
+                  >
+                    清除圈选
+                  </Button>
+                </Group>
+              </>
             ) : editMode === 'pose' ? (
               <Text className="pose-editor__size-preview-note" size="xs" c="dimmed">
                 姿势调整只会提交火柴人参考和提示词，不会提交局部涂抹区域。

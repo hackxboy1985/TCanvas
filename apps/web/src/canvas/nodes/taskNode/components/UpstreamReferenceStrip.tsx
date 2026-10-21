@@ -3,6 +3,7 @@ import { ActionIcon, Text, Tooltip } from '@mantine/core'
 import { IconGripVertical, IconPlus, IconX } from '@tabler/icons-react'
 import type { OrderedUpstreamReferenceItem } from '../upstreamReferences'
 import { ManagedImage } from '../../../../domain/resource-runtime'
+import { useUIStore } from '../../../../ui/uiStore'
 
 type UpstreamReferenceStripProps = {
   targetNodeId: string
@@ -11,6 +12,15 @@ type UpstreamReferenceStripProps = {
   onReorder: (draggedEdgeId: string, targetEdgeId: string) => void
   onToggleCanvasReferencePicker: () => void
   canvasReferencePickerActive: boolean
+  /**
+   * 节点本地的局部编辑引导图（`node.data.poseMaskUrl`）。
+   *
+   * <p><b>只读项</b>：它不来自连线，不参与参考顺序、不能拖拽/删除，
+   * 仅用于让用户确认「本次局部编辑确实带了引导图」；点击走站内大图预览。
+   */
+  maskGuideUrl?: string | null
+  /** 本地引导图的展示名（默认「局部编辑引导图」） */
+  maskGuideLabel?: string
 }
 
 export function UpstreamReferenceStrip({
@@ -20,8 +30,11 @@ export function UpstreamReferenceStrip({
   onReorder,
   onToggleCanvasReferencePicker,
   canvasReferencePickerActive,
+  maskGuideUrl,
+  maskGuideLabel = '局部编辑引导图',
 }: UpstreamReferenceStripProps) {
   const [draggedEdgeId, setDraggedEdgeId] = React.useState<string | null>(null)
+  const normalizedMaskGuideUrl = typeof maskGuideUrl === 'string' ? maskGuideUrl.trim() : ''
 
   return (
     <div className="tc-task-node__upstream-reference-strip">
@@ -103,6 +116,38 @@ export function UpstreamReferenceStrip({
             </div>
           </Tooltip>
         ))}
+        {normalizedMaskGuideUrl ? (
+          <Tooltip label={`${maskGuideLabel}（只读，点击预览）`} withArrow openDelay={180}>
+            <button
+              type="button"
+              className="tc-task-node__upstream-reference-card tc-task-node__upstream-reference-card--mask-guide"
+              aria-label={`预览${maskGuideLabel}`}
+              onClick={(event) => {
+                // 只做预览：该图不是连线引用，不能拖拽排序，也不能删除
+                event.preventDefault()
+                event.stopPropagation()
+                useUIStore.getState().openPreview({ url: normalizedMaskGuideUrl, kind: 'image', name: maskGuideLabel })
+              }}
+            >
+              <ManagedImage
+                className="tc-task-node__upstream-reference-image"
+                src={normalizedMaskGuideUrl}
+                alt={maskGuideLabel}
+                kind="preview"
+                variantKey="preview"
+                priority="prefetch"
+                ownerNodeId={targetNodeId}
+                ownerSurface="task-node-upstream-reference"
+                ownerRequestKey={`task-node-mask-guide:${targetNodeId}`}
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+                referrerPolicy="no-referrer"
+              />
+              <span className="tc-task-node__upstream-reference-mask-tag">圈选</span>
+            </button>
+          </Tooltip>
+        ) : null}
         <Tooltip
           label={canvasReferencePickerActive ? '退出从画布选择参考' : '从画布选择参考'}
           withArrow

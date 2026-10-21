@@ -6308,6 +6308,36 @@ body {
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.3);
 }
 
+/* 节点本地只读项：局部编辑引导图（不是连线引用，不参与排序/删除，点击预览） */
+.tc-task-node__upstream-reference-card--mask-guide {
+  display: block;
+  padding: 0;
+  cursor: zoom-in;
+  border-style: dashed;
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.tc-task-node__upstream-reference-card--mask-guide:active {
+  cursor: zoom-in;
+}
+
+.tc-task-node__upstream-reference-mask-tag {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding-inline: 4px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.86);
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
 .tc-task-node__upstream-reference-image {
   display: block;
   width: 100%;
