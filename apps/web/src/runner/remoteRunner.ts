@@ -148,6 +148,15 @@ function nowLabel() {
 
 const DEFAULT_TASK_POLL_TIMEOUT_MS = 600_000
 const MAX_VIDEO_DURATION_SECONDS = 15
+/**
+ * lens 画布图像任务的参考图上限（含局部编辑引导图）。
+ *
+ * <p>lens 链路的参考图是「按图位逐张下发」，提示词里写「图1/图2…」，
+ * 局部编辑引导图固定在最后一张，因此不能像非 lens 模式那样在超过 2 张时合成拼图参考板
+ * （拼图会把图位与引导图语义一起破坏掉）。上限沿用归一后端「参考图总数 9 张」的既有约定；
+ * 超过上限必须显式写日志，不静默截断。
+ */
+const LENS_CANVAS_MAX_REFERENCE_IMAGES = 9
 const SORA2_PRO_MAX_VIDEO_DURATION_SECONDS = 25
 const IMAGE_NODE_KINDS = new Set(['image', 'imageEdit', 'storyboard'])
 const VIDEO_RENDER_NODE_KINDS = new Set(['video', 'composeVideo'])
@@ -1966,11 +1975,12 @@ function getRemixTargetIdFromNodeData(data?: any): string | null {
 function collectReferenceImages(
   state: any,
   targetId: string,
+  maxImageSources?: number,
 ): string[] {
   if (!state) return []
   const edges = Array.isArray(state.edges) ? (state.edges as Edge[]) : []
   const nodes = Array.isArray(state.nodes) ? (state.nodes as Node[]) : []
-  const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, targetId)
+  const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, targetId, maxImageSources)
   if (orderedItems.length === 0) return []
 
   const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
@@ -1995,12 +2005,13 @@ function collectReferenceImages(
 function collectDynamicUpstreamReferenceEntries(
   state: unknown,
   targetId: string,
+  maxImageSources?: number,
 ): Array<{ url: string; label: string; assetId?: string | null; name?: string | null }> {
   if (!state || typeof state !== 'object') return []
   const record = state as { edges?: unknown; nodes?: unknown }
   const edges = Array.isArray(record.edges) ? (record.edges as Edge[]) : []
   const nodes = Array.isArray(record.nodes) ? (record.nodes as Node[]) : []
-  const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, targetId)
+  const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, targetId, maxImageSources)
   if (!orderedItems.length) return []
 
   const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
@@ -5165,6 +5176,7 @@ async function runGenericTask(ctx: RunnerContext) {
   // lens 画布模式：image / imageEdit 节点的提交与轮询改走 lens 接口
   // （非 lens 模式为 null，原 /public/tasks 链路完全不变）
   const lensUrlParams = readLensCanvasUrlParams()
+  const isLensCanvasTask = Boolean(lensUrlParams)
 
   try {
     const storedImageModel =
@@ -5259,6 +5271,8 @@ async function runGenericTask(ctx: RunnerContext) {
       isImageTask && typeof (data as any)?.poseStickmanUrl === 'string' && (data as any).poseStickmanUrl.trim()
         ? String((data as any).poseStickmanUrl).trim()
         : ''
+    // lens 画布允许更多上游参考来源（多图层/局部编辑），非 lens 保持原有 3 个来源口径
+    const upstreamReferenceSourceLimit = isLensCanvasTask ? LENS_CANVAS_MAX_REFERENCE_IMAGES : undefined
     const referenceImagesRaw = isImageTask
       ? (
         isRoleCardTask
@@ -5268,14 +5282,14 @@ async function runGenericTask(ctx: RunnerContext) {
               ...selfPoseRefs,
               ...(selfStickmanRef ? [selfStickmanRef] : []),
               ...collectNodeReferenceImageUrls(data, 8),
-              ...collectReferenceImages(state, id),
+              ...collectReferenceImages(state, id, upstreamReferenceSourceLimit),
               ...mentionAssetRefs.urls,
             ]
           : [
               ...selfPoseRefs,
               ...(selfStickmanRef ? [selfStickmanRef] : []),
-              ...collectNodeReferenceImageUrls(data, 3),
-              ...collectReferenceImages(state, id),
+              ...collectNodeReferenceImageUrls(data, isLensCanvasTask ? LENS_CANVAS_MAX_REFERENCE_IMAGES : 3),
+              ...collectReferenceImages(state, id, upstreamReferenceSourceLimit),
               ...mentionAssetRefs.urls,
               ...mentionRoleRefs.urls,
               ...roleCardRefImages,
@@ -5299,28 +5313,49 @@ async function runGenericTask(ctx: RunnerContext) {
       }
     }
     const prioritized: string[] = []
-    const hardLimit = isRoleCardTask ? 8 : 3
+    // lens 画布按图位逐张下发（上限 9，含引导图）；非 lens 模式沿用原口径（角色卡 8、其他 3）
+    const hardLimit = isLensCanvasTask
+      ? LENS_CANVAS_MAX_REFERENCE_IMAGES
+      : isRoleCardTask
+        ? 8
+        : 3
     const baseReferenceLimit = focusGuideUrl ? Math.max(1, hardLimit - 1) : hardLimit
-    deduped.forEach((url) => {
+    const candidateReferenceUrls = deduped.filter((url) => url !== focusGuideUrl)
+    candidateReferenceUrls.forEach((url) => {
       if (prioritized.length >= baseReferenceLimit) return
-      if (url === focusGuideUrl) return
       prioritized.push(url)
     })
+    if (candidateReferenceUrls.length > prioritized.length) {
+      // 超上限必须留痕：否则用户会以为「传了 N 张、实际也发了 N 张」
+      appendLog(
+        id,
+        `[${nowLabel()}] 参考图超过上限 ${baseReferenceLimit} 张（不含局部编辑引导图），已忽略：${candidateReferenceUrls.slice(prioritized.length).join('、')}`,
+      )
+    }
     let referenceImages = focusGuideUrl
       ? [...prioritized.slice(0, Math.max(0, hardLimit - 1)), focusGuideUrl]
       : prioritized.slice(0, hardLimit)
-    const dynamicReferenceEntries = collectDynamicUpstreamReferenceEntries(state, id)
+    const dynamicReferenceEntries = collectDynamicUpstreamReferenceEntries(state, id, upstreamReferenceSourceLimit)
+    // 别名槽位上限与参考图上限对齐，否则第 9 张图有图位却没有别名绑定
+    const referenceAssetInputLimit = isLensCanvasTask ? hardLimit : 8
     let runtimeReferenceAssetInputs = mergeReferenceAssetInputs({
       assetInputs: (data as Record<string, unknown>)?.assetInputs,
       dynamicEntries: dynamicReferenceEntries,
       referenceImages,
-      limit: 8,
+      limit: referenceAssetInputLimit,
     })
     if (isRoleCardTask && referenceImages.length) {
       appendLog(id, `[${nowLabel()}] 角色卡任务已启用风格锚定：注入参考图 x${referenceImages.length}`)
     }
     if (isImageTask && focusGuideUrl && referenceImages.length) {
       appendLog(id, `[${nowLabel()}] 已注入局部编辑区域引导图，模型仅允许修改高亮区域`)
+    }
+    if (isLensCanvasTask && isImageTask && referenceImages.length > 1) {
+      // lens 参考图按图位逐张下发，日志里给出张数与引导图位置，便于核对后端实际收到的 images
+      appendLog(
+        id,
+        `[${nowLabel()}] 参考图按图位顺序下发（共 ${referenceImages.length} 张）${focusGuideUrl ? '，局部编辑区域引导图为最后一张' : ''}`,
+      )
     }
     const wantsImageEdit = isImageTask && referenceImages.length > 0
     const effectiveTaskKind: TaskKind = wantsImageEdit ? 'image_edit' : taskKind
@@ -5347,7 +5382,8 @@ async function runGenericTask(ctx: RunnerContext) {
               : 'gemini'
         )
     let referenceSheet: UploadedReferenceSheet | null = null
-    if (isImageTask && referenceImages.length > 2) {
+    // lens 模式绝对不能合成拼图：参考图按图位逐张下发，局部编辑引导图必须独立且固定在最后一张
+    if (!isLensCanvasTask && isImageTask && referenceImages.length > 2) {
       try {
         const mergedReferenceSheet = await uploadMergedReferenceSheet({
           id,
@@ -5369,7 +5405,7 @@ async function runGenericTask(ctx: RunnerContext) {
             assetInputs: runtimeReferenceAssetInputs,
             dynamicEntries: dynamicReferenceEntries,
             referenceImages,
-            limit: 8,
+            limit: referenceAssetInputLimit,
           })
           appendLog(id, `[${nowLabel()}] 参考资产超过 2 张，已自动合成带 id 标记的拼图参考板`)
         }

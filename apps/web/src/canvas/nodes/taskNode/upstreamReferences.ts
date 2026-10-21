@@ -33,6 +33,14 @@ export type NodePrimaryAssetReference = {
 
 const IMAGE_REFERENCE_NODE_KINDS = new Set(['image', 'imageEdit', 'storyboard'])
 
+/**
+ * 上游参考图来源节点的默认上限。
+ *
+ * <p>非 lens 链路的既有口径是 3 个来源；lens 画布的多参考图任务（局部编辑、多图层）
+ * 需要按图位收集更多来源，由调用方显式传入更大上限，这里仅保留默认值。
+ */
+const DEFAULT_UPSTREAM_IMAGE_SOURCE_LIMIT = 3
+
 function isVideoReferenceNodeKind(kind: string): boolean {
   return kind === 'video' || kind === 'composeVideo'
 }
@@ -170,6 +178,7 @@ export function collectOrderedUpstreamMediaSources(
   nodes: Node[],
   edges: Edge[],
   targetId: string,
+  maxImageSources: number = DEFAULT_UPSTREAM_IMAGE_SOURCE_LIMIT,
 ): {
   imageSources: OrderedUpstreamImageSource[]
   videoTailSource: OrderedUpstreamVideoTailSource | null
@@ -214,7 +223,7 @@ export function collectOrderedUpstreamMediaSources(
       edgeId: edge.id,
       node: sourceNode,
     })
-    if (imageSources.length >= 3) break
+    if (imageSources.length >= Math.max(1, Math.trunc(maxImageSources))) break
   }
 
   const referenceOrder = getReferenceOrderForTargetNode(nodes, targetId)
@@ -239,8 +248,9 @@ export function collectOrderedUpstreamReferenceItems(
   nodes: Node[],
   edges: Edge[],
   targetId: string,
+  maxImageSources: number = DEFAULT_UPSTREAM_IMAGE_SOURCE_LIMIT,
 ): OrderedUpstreamReferenceItem[] {
-  const { imageSources, videoTailSource } = collectOrderedUpstreamMediaSources(nodes, edges, targetId)
+  const { imageSources, videoTailSource } = collectOrderedUpstreamMediaSources(nodes, edges, targetId, maxImageSources)
   const items: OrderedUpstreamReferenceItem[] = []
 
   if (videoTailSource) {
