@@ -5,6 +5,12 @@ import { useUIStore } from '../../ui/uiStore'
 import { toast } from '../../ui/toast'
 import { IconCopy, IconEye } from '@tabler/icons-react'
 import { AssetTaskAdoptButton } from './AssetTaskAdoptButton'
+import { toOssResponsiveUrl } from '../utils/ossResponsive'
+
+/** 参考图缩略图显示宽度（px），与 CSS .lens-asset-task-panel__reference 的 36px 一致 */
+const REFERENCE_THUMB_DISPLAY_WIDTH = 36
+/** 结果图缩略图显示宽度（px）：任务面板结果区为两列网格，单格上限约 164px */
+const RESULT_THUMB_DISPLAY_WIDTH = 164
 
 const STATUS_LABELS: Record<string, string> = {
   [LensAssetTaskStatus.Created]: '创建', CREATED: '创建', [LensAssetTaskStatus.Queued]: '排队',
@@ -125,13 +131,14 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
         <button className="lens-asset-task-panel__reference-btn" type="button" key={url + index}
           aria-label={'预览参考图 ' + (index + 1)}
           onClick={() => useUIStore.getState().openPreview({ url, kind: 'image', name: '参考图 ' + (index + 1) })}>
-          <img className="lens-asset-task-panel__reference" src={url} alt={'参考图 ' + (index + 1)} loading="lazy" />
+          {/* 列表用小图走 OSS 缩略图，避免直接拉 2k 原图；点开预览仍用原图 */}
+          <img className="lens-asset-task-panel__reference" src={toOssResponsiveUrl(url, REFERENCE_THUMB_DISPLAY_WIDTH)} alt={'参考图 ' + (index + 1)} loading="lazy" />
         </button>
       ))}</div>}
       {!!record.prompt && <Text className="lens-asset-task-panel__prompt" size="xs" title={record.prompt}>{record.prompt}</Text>}
       <div className="lens-asset-task-panel__results">{details.media.map((media, index) => <button className="lens-asset-task-panel__preview" type="button" key={media.url + index}
         aria-label={'预览结果 ' + (index + 1)} onClick={() => useUIStore.getState().openPreview({ url: media.url, kind: media.type, name: applicationName })}>
-        {media.type === 'image' ? <img className="lens-asset-task-panel__image" src={media.thumbnail || media.url} alt={'生成结果 ' + (index + 1)} loading="lazy" /> : <video className="lens-asset-task-panel__image" src={media.url} preload="metadata" />}
+        {media.type === 'image' ? <img className="lens-asset-task-panel__image" src={media.thumbnail || toOssResponsiveUrl(media.url, RESULT_THUMB_DISPLAY_WIDTH)} alt={'生成结果 ' + (index + 1)} loading="lazy" /> : <video className="lens-asset-task-panel__image" src={media.url} preload="metadata" />}
       </button>)}</div>
       {!details.media.length && <Text className="lens-asset-task-panel__result-status" size="xs" c={failed ? 'red' : undefined}>{record.resMsg || record.errorMsg || (pending ? '生成中，请稍候…' : '暂无结果')}</Text>}
       {details.errors.map((error) => <Text className="lens-asset-task-panel__error" key={error} size="xs" c="red">{error}</Text>)}
