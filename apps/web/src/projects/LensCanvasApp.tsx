@@ -26,6 +26,7 @@ import {
   type LensStoryboard,
   type LensAssetEnriched,
   canViewTaskParams,
+  lensErrorReason,
   type LensScriptContent,
 } from '../api/lens'
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
@@ -1162,11 +1163,12 @@ export default function LensCanvasApp(): JSX.Element {
       setSavedAt(new Date().toLocaleTimeString())
       return true
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '保存失败'
-      if (msg.includes('已被他人修改')) {
+      // 顶部提示只展示失败原因：接口方法/地址由接口层写进控制台日志，不暴露给用户
+      const reason = lensErrorReason(err)
+      if (reason.includes('已被他人修改')) {
         setError('编排已被他人修改，请刷新后重试')
       } else {
-        setError(`编排保存失败：${msg}`)
+        setError(`编排保存失败：${reason || '保存失败'}`)
       }
       return false
     } finally {

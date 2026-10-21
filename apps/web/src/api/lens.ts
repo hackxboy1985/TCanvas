@@ -83,6 +83,38 @@ async function parseLensResponse(r: Response, url: string, startedAt: number): P
 }
 
 /**
+ * 把 lens 接口错误文案转换成面向用户的简短原因。
+ *
+ * <p>接口层抛出的消息为了可诊断，带上了请求方法、接口地址、业务码等信息，
+ * 例如 `lens 接口请求失败：POST url=/api/canvas/738/episode/1/flow 原因=Failed to fetch`。
+ * 这些细节只该进控制台日志；直接展示在页面顶部会把内部接口路径暴露给用户。
+ * 因此这里只提取真正的失败原因：
+ * <ul>
+ *   <li>请求未到达：取 `原因=` 之后的内容，如 `Failed to fetch`；</li>
+ *   <li>业务码失败：取 `msg=` 与结尾 ` url=` 之间的后端提示；</li>
+ *   <li>其它错误（非 JSON / 响应体为空等）原样返回，避免丢失排查线索。</li>
+ * </ul>
+ *
+ * @param err 捕获到的异常（通常来自 lensRequest / lensFetch）
+ * @returns 面向用户展示的失败原因
+ */
+export function lensErrorReason(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err)
+  const reasonIndex = message.indexOf('原因=')
+  if (reasonIndex >= 0) {
+    const reason = message.slice(reasonIndex + '原因='.length).trim()
+    if (reason) return reason
+  }
+  const msgIndex = message.indexOf(' msg=')
+  if (msgIndex >= 0) {
+    const urlIndex = message.lastIndexOf(' url=')
+    const reason = message.slice(msgIndex + ' msg='.length, urlIndex > msgIndex ? urlIndex : undefined).trim()
+    if (reason) return reason
+  }
+  return message
+}
+
+/**
  * lens 接口统一请求入口：发请求 → 记录诊断日志 → 解析响应体。
  *
  * <p>所有 lens 接口（lensFetch / lensFetchPage）都经此发起，因此日志天然覆盖全部接口，
