@@ -2,16 +2,52 @@
 .lens-reference-picker__body { height: min(56vh, 580px); overflow-y: auto; }
 /* 分组按图片实际宽度并排，整组放不下再换行；大组在弹窗宽度内换行。 */
 .lens-reference-picker__groups { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+/* 资产库管理页：同一行内的「添加」入口分组与资产分组需要等高对齐，改为一律拉伸。 */
+.lens-reference-picker__groups--manage { align-items: stretch; }
 .lens-reference-picker__group { flex: 0 1 auto; width: max-content; max-width: 100%; min-width: 0; box-sizing: border-box; background: var(--mantine-color-default-hover); padding: 10px; border-radius: 8px; }
 .lens-reference-picker__group-header { margin-bottom: 10px; }
+/* 资产库管理页的「添加子造型 / 添加子场景」按钮要贴在整组卡片右上角：
+   分组默认 width:max-content（宽度由卡片内容决定），标题行若不显式占满，
+   space-between 只会在「名称到最后一个卡片」之间分配空间，按钮看起来就贴着名称。
+   这里让标题行撑满分组宽度，按钮自然落到整组右上角。 */
+.lens-reference-picker__group--manage > .lens-reference-picker__group-header { width: 100%; }
 .lens-reference-picker__group-count { color: var(--mantine-color-text); }
 .lens-reference-picker__items { display: flex; flex-wrap: wrap; gap: 8px; }
-.lens-reference-picker__card { flex: 0 0 170px; width: 170px; max-width: 100%; }
-.lens-reference-picker__thumb { height: 100px; position: relative; background: var(--mantine-color-body); }
+/* 卡片宽高统一由变量驱动：分组容器是 width:max-content（宽度由内容反推），
+   若卡片宽度随内容浮动会触发「越排越窄、每行少放一张」的反馈循环，因此固定 170px。 */
+.lens-reference-picker__card { flex: 0 0 170px; width: 170px; max-width: 100%; box-sizing: border-box; }
+/* 缩略图高度也走变量：角色 115px、场景/道具 100px。
+   同一行内若角色卡与场景卡混排，高度差会让名称基线相差 15px，这里显式声明高度来源。 */
+.lens-reference-picker__card { --thumb-h: 100px; }
+.lens-reference-picker__card:has(.lens-reference-picker__thumb--role) { --thumb-h: 115px; }
+.lens-reference-picker__thumb { height: var(--thumb-h, 100px); position: relative; background: var(--mantine-color-body); }
 .lens-reference-picker__thumb--role { height: 115px; }
-.lens-reference-picker__image { width: 100%; height: 100%; object-fit: contain; }
+.lens-reference-picker__image { width: 100%; height: 100%; object-fit: contain; display: block; }
 .lens-reference-picker__no-image { height: 100%; display: grid; place-items: center; }
-.lens-reference-picker__label { padding: 6px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 卡片名称：与缩略图视觉中线对齐。
+   <p><b>为什么要居中</b>：缩略图用 object-fit:contain 居中显示（道具多为透明背景 PNG，
+   图片本身的视觉中心就是卡片中线）；名称若左对齐，长短不一的文字会形成锯齿状左边缘，
+   与图片轴线错位，整排看起来参差不齐。居中后每段文字的中心都落在卡片中线上。
+   <p><b>margin 必须清零</b>：名称节点是 Mantine <Text> 渲染的 <p>，浏览器默认
+   margin: 0 0 1em；之前靠 padding:6px 0 0 掩盖，一旦加左右内边距，底部 1em(约10px)
+   会把卡片重新撑高，导致行距错乱。
+   <p><b>省略号生效的三个前提</b>：overflow:hidden + white-space:nowrap + 宽度受约束
+   （display:block + width:100%）。若宽度改为随内容撑开，text-overflow:ellipsis 会失效。 */
+.lens-reference-picker__label {
+  margin: 0;
+  /* 左右对称内边距：省略号不贴边，短文本居中后不会显得偏右 */
+  padding: 6px 10px 0;
+  box-sizing: border-box;
+  width: 100%;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 17px;
+  min-height: 23px;
+}
+
 .lens-reference-picker__badge, .lens-reference-picker__check { position: absolute; top: 4px; padding: 3px 5px; font-size: 11px; background: rgba(15,20,28,.8); color: white; }
 .lens-reference-picker__badge { left: 4px; }
 .lens-reference-picker__check { right: 4px; background: var(--mantine-primary-color-filled); }
@@ -19,9 +55,14 @@
 .lens-reference-picker__card:hover .lens-reference-picker__hover, .lens-reference-picker__card:focus-within .lens-reference-picker__hover { visibility: visible; }
 .lens-reference-picker__action { color: rgba(255,255,255,.9); background: transparent; border: 0; cursor: pointer; font-size: 12px; padding: 3px; }
 .lens-reference-picker__action:disabled { cursor: default; color: #c9cdd4; }
-.lens-reference-picker__card.is-selected .lens-reference-picker__thumb { outline: 2px solid var(--mantine-primary-color-filled); }
-.lens-reference-picker__groups--props { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
-.lens-reference-picker__groups--props .lens-reference-picker__group { padding: 0; background: transparent; }
+/* outline-offset: -2px 让 2px 描边收进内部，选中卡不会比相邻卡视觉上更胖 */
+.lens-reference-picker__card.is-selected .lens-reference-picker__thumb { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: -2px; }
+/* 道具 Tab：没有父子层级与分组标题，全部平铺在同一个分组里。
+   沿用角色/场景同一套 flex 卡片流，卡片固定 170px、间距 8px，
+   保证三个 Tab 的卡片尺寸、图文对齐、行距完全一致，不与其它 Tab 出现风格割裂。 */
+.lens-reference-picker__group--flat { padding: 10px; }
+.lens-reference-picker__group--flat .lens-reference-picker__items { align-items: flex-start; }
+
 .lens-reference-picker__footer { padding-top: 14px; }
 .lens-reference-picker__error { padding-bottom: 8px; }
 /* Tab 选中状态样式 */
@@ -30,4 +71,53 @@
 .lens-reference-picker__tab:hover { color: var(--mantine-color-text); }
 .lens-reference-picker__tab[data-active] { color: var(--mantine-primary-color-filled); font-weight: 600; }
 .lens-reference-picker__tab[data-active]::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--mantine-primary-color-filled); }
-@media (max-width: 520px) { .lens-reference-picker__card { flex-basis: 140px; width: 140px; } .lens-reference-picker__groups--props { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); } .lens-reference-picker__hover { visibility: visible; } }
+/* ===== 资产库管理（新增资产入口） ===== */
+/* 「添加」卡片：固定排在同组第一张，虚线框提示是新增入口而非已有资产。
+   <p><b>为什么外层虚线而不是缩略图虚线</b>：资产分组卡片由「分组标题行 + 图片区 + 名称行」三层组成，
+   而「添加」卡片只有一层图片区，虚线只画在图片上会比旁边整组矮一截。因此虚线框改为画在整个
+   卡片外层，并补齐与分组标题行、名称行等高的占位，使入口卡与资产分组卡视觉上等高对齐。 */
+/* 「添加」卡片高度与资产分组卡对齐。
+   资产分组的内容高度 = 分组标题行（24px + 10px 间距）+ 图片区 + 名称行；
+   这里给入口卡同样的最小高度，使左边入口框与右边角色卡上下沿齐平，
+   避免只对齐缩略图、整框比旁边矮一截。 */
+/* 入口卡：外层虚线框 + 纵向排列。
+   <p><b>必须 flex-direction:column</b>：普通卡片是 block，图片区与名称行自然堆叠、
+   高度相加；若这里用 row 居中，名称行会与图片区同排，卡片高度就只剩图片高度，
+   比旁边的道具/场景卡矮一截。纵向排列后两层高度同样相加，与普通卡片精确等高。 */
+.lens-reference-picker__card--add {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px dashed var(--mantine-color-gray-5);
+  border-radius: 8px;
+  color: var(--mantine-color-text-secondary);
+  /* 不设 padding：普通卡片也没有外层 padding，加内边距会让入口卡比旁边卡片高。
+     虚线框直接贴着「图片区 + 名称行」的包围盒，与普通卡片外廓完全重合。 */
+  padding: 0;
+}
+/* 添加分组与资产分组在 .lens-reference-picker__groups 里同为 flex 子项：
+   让它撑满同一行高度，内部卡片再 flex:1 铺满，
+   这样入口卡的外框高度始终等于旁边资产分组卡片的整组高度。
+   （道具 Tab 没有分组标题行，靠下面的 flex 行内等高把「添加」与普通卡片对齐。） */
+.lens-reference-picker__group--add { display: flex; align-self: stretch; }
+.lens-reference-picker__group--add > .lens-reference-picker__items { display: flex; flex: 1; }
+.lens-reference-picker__group--add .lens-reference-picker__card--add { flex: 1 1 auto; }
+
+.lens-reference-picker__card--add:hover { border-color: var(--mantine-primary-color-filled); color: var(--mantine-primary-color-filled); }
+/* 内层只承担居中，不再画虚线（避免出现「框套框」）。 */
+.lens-reference-picker__thumb--add { display: grid; place-items: center; width: 100%; border: 0; background: transparent; }
+/* 分组标题右侧的「添加子造型 / 添加子场景」按钮：外框一层虚线描边区分它是入口而非统计信息。 */
+.lens-reference-picker__add-child { flex: 0 0 auto; border: 1px dashed var(--mantine-color-gray-5); }
+.lens-reference-picker__add-child:hover { border-style: solid; }
+/* 分组标题行不能压缩换行，否则按钮会被挤到下一行看不见；名称部分自行省略。 */
+.lens-reference-picker__group-header { min-height: 24px; }
+.lens-reference-picker__group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) {
+  .lens-reference-picker__card { flex-basis: 140px; width: 140px; }
+  /* 窄屏卡片只有 140px，内边距同步收窄，否则可用文字宽度过小、省略过早 */
+  .lens-reference-picker__label { padding: 6px 6px 0; }
+  .lens-reference-picker__hover { visibility: visible; }
+}

@@ -613,6 +613,76 @@ export async function listReferenceAssets<T extends LensRole | LensAssetImage>(d
   }
 }
 
+/**
+ * 新增主角色（lens_role）。
+ *
+ * <p>与归一前端 `addRole`（POST /api/lensRole）同契约，仅传最小必要字段：
+ * 名称 + 剧ID。图片在后续生图流程中回写，这里不伪造占位数据。
+ *
+ * @param dramaId  剧ID
+ * @param roleName 角色名称
+ * @returns 新建角色ID（后端返回 lens_role.id）
+ */
+export async function createRole(dramaId: string, roleName: string): Promise<string> {
+  return lensFetch<string>('/api/lensRole', { method: 'POST', body: JSON.stringify({ dramaId, roleName }) })
+}
+
+/**
+ * 新增角色子造型（分身）。
+ *
+ * <p>与归一前端 `addRoleClone` 同契约：roleType=1 标识分身，parentId 指向主角色。
+ * roleName 必须与主角色一致（后端据此继承人物身份），cloneName 才是造型名称。
+ *
+ * @param dramaId   剧ID
+ * @param parentId  主角色ID
+ * @param parentName 主角色名称
+ * @param cloneName 造型名称
+ * @returns 新建分身ID
+ */
+export async function createRoleClone(dramaId: string, parentId: string, parentName: string, cloneName: string): Promise<string> {
+  return lensFetch<string>('/api/lensRole', {
+    method: 'POST',
+    body: JSON.stringify({ dramaId, roleName: parentName, parentId, roleType: 1, cloneName }),
+  })
+}
+
+/**
+ * 新增主场景 / 主道具（lens_asset_image，POST /api/lensImage/upload）。
+ *
+ * <p>与归一前端 `addLensImage` 同契约：type 1=场景、2=道具。
+ * url 传空串：画布只建资产身份，图片由后续生图任务回写，不造假数据。
+ *
+ * @param dramaId 剧ID
+ * @param type    1=场景 2=道具
+ * @param name    资产名称
+ * @returns 新建资产ID
+ */
+export async function createAssetImage(dramaId: string, type: 1 | 2, name: string): Promise<string> {
+  return lensFetch<string>('/api/lensImage/upload', {
+    method: 'POST',
+    body: JSON.stringify({ dramaId, type, name, url: '', state: 0 }),
+  })
+}
+
+/**
+ * 新增子场景（lens_asset_image，parent_id 指向主场景）。
+ *
+ * <p>与归一前端 SceneVariantEditDrawer 的新增子场景同契约：
+ * type 固定 1（场景），variantName 为子场景名称，parentId 为主场景ID。
+ *
+ * @param dramaId   剧ID
+ * @param parentId  主场景ID
+ * @param parentName 主场景名称
+ * @param variantName 子场景名称
+ * @returns 新建子场景ID
+ */
+export async function createSubScene(dramaId: string, parentId: string, parentName: string, variantName: string): Promise<string> {
+  return lensFetch<string>('/api/lensImage/upload', {
+    method: 'POST',
+    body: JSON.stringify({ dramaId, type: 1, state: 0, name: parentName, variantName, parentId, url: '' }),
+  })
+}
+
 /** 只追加分镜资产关联；权限与并发去重交给现有业务接口。 */
 export async function addShotReferenceRelations(dramaId: string, storyboardId: string, addRelations: { assetId: string; assetCategory: number }[]): Promise<void> {
   await lensFetch<unknown>('/api/storyboard/saveRelations', { method: 'POST', body: JSON.stringify({ dramaId, storyboardId, addRelations }) })
@@ -1016,12 +1086,20 @@ export async function editStoryboard(patch: Record<string, unknown>): Promise<un
   })
 }
 
-/** 清空分镜说话者（speakerName 置空，与 lens 分镜板一致） */
+/**
+ * 清空分镜说话者（speakerName 置空，与 lens 分镜板一致）。
+ *
+ * <p><b>参数必须走 query 串</b>：后端 `@RequestParam Long id, Long dramaId`，
+ * 用 JSON body 传不会绑定、接口直接报参数缺失；`as=lens` 是 lens 接口统一标识。
+ * 请求形如 `/api/storyboard/clearSpeakerName?as=lens&id=28296&dramaId=738`。
+ *
+ * @param id 分镜ID
+ * @param dramaId 剧ID
+ * @returns 接口原始响应
+ */
 export async function clearStoryboardSpeaker(id: string, dramaId: string): Promise<unknown> {
-  return lensFetch<unknown>('/api/storyboard/clearSpeakerName', {
-    method: 'POST',
-    body: JSON.stringify({ id, dramaId }),
-  })
+  const qs = new URLSearchParams({ as: 'lens', id, dramaId })
+  return lensFetch<unknown>(`/api/storyboard/clearSpeakerName?${qs.toString()}`, { method: 'POST' })
 }
 
 /**

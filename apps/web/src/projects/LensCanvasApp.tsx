@@ -17,6 +17,7 @@ import type { CanvasHandle } from '../canvas/Canvas'
 import { useRFStore } from '../canvas/store'
 import { useUIStore } from '../ui/uiStore'
 import { buildShotRefsFromAssets } from '../canvas/nodes/LensShotNode'
+import { ReferenceCategory, type ReferenceAsset } from '../canvas/nodes/lensShotReferences'
 import {
   listEpisodes,
   listStoryboards,
@@ -25,9 +26,12 @@ import {
   getFlow,
   saveFlow,
   getStyleConfig,
+  listReferenceAssets,
   type LensEpisodeBrief,
   type LensStoryboard,
   type LensAssetEnriched,
+  type LensRole,
+  type LensAssetImage,
   canViewTaskParams,
   lensErrorReason,
   type LensScriptContent,
@@ -141,6 +145,14 @@ async function loadShotAspects(storyboards: LensStoryboard[]): Promise<Map<strin
 const ARRANGE_START = 40
 const ARRANGE_GAP = 40
 const ARRANGE_SECTION_GAP = 120
+
+/**
+ * 新增子造型/子场景相对父级的横向步长。
+ *
+ * <p>与 {@link projectLensNodes} 内部 CHILD_GAP_X 取同值（420 = 资产节点宽 384 + 36 间距），
+ * 保证「右键添加的子资产」与「投影出来的子资产」横向排布节奏一致。
+ */
+const CHILD_NODE_GAP_X = 420
 
 /**
  * 投影资产节点（角色/场景/道具）的尺寸见 ./lensCanvasNodeLayout。
@@ -515,7 +527,7 @@ function buildCanvasNodes(input: {
           source: 'lens_projection',
           nodeWidth: LENS_ASSET_NODE_WIDTH,
           nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
-          lensTypeLabel: '分身',
+          lensTypeLabel: '子造型',
           assetCategory: 1,
           entityId: childId,
           parentEntityId: assetId,
@@ -935,7 +947,7 @@ export default function LensCanvasApp(): JSX.Element {
         (n) => String((n.data as { entityId?: string })?.entityId ?? '') === parentEntityId,
       )
       const label = String((parent?.data as { label?: string })?.label ?? '').trim()
-      const suffix = category === 1 ? '分身' : category === 2 ? '子场景' : '同构'
+      const suffix = category === 1 ? '子造型' : category === 2 ? '子场景' : '同构'
       return label ? `${label} · ${suffix}` : suffix
     }
 
@@ -1681,41 +1693,168 @@ export default function LensCanvasApp(): JSX.Element {
     setAssetLibraryOpened(true)
   }, [])
 
-  /** 从资产库选择资产后，导入画布变成资产图节点 */
-  const handleSelectAsset = useCallback((asset: LensAssetImage) => {
+  /**
+   * 从资产库选择资产后，导入画布变成资产图节点。
+   *
+   * <p><b>复用投影节点口径</b>：节点 id、尺寸、data 字段与 {@link projectLensNodes}
+   * 生成的资产节点完全一致（`role-{id}` / `scene-{id}` / `prop-{id}`，以及
+   * entityId/assetCategory/imageUrl/nodeWidth/nodeHeight），这样：
+   * <ol>
+   *   <li>同一资产重复添加时命中相同 id，不会在画布上出现两份；</li>
+   *   <li>节点仍可参与生图、任务查询与分镜引用，功能与投影节点同源；</li>
+   *   <li>flow 只保存节点身份与位置，资产数据仍以 Lens 业务表为唯一来源。</li>
+   * </ol>
+   *
+   * <p><b>放置位置</b>：以画布可视区中心为新节点落点，用户添加后立刻能看到，
+   * 不需要手动平移画布去找。
+   */
+  const handleSelectAsset = useCallback((asset: ReferenceAsset) => {
+    const prefix = asset.category === ReferenceCategory.Role ? 'role' : asset.category === ReferenceCategory.Scene ? 'scene' : 'prop'
+    const nodeId = `${prefix}-${asset.id}`
     const store = useRFStore.getState()
-    // TODO: 创建资产图节点并添加到画布
-    // 需要根据 asset.assetCategory 确定节点类型
-    // 1=角色 2=场景 3=道具
-    const nodeType = 'taskNode'
-    const kind = 'image'
-    const label = asset.roleName || '资产'
-    const imageUrl = asset.roleImg || ''
-    
-    // 在画布中心创建节点
+    if (store.nodes.some((node) => node.id === nodeId)) {
+      // 已存在则选中并提示，避免重复添加产生同名节点
+      useRFStore.setState({
+        nodes: store.nodes.map((node) => ({ ...node, selected: node.id === nodeId })),
+      })
+      toast(`画布已存在该资产：${asset.name}`)
+      setAssetLibraryOpened(false)
+      return
+    }
+    // 视口中心换算成画布坐标：父级不在画布上时作为新节点落点
     const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
     const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom
     const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom
-    
-    const newNode = {
-      id: `asset-${Date.now()}`,
-      type: nodeType,
-      position: { x: centerX - 150, y: centerY - 100 },
-      data: {
-        kind,
-        label,
-        imageUrl,
-        assetCategory: asset.assetCategory,
-        assetId: asset.id,
-        roleId: asset.roleId,
-        source: 'asset_library',
-      },
+
+    /**
+     * 子造型/子场景的落点：紧邻父级右侧、与父级同一行。
+     *
+     * <p><b>为什么不能放视口中心</b>：同一父级的全部子级由 {@link applyParentChildGroups}
+     * 收进同一个分组框，组框按「组内节点的实际包围盒」计算。若新子造型落在视口中心、
+     * 而父级在画布另一侧，组框会被拉成横跨整块画布的巨型空框，已有子造型也会被甩出视野。
+     * 因此优先排在父级右侧的空位，与 {@link projectLensNodes} 的「父级下一排逐个向右」布局一致。
+     *
+     * @param parentId 父级实体ID
+     * @param siblingCount 该父级当前已有的子级数量（用于横向错位，避免与已有子级重叠）
+     * @returns 画布坐标
+     */
+    const resolveChildPosition = (parentId: string, siblingCount: number): { x: number; y: number } => {
+      const parentNode = useRFStore.getState().nodes.find((node) => node.id === `${prefix}-${parentId}`)
+      if (!parentNode) return { x: centerX - LENS_ASSET_NODE_WIDTH / 2, y: centerY - LENS_ASSET_MEDIA_HEIGHT / 2 }
+      // 父级右侧一个节点宽度 + 间距起步，已有子级依次向右排开
+      return {
+        x: parentNode.position.x + (siblingCount + 1) * (LENS_ASSET_NODE_WIDTH + CHILD_NODE_GAP_X),
+        y: parentNode.position.y,
+      }
     }
-    
-    store.addNodes([newNode])
-    setAssetLibraryOpened(false)
-    toast(`已添加资产：${label}`)
-  }, [])
+
+    /**
+     * 构造资产节点数据。
+     *
+     * <p>字段与 {@link projectLensNodes} 投影节点完全一致，其中 **parentEntityId 最关键**：
+     * 子造型/子场景只有带该字段才会被 {@link applyParentChildGroups} 收进
+     * 「父角色 · 分身」分组框，缺了它就会散落在画布上、不进入子角色编辑组。
+     *
+     * @param entityId 实体ID
+     * @param parentId 父级实体ID（子资产才有）
+     * @param imgUrl   图片地址
+     * @param variantName 子造型/子场景名称
+     * @param position 落点
+     */
+    const buildAssetNode = (
+      entityId: string,
+      parentId: string | undefined,
+      imgUrl: string,
+      variantName?: string,
+      position?: { x: number; y: number },
+    ): Node => ({
+      id: `${prefix}-${entityId}`,
+      type: 'taskNode',
+      position: position ?? { x: centerX - LENS_ASSET_NODE_WIDTH / 2, y: centerY - LENS_ASSET_MEDIA_HEIGHT / 2 },
+      data: {
+        label: asset.name,
+        kind: 'image',
+        // 与投影节点同标记：重开画布时按业务快照重投影，不会重复建节点
+        source: 'lens_projection',
+        sourceProjectId: dramaId,
+        entityId,
+        assetCategory: asset.category,
+        imageUrl: imgUrl,
+        nodeWidth: LENS_ASSET_NODE_WIDTH,
+        nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
+        ...(variantName ? { cloneName: variantName, variantName } : {}),
+        // 子级必须写 parentEntityId，否则不会编入子角色/子场景分组框
+        ...(parentId ? { parentEntityId: parentId } : {}),
+      },
+    })
+
+    const parentId = String(asset.parentId ?? '').trim()
+    // 该父级当前已有的子级数量：决定新子级横向排在第几个位置
+    const siblingCount = parentId
+      ? store.nodes.filter((node) => String((node.data as { parentEntityId?: string })?.parentEntityId ?? '') === parentId).length
+      : 0
+    const childPosition = parentId ? resolveChildPosition(parentId, siblingCount) : undefined
+    const childNode = buildAssetNode(asset.id, parentId || undefined, asset.imgUrl || '', asset.variantName, childPosition)
+    const parentMissing = Boolean(parentId) && !store.nodes.some((node) => node.id === `${prefix}-${parentId}`)
+
+    /** 落地节点并触发编组（父节点已就位后才编组，否则分组框缺父级标题） */
+    const commit = (extraNodes: Node[]) => {
+      useRFStore.setState({ nodes: [...useRFStore.getState().nodes, ...extraNodes] })
+      setAssetLibraryOpened(false)
+      toast(`已添加资产：${asset.name}`)
+      // 新增子级后重新编组：让新节点立即进入对应的「父角色 · 分身」分组框，
+      // 延迟一拍等节点完成首次渲染（组框尺寸依赖节点实测宽高）。
+      if (parentId) {
+        window.setTimeout(() => {
+          applyParentChildGroups()
+          // 重编后再把组内子级按横向排好：新增节点与既有子级的初始落点可能疏密不一，
+          // 统一重排后同一父级的全部子造型才会等距排在同一行，符合「同一角色所有子造型同组」的预期。
+          const groupId = useRFStore.getState().nodes.find(
+            (node) => node.type === 'groupNode'
+              && useRFStore.getState().nodes.some(
+                (child) => child.parentId === node.id
+                  && String((child.data as { parentEntityId?: string })?.parentEntityId ?? '') === parentId,
+              ),
+          )?.id
+          // flow = 横向排列，与投影「父级右侧逐个向右」的子级布局一致
+          if (groupId) useRFStore.getState().arrangeGroupChildren(groupId, 'flow')
+        }, 200)
+      }
+    }
+
+    // 父节点不在画布上：按业务接口取真实父级数据补建。
+    // 不构造空图占位节点 —— 画布约定禁止造假数据，父级名称/图片必须来自 Lens 业务表。
+    if (parentMissing) {
+      void listReferenceAssets<LensRole & LensAssetImage>(dramaId, asset.category as ReferenceCategory)
+        .then((rows) => {
+          const parent = rows.find((row) => String(row.id) === parentId)
+          if (!parent) {
+            // 查不到父级仍要落地子节点，否则用户点了「添加」却没有任何反应
+            commit([childNode])
+            toast(`未找到父级资产，子资产已单独添加`)
+            return
+          }
+          const parentImgUrl = asset.category === ReferenceCategory.Role
+            ? String((parent as LensRole).threeImg || '')
+            : String((parent as LensAssetImage).url || '')
+          const parentLabel = String((parent as LensRole).roleName || (parent as LensAssetImage).name || '')
+          // 父节点补在子节点左侧一格，使「父 → 子」保持投影时的横向相邻关系
+          const parentPos = childPosition
+            ? { x: childPosition.x - (LENS_ASSET_NODE_WIDTH + CHILD_NODE_GAP_X), y: childPosition.y }
+            : undefined
+          const parentBase = buildAssetNode(parentId, undefined, parentImgUrl, undefined, parentPos)
+          const parentNode = { ...parentBase, data: { ...parentBase.data, label: parentLabel || asset.name } }
+          commit([parentNode, childNode])
+        })
+        .catch((reason: unknown) => {
+          // 接口失败也要让子节点落地，并如实报错，不静默吞掉
+          commit([childNode])
+          toast(`父级资产加载失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+        })
+      return
+    }
+    commit([childNode])
+  }, [dramaId, applyParentChildGroups])
 
   return (
     <div className="lens-canvas-app">
