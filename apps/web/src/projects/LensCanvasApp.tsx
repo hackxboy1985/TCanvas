@@ -422,8 +422,12 @@ function buildCanvasNodes(input: {
   const pickAssets = (category: number): LensAssetEnriched[] => {
     const out: LensAssetEnriched[] = []
     for (const asset of assets) {
+      // 接口的 assetCategory 偶有字符串形态（"3"），严格 !== 比较会把整类资产漏掉，
+      // 这里统一转成数字再比对，避免道具/场景凭空消失。
+      const categoryOfAsset = Number(asset.assetCategory)
+      if (!Number.isFinite(categoryOfAsset) || categoryOfAsset !== category) continue
       const assetKey = `${category}:${asset.assetId || asset.roleId || ''}`
-      if (!assetKey || asset.assetCategory !== category || seenAssets.has(assetKey)) continue
+      if (seenAssets.has(assetKey)) continue
       seenAssets.add(assetKey)
       out.push(asset)
     }
@@ -1340,6 +1344,15 @@ export default function LensCanvasApp(): JSX.Element {
                 // 布局版本不一致：位置与节点类型都以最新投影为准（如 asset 节点类型变化）
                 return useFlowLayout ? merged : { ...merged, type: fresh.type, position: fresh.position }
               })
+            // 投影里新增、但旧 flow 里还不存在的节点（新角色/场景/道具、新分镜）必须补进画布，
+            // 否则按旧 flow 恢复时这些新资产会永久不显示（历史表现：侧边新增道具后画布始终看不到）。
+            const restoredIds = new Set(restored.map((n) => n.id))
+            const appendedFromProjection = projected.nodes.filter(
+              (p) => isLensProjectionNode(p) && !restoredIds.has(p.id),
+            )
+            if (appendedFromProjection.length > 0) {
+              restored.push(...appendedFromProjection)
+            }
             // 同步顶部「引用」开关状态（与恢复出的分镜节点一致）
             const restoredShot = restored.find((nd) => nd.type === 'lensShot')
             if (restoredShot) {

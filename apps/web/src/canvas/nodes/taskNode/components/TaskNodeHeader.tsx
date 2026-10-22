@@ -26,6 +26,8 @@ type TaskNodeHeaderProps = {
     color: string
     background: string
     borderColor: string
+    /** 角标文字色，与背景拉开对比度；不传时退回 color */
+    textColor?: string
   } | null
   /** 标题栏左侧强调色条（图片节点类别色）；不传则不渲染 */
   accentColor?: string
@@ -129,21 +131,24 @@ export function TaskNodeHeader({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 maxWidth: '100%',
-                height: 16,
-                marginTop: 2,
-                padding: '0 7px',
-                borderRadius: 999,
+                height: 19,
+                marginTop: 4,
+                padding: '0 8px',
+                borderRadius: 6,
                 border: `1px solid ${subtitleBadge.borderColor}`,
                 background: subtitleBadge.background,
-                color: subtitleBadge.color,
-                fontSize: 10,
-                fontWeight: 700,
-                lineHeight: '16px',
-                letterSpacing: 0.2,
+                color: subtitleBadge.textColor ?? subtitleBadge.color,
+                fontSize: 11,
+                fontWeight: 500,
+                lineHeight: '17px',
+                letterSpacing: 0.4,
                 whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
+                overflow: 'visible',
+                flexShrink: 0,
+                // 顶部 1px 内高光 + 轻微下沉投影，形成玻璃质感（Raycast 方案核心细节）
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 2px rgba(0,0,0,0.35)',
               }}
             >
               {subtitleBadge.label}

@@ -737,7 +737,7 @@ const TEXT_NODE_DEFAULT_HEIGHT = 360
 const TEXT_NODE_MIN_HEIGHT = 240
 const TEXT_NODE_MAX_HEIGHT = 680
 
-/** 图片节点类型角标的配色键：业务资产（角色/分身/场景/子场景/道具）与衍生、自由节点 */
+/** 图片节点类型角标的配色键：业务资产（角色/分身/场景/子场景/道具）与编辑、自由节点 */
 type ImageNodeBadgeKey = 'role' | 'clone' | 'scene' | 'subscene' | 'prop' | 'derived' | 'free'
 
 /** 图片节点类型角标配色：底色、文字色、描边色 */
@@ -757,7 +757,7 @@ type BadgeTone = {
  * 1. 色相承载"类别"——角色族紫、场景族青绿、道具琥珀；
  * 2. 明度承载"层级"——同族主类型与派生类型共用色相，仅降一档明度，
  *    保证"角色/分身""场景/子场景"一眼看出同族但不同级；
- * 3. 衍生与自由节点去饱和，作为画面的中性呼吸口，不抢主类型的注意力；
+ * 3. 编辑与自由节点去饱和，作为画面的中性呼吸口，不抢主类型的注意力；
  * 4. 所有文字与底色对比度 ≥ 5.5:1（WCAG AA 以上），11px 小字也稳定可读。
  */
 const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: BadgeTone; dark: BadgeTone }> = {
@@ -786,7 +786,7 @@ const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: BadgeTone; da
     light: { background: '#FAEEDC', text: '#7A4A06', border: 'rgba(180,116,20,0.32)' },
     dark: { background: 'linear-gradient(135deg,#4A2A08,#63380B)', text: '#FFD39B', border: 'rgba(255,160,50,0.55)' },
   },
-  // 衍生：中性灰蓝，系统派生节点，主动退到背景
+  // 编辑：中性灰蓝，系统派生节点，主动退到背景
   derived: {
     light: { background: '#EDF0F4', text: '#41505F', border: 'rgba(100,116,139,0.24)' },
     dark: { background: 'linear-gradient(135deg,#232A34,#2C3440)', text: '#AFBCCC', border: 'rgba(148,163,184,0.34)' },
@@ -6494,8 +6494,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     objectFit: 'contain',
     // lens 投影节点：无图时把提示词展示在图片位置（对齐分镜节点行为）
     emptyPromptText: isLensProjectionNode ? String((data as { prompt?: string })?.prompt ?? '').trim() || null : null,
-    // lens 投影节点：双击图片不打开大图预览（放大预览有专门按钮），事件冒泡给画布做「放大到该节点」
-    disableDoubleClickPreview: isLensProjectionNode,
+    // 图片节点双击一律打开大图预览，与角色节点行为对齐；
+    // 不再让事件冒泡给画布做「放大到该节点」（定位可用工具栏按钮）
+    disableDoubleClickPreview: false,
     // lens 画布：所有图片节点（含自由节点）统一走 OSS 响应式图档位，按画布缩放选缩略图宽度；
     // 非 lens 画布保持原行为（仅投影节点/图片编辑节点），避免给非 OSS 外链拼 x-oss-process 参数。
     responsiveOss: isLensMode() || isLensProjectionNode || kind === 'imageEdit',
@@ -7765,7 +7766,7 @@ const rewritePromptWithCharacters = React.useCallback(
     return sourceLabel ? `${sourceLabel} · ${typeText}` : typeText
   }, [id, kind, data])
 
-  // 图片节点类型角标：业务资产（角色/分身/场景/子场景/道具）、衍生、自由各用一种颜色，
+  // 图片节点类型角标：业务资产（角色/分身/场景/子场景/道具）、编辑、自由各用一种颜色，
   // 解决四类图片节点外观完全一致、只能靠文字辨认的问题。非图片节点返回 null。
   const imageCategoryBadge = (() => {
     if (!isImageNode) return null
@@ -7789,7 +7790,7 @@ const rewritePromptWithCharacters = React.useCallback(
       return null
     } else if (String(nodeData.refNodeId ?? '').trim()) {
       paletteKey = 'derived'
-      badgeLabel = '衍生'
+      badgeLabel = '编辑'
     } else {
       paletteKey = 'free'
       badgeLabel = '自由'
@@ -7797,11 +7798,10 @@ const rewritePromptWithCharacters = React.useCallback(
     const tone = isDarkUi ? IMAGE_NODE_BADGE_PALETTE[paletteKey].dark : IMAGE_NODE_BADGE_PALETTE[paletteKey].light
     return {
       label: badgeLabel,
-      color: tone.dot,
+      color: tone.text,
       textColor: tone.text,
       background: tone.background,
       borderColor: tone.border,
-      dotColor: tone.dot,
     }
   })()
 

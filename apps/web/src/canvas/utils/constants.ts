@@ -77,12 +77,28 @@ export const EDGE_TYPES = {
 export const COLORS = {
   // 类型颜色
   TYPE_COLORS: {
-    image: '#3B82F6',
-    audio: '#10B981',
-    subtitle: '#EAB308',
-    video: '#8B5CF6',
-    text: '#6B7280',
-    default: '#9CA3AF',
+    // 基础媒体类型
+    image: '#3B82F6',           // 蓝色 - 图片
+    audio: '#10B981',           // 绿色 - 音频
+    subtitle: '#EAB308',        // 黄色 - 字幕
+    video: '#8B5CF6',           // 紫色 - 视频
+    text: '#6B7280',            // 灰色 - 文本
+    
+    // 资产类型
+    role: '#F59E0B',            // 橙色 - 角色
+    character: '#F59E0B',       // 橙色 - 角色（别名）
+    scene: '#06B6D4',           // 青色 - 场景
+    prop: '#84CC16',            // 绿黄色 - 道具
+    
+    // 编辑类型
+    edit: '#EC4899',            // 粉色 - 编辑
+    imageEdit: '#EC4899',       // 粉色 - 图片编辑（统一编辑节点颜色）
+    
+    // 分镜类型
+    storyboard: '#A855F7',      // 紫色 - 分镜
+    
+    // 默认
+    default: '#9CA3AF',         // 浅灰色 - 默认
   },
 
   // 状态颜色
@@ -97,10 +113,26 @@ export const COLORS = {
 
   // 边颜色（半透明版本）
   EDGE_COLORS: {
+    // 基础媒体类型
     image: 'rgba(59,130,246,0.7)',
     audio: 'rgba(16,185,129,0.7)',
     subtitle: 'rgba(234,179,8,0.7)',
     video: 'rgba(139,92,246,0.7)',
+    
+    // 资产类型
+    role: 'rgba(245,158,11,0.7)',
+    character: 'rgba(245,158,11,0.7)',
+    scene: 'rgba(6,182,212,0.7)',
+    prop: 'rgba(132,204,22,0.7)',
+    
+    // 编辑类型
+    edit: 'rgba(236,72,153,0.7)',
+    imageEdit: 'rgba(236,72,153,0.7)',
+    
+    // 分镜类型
+    storyboard: 'rgba(168,85,247,0.7)',
+    
+    // 默认
     default: 'rgba(156,163,175,0.7)',
   },
 

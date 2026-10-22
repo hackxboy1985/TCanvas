@@ -278,6 +278,8 @@ type CanvasInnerProps = {
   shotArrange?: 'column' | 'flow'
   /** 切换分镜组排列方向 */
   onShotArrangeChange?: (direction: 'column' | 'flow') => void
+  /** 打开资产库弹窗（lens 画布右键菜单"添加资产"） */
+  onOpenAssetLibrary?: () => void
   /**
    * 打开「任务结果」抽屉（lens 画布）。
    *
@@ -364,7 +366,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp, onOpenAssetLibrary }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -2128,11 +2130,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const target = _evt?.target as HTMLElement | null
     if (target && typeof target.closest === 'function'
       && (target.closest('.react-flow__node-toolbar') || target.closest('[data-no-node-dblclick="1"]'))) return
-    // lens 节点（分镜/资产/剧本台本）双击：放大到该节点（不进入子图聚焦模式）；位置异常时回退原聚焦行为
-    // 图片编辑节点（角度/打光等衍生节点）也按业务节点处理，双击=放大到节点，而不是查看大图
-    const source = String((node.data as { source?: string })?.source ?? '')
-    const nodeKind = String((node.data as { kind?: string })?.kind ?? '')
-    if (node.type === 'lensShot' || source === 'lens_projection' || nodeKind === 'imageEdit') {
+    // 图片类节点（资产投影、图片编辑、自由图）双击统一打开图片大图预览，行为与角色节点一致，
+    // 由节点内部 ImageContent 处理并 stopPropagation，事件不会走到这里。
+    // 因此这里只保留分镜节点的「双击放大到该节点」，其余节点走原有子图聚焦。
+    if (node.type === 'lensShot') {
       const w = Number(node.measured?.width ?? node.width ?? 400)
       const h = Number(node.measured?.height ?? node.height ?? 300)
       // 组内节点 position 为相对坐标：累加父链得到绝对坐标
@@ -3873,6 +3874,21 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                     </Button>
                   )
                 })}
+                {isLensMode() && onOpenAssetLibrary && (
+                  <>
+                    <Divider className="tc-canvas__context-menu-divider" my={2} />
+                    <Button
+                      className="tc-canvas__context-menu-action"
+                      variant="subtle"
+                      onClick={() => {
+                        onOpenAssetLibrary()
+                        setMenu(null)
+                      }}
+                    >
+                      添加资产
+                    </Button>
+                  </>
+                )}
               </>
             )}
             {menu.type === 'node' && menu.id && (() => {
@@ -4180,8 +4196,8 @@ const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
 /** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
-const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void }>(
-  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult }, ref): JSX.Element {
+const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void; onOpenAssetLibrary?: () => void }>(
+  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult, onOpenAssetLibrary }, ref): JSX.Element {
     const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
     return (
@@ -4193,6 +4209,7 @@ const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: (
           shotArrange={shotArrange}
           onShotArrangeChange={onShotArrangeChange}
           onOpenTaskResult={onOpenTaskResult}
+          onOpenAssetLibrary={onOpenAssetLibrary}
         />
       </ReactFlowProviderWithClass>
     )
