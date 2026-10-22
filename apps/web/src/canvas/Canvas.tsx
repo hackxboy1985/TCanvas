@@ -2130,10 +2130,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const target = _evt?.target as HTMLElement | null
     if (target && typeof target.closest === 'function'
       && (target.closest('.react-flow__node-toolbar') || target.closest('[data-no-node-dblclick="1"]'))) return
-    // 图片类节点（资产投影、图片编辑、自由图）双击统一打开图片大图预览，行为与角色节点一致，
-    // 由节点内部 ImageContent 处理并 stopPropagation，事件不会走到这里。
-    // 因此这里只保留分镜节点的「双击放大到该节点」，其余节点走原有子图聚焦。
-    if (node.type === 'lensShot') {
+    // 双击统一「放大到该节点」：分镜、lens 资产投影（角色/场景/道具）、
+    // 图片编辑（角度/打光等衍生节点）、自由图片节点行为完全一致。
+    // 图片大图预览由节点上的预览按钮触发，不再占用双击。
+    const source = String((node.data as { source?: string })?.source ?? '')
+    const nodeKind = String((node.data as { kind?: string })?.kind ?? '')
+    if (node.type === 'lensShot' || source === 'lens_projection' || nodeKind === 'image' || nodeKind === 'imageEdit') {
       const w = Number(node.measured?.width ?? node.width ?? 400)
       const h = Number(node.measured?.height ?? node.height ?? 300)
       // 组内节点 position 为相对坐标：累加父链得到绝对坐标

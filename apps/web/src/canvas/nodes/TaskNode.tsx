@@ -6494,9 +6494,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     objectFit: 'contain',
     // lens 投影节点：无图时把提示词展示在图片位置（对齐分镜节点行为）
     emptyPromptText: isLensProjectionNode ? String((data as { prompt?: string })?.prompt ?? '').trim() || null : null,
-    // 图片节点双击一律打开大图预览，与角色节点行为对齐；
-    // 不再让事件冒泡给画布做「放大到该节点」（定位可用工具栏按钮）
-    disableDoubleClickPreview: false,
+    // 图片节点双击统一「放大到该节点」，与角色节点完全一致：
+    // 图片区域放行事件冒泡，由 Canvas.onNodeDoubleClick 统一处理定位。
+    // 图片大图预览改由节点上的预览按钮触发，不再占用双击。
+    disableDoubleClickPreview: isImageNode,
     // lens 画布：所有图片节点（含自由节点）统一走 OSS 响应式图档位，按画布缩放选缩略图宽度；
     // 非 lens 画布保持原行为（仅投影节点/图片编辑节点），避免给非 OSS 外链拼 x-oss-process 参数。
     responsiveOss: isLensMode() || isLensProjectionNode || kind === 'imageEdit',
