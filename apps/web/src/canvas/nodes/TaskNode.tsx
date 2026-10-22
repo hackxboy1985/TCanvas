@@ -2240,29 +2240,48 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     })
   })
   const orientationRef = React.useRef<Orientation>(orientation)
+  // 监听项目配置变化，动态更新视频配置 state
   React.useEffect(() => {
-    const dataRecord = data as Record<string, unknown>
-    const rawVideoSize = typeof dataRecord.videoSize === 'string' ? dataRecord.videoSize.trim() : ''
-    const rawAspect = typeof dataRecord.aspect === 'string' ? dataRecord.aspect.trim() : ''
-    const normalized = resolveVideoOrientationValue({
-      currentOrientation: dataRecord.orientation,
-      size: rawVideoSize,
-      aspect: rawAspect,
-      config: null,
-    })
-    setOrientation((prev) => (prev === normalized ? prev : normalized))
-    orientationRef.current = normalized
-  }, [(data as any)?.orientation, (data as any)?.videoSize, (data as any)?.aspect])
-  React.useEffect(() => {
-    const raw = typeof (data as any)?.videoSize === 'string' ? String((data as any).videoSize).trim() : ''
-    const normalized = raw.replace(/\s+/g, '')
-    setVideoSize((prev) => (prev === normalized ? prev : normalized))
-  }, [(data as any)?.videoSize])
-  React.useEffect(() => {
-    const dataRecord = data as Record<string, unknown>
-    const normalized = normalizeVideoResolution(dataRecord.videoResolution ?? dataRecord.resolution)
-    setVideoResolution((prev) => (prev === normalized ? prev : normalized))
-  }, [(data as Record<string, unknown>)?.videoResolution, (data as Record<string, unknown>)?.resolution])
+    if (!lensProjectConfig) return
+    
+    // 更新 videoModel
+    if (lensProjectConfig.autoGenerateModel) {
+      const nextModel = String(lensProjectConfig.autoGenerateModel)
+      setVideoModel((prev) => (prev === nextModel ? prev : nextModel))
+    }
+    
+    // 更新 videoSize
+    if (lensProjectConfig.screenRatio && typeof lensProjectConfig.screenRatio === 'string') {
+      const nextSize = lensProjectConfig.screenRatio.trim().replace(/\s+/g, '')
+      setVideoSize((prev) => (prev === nextSize ? prev : nextSize))
+    }
+    
+    // 更新 videoResolution
+    if (lensProjectConfig.resolution && typeof lensProjectConfig.resolution === 'string') {
+      const nextResolution = normalizeVideoResolution(lensProjectConfig.resolution)
+      setVideoResolution((prev) => (prev === nextResolution ? prev : nextResolution))
+    }
+    
+    // 更新 videoDuration
+    if (lensProjectConfig.maxVideoDuration && typeof lensProjectConfig.maxVideoDuration === 'number') {
+      setVideoDuration((prev) => (prev === lensProjectConfig.maxVideoDuration ? prev : lensProjectConfig.maxVideoDuration as number))
+    }
+    
+    // 更新 orientation
+    const configSize = lensProjectConfig.screenRatio && typeof lensProjectConfig.screenRatio === 'string'
+      ? lensProjectConfig.screenRatio.trim()
+      : ''
+    if (configSize) {
+      const normalized = resolveVideoOrientationValue({
+        currentOrientation: undefined,
+        size: configSize,
+        aspect: '',
+        config: null,
+      })
+      setOrientation((prev) => (prev === normalized ? prev : normalized))
+      orientationRef.current = normalized
+    }
+  }, [lensProjectConfig])
   React.useEffect(() => {
     if (kind !== 'imageEdit') return
     const next = normalizeImageEditSize((data as Record<string, unknown>)?.imageEditSize ?? (data as Record<string, unknown>)?.size)
