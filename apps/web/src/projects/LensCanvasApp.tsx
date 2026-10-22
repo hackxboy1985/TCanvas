@@ -14,6 +14,7 @@ import Canvas from '../canvas/Canvas'
 import PreviewModal from '../ui/PreviewModal'
 import type { CanvasHandle } from '../canvas/Canvas'
 import { useRFStore } from '../canvas/store'
+import { useUIStore } from '../ui/uiStore'
 import { buildShotRefsFromAssets } from '../canvas/nodes/LensShotNode'
 import {
   listEpisodes,
@@ -22,6 +23,7 @@ import {
   getScriptContent,
   getFlow,
   saveFlow,
+  getStyleConfig,
   type LensEpisodeBrief,
   type LensStoryboard,
   type LensAssetEnriched,
@@ -690,6 +692,7 @@ function buildCanvasNodes(input: {
 
 /** 画布入口组件 */
 export default function LensCanvasApp(): JSX.Element {
+  const setLensProjectConfig = useUIStore((state) => state.setLensProjectConfig)
   const { dramaId, episode: initialEpisode } = useMemo(() => readQueryParams(), [])
   const [episodeNum, setEpisodeNum] = useState<number>(initialEpisode)
   const [episodes, setEpisodes] = useState<LensEpisodeBrief[]>([])
@@ -714,6 +717,38 @@ export default function LensCanvasApp(): JSX.Element {
   const [taskResultTarget, setTaskResultTarget] = useState<TaskResultTarget | null>(null)
   // 是否可查看任务请求参数（仅管理员，与 lens 分镜板 canViewParams 同口径）
   const [canViewParams, setCanViewParams] = useState<boolean>(false)
+  
+  // 项目配置（从后端获取并缓存到 sessionStorage，用于画布节点默认值）
+  const [projectConfig, setProjectConfig] = useState<Record<string, unknown> | null>(() => {
+    if (typeof window === 'undefined' || !dramaId) return null
+    try {
+      const cached = window.sessionStorage.getItem(`lens_project_config_${dramaId}`)
+      return cached ? JSON.parse(cached) : null
+    } catch {
+      return null
+    }
+  })
+
+  // 获取项目配置（仅在没有缓存时请求接口）
+  useEffect(() => {
+    if (!dramaId || projectConfig !== null) return
+    getStyleConfig(dramaId)
+      .then((config) => {
+        if (config) {
+          setProjectConfig(config)
+          setLensProjectConfig(config)
+          try {
+            window.sessionStorage.setItem(`lens_project_config_${dramaId}`, JSON.stringify(config))
+          } catch {
+            // ignore
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('获取项目配置失败:', err)
+      })
+  }, [dramaId, projectConfig, setLensProjectConfig])
+  
   // 已保存 flow 里的布局设置（排列方向 + 分组开关）：与当前一致时沿用保存的位置，不重新排列
   const loadedLayoutMetaRef = useRef<{ direction: 'column' | 'flow'; groupOn: boolean } | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

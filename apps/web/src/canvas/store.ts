@@ -1637,6 +1637,15 @@ function computeTreeLayout(
   return { positions, sizes }
 }
 
+/** 从项目配置获取默认视频模型 */
+function getDefaultVideoModel(): string {
+  const config = useUIStore.getState().lensProjectConfig
+  if (config?.autoGenerateModel && typeof config.autoGenerateModel === 'string') {
+    return config.autoGenerateModel.trim()
+  }
+  return 'veo3.1-fast'
+}
+
 function upgradeVideoKind(node: Node): Node {
   if (node.type !== 'taskNode') return node
   const data = node.data && typeof node.data === 'object'
@@ -1653,7 +1662,7 @@ function upgradeVideoKind(node: Node): Node {
   if (normalizedKind === 'video') {
     Object.assign(nextData, buildVideoDurationPatch(readVideoDurationSeconds(data, 5)))
     if (typeof nextData.videoModel !== 'string' || !nextData.videoModel.trim()) {
-      nextData.videoModel = 'veo3.1-fast'
+      nextData.videoModel = getDefaultVideoModel()
     }
   }
 
@@ -2116,7 +2125,7 @@ export const useRFStore = create<RFState>((set, get) => ({
       if (kindValue === 'video' && !isReferenceOnlyTaskNode && (dataExtra as any).videoModel == null) {
         dataExtra = {
           ...dataExtra,
-          videoModel: 'veo3.1-fast',
+          videoModel: getDefaultVideoModel(),
           videoModelVendor:
             (dataExtra as any).videoModelVendor ?? 'veo',
         }

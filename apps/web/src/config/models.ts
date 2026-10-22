@@ -25,6 +25,8 @@ export interface ModelOption {
   pricing?: ModelOptionPricing
   /** 选项是否禁用（lens 模型接口 enabled=false 时灰显） */
   disabled?: boolean
+  /** 渠道（lens 模型必填，用于后端任务提交） */
+  channel?: string
 }
 
 export const TEXT_MODELS: ModelOption[] = [

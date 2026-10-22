@@ -72,6 +72,8 @@ export interface LensShotRef {
   isSpeaker?: boolean
   /** 父级资产ID（子角色/子场景才有）：用于角标区分「子角色」「子场景」 */
   parentId?: string
+  /** 是否包含真人（0=无人，1=有真人）：仅场景和道具使用，用于控制生成时是否同步真人风格 */
+  hasHuman?: number
 }
 
 /**
@@ -580,28 +582,55 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
       return
     }
     setSaveState('任务提交中…')
+    // 获取所选模型的 channel（后端 StoryboardTaskController.submit 必填参数）
+    const selectedModelChannel = selectedModel?.channel || ''
+    if (!selectedModelChannel) {
+      setSaveState('提交失败：模型配置缺少 channel')
+      return
+    }
     try {
+      // 构造 refImages 对象数组（与 RuoYi-Vue3 格式一致）
+      const refImagesArray = [
+        // 节点直接引用的资产（refs）
+        ...refs.map((ref) => {
+          if (!ref.imgUrl) return null
+          // category: 1=角色, 2=场景, 3=道具, 4=站位, 0=其他
+          if (ref.category === 1 && ref.id) {
+            // 角色资产：使用 type: 'role' 并带上 id
+            return { type: 'role', id: Number(ref.id), url: ref.imgUrl, name: ref.name || '角色' }
+          } else {
+            // 场景/道具/站位：使用 type: 'url'，needsSync 根据 hasHuman 决定
+            return { type: 'url', url: ref.imgUrl, name: ref.name || '参考图', needsSync: !!ref.hasHuman }
+          }
+        }).filter(Boolean),
+        // 上游连线的参考图（通用图片节点等）
+        ...collectOrderedUpstreamReferenceItems(useRFStore.getState().nodes, useRFStore.getState().edges, id).map((item) => ({
+          type: 'url',
+          url: item.previewUrl,
+          name: item.label || '参考图',
+          needsSync: false
+        }))
+      ]
+
       await submitShotVideo({
         dramaId,
         episodeNum: Number(data.episodeNum ?? 1),
         storyboardId,
         model: modelValue,
         appid: Number(modelValue) || undefined,
+        channel: selectedModelChannel,
         prompt: effectivePrompt(),
         aspectRatio: aspectValue,
         resolution: resolutionValue,
         duration,
-        refImages: JSON.stringify(Array.from(new Set([
-          ...refs.map((ref) => ref.imgUrl).filter(Boolean),
-          ...collectOrderedUpstreamReferenceItems(useRFStore.getState().nodes, useRFStore.getState().edges, id).map((item) => item.previewUrl),
-        ]))),
+        refImages: JSON.stringify(refImagesArray),
       })
       setSaveState('已提交生视频任务')
     } catch (err) {
       const msg = err instanceof Error ? err.message : '未知错误'
       setSaveState('提交失败：' + msg)
     }
-  }, [data.entityId, data.sourceProjectId, data.episodeNum, effectivePrompt, modelValue, refs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
+  }, [data.entityId, data.sourceProjectId, data.episodeNum, effectivePrompt, modelValue, selectedModel, refs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
 
   /**
    * 剪辑：复用画布视频节点的 WebCut 剪辑入口。

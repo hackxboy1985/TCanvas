@@ -1017,6 +1017,28 @@ export async function clearStoryboardSpeaker(id: string, dramaId: string): Promi
   })
 }
 
+/**
+ * 编辑资产引用图片（更新 name/tag/prompt/hasHuman）
+ *
+ * @param id 图片 ID（lens_asset_image.id）
+ * @param name 资产名称
+ * @param tag 标签
+ * @param prompt 提示词
+ * @param hasHuman 是否包含真人（0=无人，1=有真人）
+ */
+export async function editReference(
+  id: number,
+  name?: string | null,
+  tag?: string | null,
+  prompt?: string | null,
+  hasHuman?: number | null
+): Promise<unknown> {
+  return lensFetch<unknown>('/api/lensImage', {
+    method: 'PUT',
+    body: JSON.stringify({ id, name, tag, prompt, hasHuman }),
+  })
+}
+
 // ============ 画布生图链路（lens 模式下 image / imageEdit 节点的唯一出口） ============
 
 /**

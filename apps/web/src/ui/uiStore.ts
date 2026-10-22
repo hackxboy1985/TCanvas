@@ -351,6 +351,8 @@ type UIState = {
   setStoryboardOutputAspectRatio: (v: string) => void
   aiChatWatchAssetsEnabled: boolean
   setAiChatWatchAssetsEnabled: (v: boolean) => void
+  lensProjectConfig: Record<string, unknown> | null
+  setLensProjectConfig: (config: Record<string, unknown> | null) => void
   creationSession: CreationSession | null
   restoreCreationSession: (payload: unknown) => void
   syncCreationSessionCheckpoint: (payload: CreationSessionCheckpoint) => void
@@ -602,6 +604,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   setAiChatWatchAssetsEnabled: (v) => {
     set({ aiChatWatchAssetsEnabled: v })
     writeStoredAiChatWatchAssets(v)
+  },
+  lensProjectConfig: null,
+  setLensProjectConfig: (config) => {
+    set({ lensProjectConfig: config })
   },
   creationSession: null,
   restoreCreationSession: (payload) => {

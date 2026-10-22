@@ -2193,37 +2193,49 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   )
   const defaultCanvasImageModel = kind === 'imageEdit' ? getDefaultModel('imageEdit') : getDefaultModel('image')
   const [imageModel, setImageModel] = React.useState<string>((data as any)?.imageModel || defaultCanvasImageModel)
-  const [videoModel, setVideoModel] = React.useState<string>((data as any)?.videoModel || 'veo3.1-fast')
+  const lensProjectConfig = useUIStore((state) => state.lensProjectConfig)
+  const defaultVideoModel = React.useMemo(() => {
+    // 从项目配置中读取默认视频模型（autoGenerateModel 对应后端的视频执行模型配置）
+    if (lensProjectConfig?.autoGenerateModel) {
+      return String(lensProjectConfig.autoGenerateModel)
+    }
+    return 'veo3.1-fast'
+  }, [lensProjectConfig])
+  const [videoModel, setVideoModel] = React.useState<string>(defaultVideoModel)
   const [videoHd, setVideoHd] = React.useState<boolean>(() => {
     const raw = (data as any)?.videoHd
     return typeof raw === 'boolean' ? raw : false
   })
   const [videoDuration, setVideoDuration] = React.useState<number>(() => {
-    const dataRecord =
-      data && typeof data === 'object'
-        ? (data as Record<string, unknown>)
-        : {}
-    return readVideoDurationSeconds(
-      dataRecord,
-      isStoryboardNode ? STORYBOARD_MAX_TOTAL_DURATION : 15,
-    )
+    // 从项目配置读取最大视频时长（maxVideoDuration）
+    if (lensProjectConfig?.maxVideoDuration && typeof lensProjectConfig.maxVideoDuration === 'number') {
+      return lensProjectConfig.maxVideoDuration
+    }
+    return isStoryboardNode ? STORYBOARD_MAX_TOTAL_DURATION : 15
   })
   const [videoSize, setVideoSize] = React.useState<string>(() => {
-    const raw = typeof (data as any)?.videoSize === 'string' ? String((data as any).videoSize).trim() : ''
-    return raw.replace(/\s+/g, '')
+    // 从项目配置读取屏幕比例（screenRatio）
+    if (lensProjectConfig?.screenRatio && typeof lensProjectConfig.screenRatio === 'string') {
+      return lensProjectConfig.screenRatio.trim().replace(/\s+/g, '')
+    }
+    return ''
   })
   const [videoResolution, setVideoResolution] = React.useState<string>(() => {
-    const dataRecord = data as Record<string, unknown>
-    return normalizeVideoResolution(dataRecord.videoResolution ?? dataRecord.resolution)
+    // 从项目配置读取分辨率（resolution）
+    if (lensProjectConfig?.resolution && typeof lensProjectConfig.resolution === 'string') {
+      return normalizeVideoResolution(lensProjectConfig.resolution)
+    }
+    return normalizeVideoResolution(null)
   })
   const [orientation, setOrientation] = React.useState<Orientation>(() => {
-    const dataRecord = data as Record<string, unknown>
-    const rawVideoSize = typeof dataRecord.videoSize === 'string' ? dataRecord.videoSize.trim() : ''
-    const rawAspect = typeof dataRecord.aspect === 'string' ? dataRecord.aspect.trim() : ''
+    // 从项目配置读取屏幕比例，推导方向
+    const configSize = lensProjectConfig?.screenRatio && typeof lensProjectConfig.screenRatio === 'string'
+      ? lensProjectConfig.screenRatio.trim()
+      : ''
     return resolveVideoOrientationValue({
-      currentOrientation: dataRecord.orientation,
-      size: rawVideoSize,
-      aspect: rawAspect,
+      currentOrientation: undefined,
+      size: configSize,
+      aspect: '',
       config: null,
     })
   })
