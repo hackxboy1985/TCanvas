@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
+import { IconBoxMultiple } from '@tabler/icons-react'
 import Canvas from '../canvas/Canvas'
 import PreviewModal from '../ui/PreviewModal'
 import type { CanvasHandle } from '../canvas/Canvas'
@@ -34,6 +35,7 @@ import {
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
 import { TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
+import { AssetLibraryModal } from './AssetLibraryModal'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
 
@@ -717,6 +719,9 @@ export default function LensCanvasApp(): JSX.Element {
   const [taskResultTarget, setTaskResultTarget] = useState<TaskResultTarget | null>(null)
   // 是否可查看任务请求参数（仅管理员，与 lens 分镜板 canViewParams 同口径）
   const [canViewParams, setCanViewParams] = useState<boolean>(false)
+  // 资产库弹窗状态
+  const [assetLibraryOpened, setAssetLibraryOpened] = useState(false)
+  const [assetLibraryMode, setAssetLibraryMode] = useState<'manage' | 'select'>('manage')
   
   // 项目配置（从后端获取并缓存到 sessionStorage，用于画布节点默认值）
   const [projectConfig, setProjectConfig] = useState<Record<string, unknown> | null>(() => {
@@ -735,10 +740,25 @@ export default function LensCanvasApp(): JSX.Element {
     getStyleConfig(dramaId)
       .then((config) => {
         if (config) {
-          setProjectConfig(config)
-          setLensProjectConfig(config)
+          // 解析嵌套的配置数据：style_config -> { key: { valueStr: "JSON" } }
+          let parsedConfig: Record<string, unknown> = {}
+          if (config.style_config && typeof config.style_config === 'object') {
+            Object.values(config.style_config).forEach((item: any) => {
+              if (item && typeof item.valueStr === 'string') {
+                try {
+                  const parsed = JSON.parse(item.valueStr)
+                  parsedConfig = { ...parsedConfig, ...parsed }
+                } catch {
+                  // ignore parse error
+                }
+              }
+            })
+          }
+          
+          setProjectConfig(parsedConfig)
+          setLensProjectConfig(parsedConfig)
           try {
-            window.sessionStorage.setItem(`lens_project_config_${dramaId}`, JSON.stringify(config))
+            window.sessionStorage.setItem(`lens_project_config_${dramaId}`, JSON.stringify(parsedConfig))
           } catch {
             // ignore
           }
@@ -1636,6 +1656,54 @@ export default function LensCanvasApp(): JSX.Element {
     [],
   )
 
+  /** 打开资产库弹窗（管理模式） */
+  const openAssetLibrary = useCallback(() => {
+    setAssetLibraryMode('manage')
+    setAssetLibraryOpened(true)
+  }, [])
+
+  /** 打开资产库弹窗（选择模式，用于右键菜单"添加资产"） */
+  const openAssetLibraryForSelect = useCallback(() => {
+    setAssetLibraryMode('select')
+    setAssetLibraryOpened(true)
+  }, [])
+
+  /** 从资产库选择资产后，导入画布变成资产图节点 */
+  const handleSelectAsset = useCallback((asset: LensAssetImage) => {
+    const store = useRFStore.getState()
+    // TODO: 创建资产图节点并添加到画布
+    // 需要根据 asset.assetCategory 确定节点类型
+    // 1=角色 2=场景 3=道具
+    const nodeType = 'taskNode'
+    const kind = 'image'
+    const label = asset.roleName || '资产'
+    const imageUrl = asset.roleImg || ''
+    
+    // 在画布中心创建节点
+    const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
+    const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom
+    const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom
+    
+    const newNode = {
+      id: `asset-${Date.now()}`,
+      type: nodeType,
+      position: { x: centerX - 150, y: centerY - 100 },
+      data: {
+        kind,
+        label,
+        imageUrl,
+        assetCategory: asset.assetCategory,
+        assetId: asset.id,
+        roleId: asset.roleId,
+        source: 'asset_library',
+      },
+    }
+    
+    store.addNodes([newNode])
+    setAssetLibraryOpened(false)
+    toast(`已添加资产：${label}`)
+  }, [])
+
   return (
     <div className="lens-canvas-app">
       <Group className="lens-canvas-topbar" p={8} gap="xs" justify="space-between">
@@ -1674,6 +1742,14 @@ export default function LensCanvasApp(): JSX.Element {
               if (!on) clearShotGroup()
             }}
           />
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<IconBoxMultiple size={14} />}
+            onClick={openAssetLibrary}
+          >
+            资产库
+          </Button>
 
         </Group>
         <Group gap="xs">
@@ -1702,6 +1778,7 @@ export default function LensCanvasApp(): JSX.Element {
           arrangeHandler={arrangeLayout}
           shotArrange={shotArrange}
           onOpenTaskResult={handleOpenTaskResult}
+          onOpenAssetLibrary={openAssetLibraryForSelect}
           onShotArrangeChange={(direction) => {
             setShotArrange(direction)
             window.localStorage.setItem('lens_shot_arrange', direction)
@@ -1722,6 +1799,13 @@ export default function LensCanvasApp(): JSX.Element {
       />
       {/* 大图预览弹窗：lens 画布路由提前 return，需在此挂载（否则双击图片无预览） */}
       <PreviewModal />
+      {/* 资产库弹窗 */}
+      <AssetLibraryModal
+        opened={assetLibraryOpened}
+        onClose={() => setAssetLibraryOpened(false)}
+        dramaId={dramaId}
+        onSelectAsset={assetLibraryMode === 'select' ? handleSelectAsset : undefined}
+      />
     </div>
   )
 }
