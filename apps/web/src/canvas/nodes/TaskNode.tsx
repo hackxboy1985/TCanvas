@@ -740,23 +740,14 @@ const TEXT_NODE_MAX_HEIGHT = 680
 /** 图片节点类型角标的配色键：业务资产（角色/分身/场景/子场景/道具）与衍生、自由节点 */
 type ImageNodeBadgeKey = 'role' | 'clone' | 'scene' | 'subscene' | 'prop' | 'derived' | 'free'
 
-/**
- * 图片节点类型角标配色（亮色/暗色两套）。
- *
- * <p>亮色用深一档的颜色保证浅底可读，暗色用亮一档的颜色保证深底可读；
- * 背景与描边由主色按透明度派生，避免再维护一套色值。
- */
-
-/** 图片节点类型角标的配色：底色、文字色、描边色、左侧色点 */
+/** 图片节点类型角标配色：底色、文字色、描边色 */
 type BadgeTone = {
-  /** 角标底色：低明度染色底，避免高饱和实色块在画布上形成彩色贴纸墙 */
+  /** 角标底色，支持 CSS 渐变：低明度染色底，避免高饱和实色块形成彩色贴纸墙 */
   background: string
   /** 文字色：同色相浅色调，不用纯白（纯白会压掉色相，多个角标并排显廉价） */
   text: string
-  /** 描边色：类型色的半透明版本，提供 1px 结构边界 */
+  /** 描边色：类型色半透明版本，提供 1px 结构边界 */
   border: string
-  /** 左侧色点：类型色实色，色盲用户也能靠位置 + 文字区分 */
-  dot: string
 }
 
 /**
@@ -770,40 +761,40 @@ type BadgeTone = {
  * 4. 所有文字与底色对比度 ≥ 5.5:1（WCAG AA 以上），11px 小字也稳定可读。
  */
 const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: BadgeTone; dark: BadgeTone }> = {
-  // 角色族（紫 H265）：业务主实体，出现频次最高，给最实的染色底
+  // 角色：紫，业务主实体，出现频次最高
   role: {
-    light: { background: '#E6E3FB', text: '#3D2E8F', border: 'rgba(94,79,205,0.34)', dot: '#5E4FCD' },
-    dark: { background: '#2C2350', text: '#C9BFFF', border: 'rgba(140,116,255,0.42)', dot: '#8C74FF' },
+    light: { background: '#E9E5FB', text: '#3D2E8F', border: 'rgba(94,79,205,0.34)' },
+    dark: { background: 'linear-gradient(135deg,#2A1F5C,#3B2A7A)', text: '#CBBCFF', border: 'rgba(140,109,255,0.55)' },
   },
-  // 分身：同色相，底与文字各压暗一档，表达"同族次一级"
+  // 分身：同色相，底压暗一档，表达同族次一级
   clone: {
-    light: { background: '#F0EEFD', text: '#5A48B5', border: 'rgba(112,96,200,0.26)', dot: '#7060C8' },
-    dark: { background: '#241E3E', text: '#A99BE8', border: 'rgba(124,104,214,0.30)', dot: 'rgba(140,116,255,0.62)' },
+    light: { background: '#F2EDFC', text: '#5A48B5', border: 'rgba(112,96,200,0.26)' },
+    dark: { background: 'linear-gradient(135deg,#2E1B38,#3F2350)', text: '#C9A9E8', border: 'rgba(168,120,214,0.42)' },
   },
-  // 场景族（青绿 H175）：空间环境，与紫在色相环相隔 90°，远距离可辨
+  // 场景：青绿，空间环境，与紫相隔约 90°
   scene: {
-    light: { background: '#DDF4F0', text: '#0D5F58', border: 'rgba(13,148,136,0.32)', dot: '#0D9488' },
-    dark: { background: '#123B38', text: '#7FEBDA', border: 'rgba(45,212,191,0.40)', dot: '#2DD4BF' },
+    light: { background: '#DCF3EF', text: '#0D5F58', border: 'rgba(13,148,136,0.32)' },
+    dark: { background: 'linear-gradient(135deg,#0B3A3F,#0F5054)', text: '#7FF2E4', border: 'rgba(20,217,192,0.55)' },
   },
   // 子场景：同色相压暗一档
   subscene: {
-    light: { background: '#EDF8F6', text: '#2A7A72', border: 'rgba(42,122,114,0.24)', dot: '#2A7A72' },
-    dark: { background: '#0E2C2A', text: '#5FC7B8', border: 'rgba(45,212,191,0.26)', dot: 'rgba(45,212,191,0.62)' },
+    light: { background: '#EBF7F4', text: '#2A7A72', border: 'rgba(42,122,114,0.24)' },
+    dark: { background: 'linear-gradient(135deg,#0A2B2E,#0E3B3E)', text: '#63C8BC', border: 'rgba(20,217,192,0.32)' },
   },
-  // 道具（琥珀 H38）：全画面唯一暖色，避免整体偏冷发灰
+  // 道具：琥珀，全画面唯一暖色
   prop: {
-    light: { background: '#FBEFDC', text: '#7A4A06', border: 'rgba(180,116,20,0.32)', dot: '#B47414' },
-    dark: { background: '#3A2A12', text: '#F2C078', border: 'rgba(217,150,42,0.40)', dot: '#D9962A' },
+    light: { background: '#FAEEDC', text: '#7A4A06', border: 'rgba(180,116,20,0.32)' },
+    dark: { background: 'linear-gradient(135deg,#4A2A08,#63380B)', text: '#FFD39B', border: 'rgba(255,160,50,0.55)' },
   },
-  // 衍生：去饱和中性灰蓝，系统派生节点，主动退到背景
+  // 衍生：中性灰蓝，系统派生节点，主动退到背景
   derived: {
-    light: { background: '#EDF0F4', text: '#41505F', border: 'rgba(100,116,139,0.24)', dot: '#64748B' },
-    dark: { background: '#252C36', text: '#A7B4C4', border: 'rgba(148,163,184,0.24)', dot: '#94A3B8' },
+    light: { background: '#EDF0F4', text: '#41505F', border: 'rgba(100,116,139,0.24)' },
+    dark: { background: 'linear-gradient(135deg,#232A34,#2C3440)', text: '#AFBCCC', border: 'rgba(148,163,184,0.34)' },
   },
-  // 自由：最弱一档中性灰，无来源节点，作为视觉呼吸口
+  // 自由：中性灰，无来源节点，作为视觉呼吸口（7 色中必须有去饱和色）
   free: {
-    light: { background: '#F1F3F6', text: '#4E5A69', border: 'rgba(124,135,152,0.22)', dot: '#7C8798' },
-    dark: { background: '#1F252E', text: '#96A1B2', border: 'rgba(148,163,184,0.18)', dot: 'rgba(148,163,184,0.60)' },
+    light: { background: '#F1F3F6', text: '#4E5A69', border: 'rgba(124,135,152,0.22)' },
+    dark: { background: 'linear-gradient(135deg,#26313F,#33404F)', text: '#E2EBF7', border: 'rgba(125,142,166,0.45)' },
   },
 }
 

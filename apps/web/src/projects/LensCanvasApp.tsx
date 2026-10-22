@@ -739,7 +739,6 @@ export default function LensCanvasApp(): JSX.Element {
     if (!dramaId || projectConfig !== null) return
     getStyleConfig(dramaId)
       .then((config) => {
-        console.warn('[DIAG] styleConfig 返回:', config ? JSON.stringify(config).slice(0, 1500) : config)
         if (config) {
           // 解析嵌套的配置数据：style_config -> { key: { valueStr: "JSON" } }
           let parsedConfig: Record<string, unknown> = {}
@@ -756,7 +755,6 @@ export default function LensCanvasApp(): JSX.Element {
             })
           }
           
-          console.warn('[DIAG] 解析后配置:', JSON.stringify(parsedConfig).slice(0, 800))
           setProjectConfig(parsedConfig)
           setLensProjectConfig(parsedConfig)
           try {
@@ -767,7 +765,7 @@ export default function LensCanvasApp(): JSX.Element {
         }
       })
       .catch((err) => {
-        console.warn('[DIAG] 获取项目配置失败:', err && err.message ? err.message : err)
+        console.warn('获取项目配置失败:', err)
       })
   }, [dramaId, projectConfig, setLensProjectConfig])
   
