@@ -254,29 +254,42 @@ export function buildShotRefsFromAssets(
     })
 }
 
-/** 说话者切换：点击角色引用上的说话图标，切换 speakerName 并写回 lens */
-function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string): void {
+/**
+ * 说话者计数的默认上限。
+ *
+ * <p>与分镜板 toggleSpeaker 的默认口径一致（模型配置 maxAudios 缺省为 3）；
+ * 后端按 maxAudioNum 只取前 N 个说话者音色，超出部分会被静默丢弃。
+ */
+const DEFAULT_MAX_SPEAKERS = 3
+
+/**
+ * 说话者切换：点击角色引用上的说话图标，切换 speakerName 并写回 lens。
+ *
+ * <p><b>写入口径必须是完整角色名</b>（子角色为「方怡静（白色连衣裙）」）：
+ * 后端 VideoMakerAgent.extractSpeakerAudioUrls 拿 speakerName 去和分镜角色
+ * characterName 精确比对来定位音色，只写基础名会让子角色匹配不到、丢音色。
+ *
+ * @param nodeId 分镜节点ID
+ * @param data 分镜节点数据
+ * @param ref 被点击的角色引用（需 category=1）
+ * @returns 结果提示文案（直接展示到工具栏状态区）
+ */
+function toggleSpeaker(nodeId: string, data: LensShotNodeData, ref: LensShotRef): string {
   const store = useRFStore.getState()
   const dramaId = String(data.sourceProjectId || '')
   const shotId = String(data.entityId || '')
-  if (!shotId) return
+  if (!shotId) return '缺少分镜身份，无法设置说话者'
 
-  const current = String(data.speakerName || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const next = current.includes(roleName)
-    ? current.filter((s) => s !== roleName)
-    : [...current, roleName]
+  // 说话者身份统一用完整名（含子造型），与分镜板、后端音色匹配口径一致
+  const roleName = String(ref.name || '').trim()
+  if (!roleName) return '角色名称缺失，无法设置说话者'
+  const wasSpeaker = String(data.speakerName || '').split(',').map((s) => s.trim()).includes(roleName)
+  const next = getNextSpeakerList(data.speakerName, roleName)
+  if (!next) return `最多只允许${DEFAULT_MAX_SPEAKERS}个不同说话者`
   const nextSpeakerName = next.join(',')
 
   // 更新节点显示（乐观更新）
-  store.updateNodeData(nodeId, {
-    speakerName: nextSpeakerName || undefined,
-    refs: Array.isArray(data.refs)
-      ? data.refs.map((r) => (r.category === 1 && (r.baseName || r.name) === roleName ? { ...r, isSpeaker: next.includes(roleName) } : r))
-      : [],
-  })
+  updateSpeakerState(nodeId, data, nextSpeakerName)
 
   // 写回 lens（与 lens 分镜板 toggleSpeaker 一致：有说话者走 edit，清空走 clearSpeakerName）
   if (next.length > 0) {
@@ -284,6 +297,41 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
   } else {
     clearStoryboardSpeaker(shotId, dramaId).catch(() => undefined)
   }
+  return wasSpeaker ? `已取消说话者：${roleName}` : `已设为说话者：${roleName}`
+}
+
+/**
+ * 计算切换后的说话者列表。
+ *
+ * @param speakerName 当前 speakerName（逗号分隔的完整角色名）
+ * @param roleName 本次点击的角色完整名
+ * @returns 下一版说话者列表；已达上限且需要新增时返回 null
+ */
+function getNextSpeakerList(speakerName: unknown, roleName: string): string[] | null {
+  const current = String(speakerName || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (current.includes(roleName)) return current.filter((s) => s !== roleName)
+  if (current.length >= DEFAULT_MAX_SPEAKERS) return null
+  return [...current, roleName]
+}
+
+/**
+ * 把最新说话者列表同步到节点数据：speakerName + 每个角色引用的 isSpeaker。
+ *
+ * @param nodeId 分镜节点ID
+ * @param data 分镜节点数据
+ * @param nextSpeakerName 逗号分隔的完整角色名
+ */
+function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerName: string): void {
+  const names = nextSpeakerName.split(',').map((s) => s.trim()).filter(Boolean)
+  useRFStore.getState().updateNodeData(nodeId, {
+    speakerName: nextSpeakerName || undefined,
+    refs: Array.isArray(data.refs)
+      ? data.refs.map((r) => (r.category === 1 ? { ...r, isSpeaker: names.includes(String(r.name || '').trim()) } : r))
+      : [],
+  })
 }function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
   // 任务结果抽屉的入口回调（由 LensCanvasApp 注入；未注入则不显示按钮）
   const { onOpenTaskResult } = useCanvasRenderContext()
@@ -1008,7 +1056,11 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
       {/* 底部引用行：场景/道具/角色/站位（画布顶部「引用」开关控制，作为节点底部独立一行，不悬浮不遮挡媒体内容） */}
       {showRefs && refs.length > 0 && (
         <div className="lens-shot-refs" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderTop: '1px solid rgba(127,127,127,0.16)', flexWrap: 'wrap', flexShrink: 0 }}>
-          {refs.map((ref) => (
+          {refs.map((ref) => {
+            // 说话者状态以节点 speakerName（完整角色名，逗号分隔）为准，refs 的 isSpeaker 只作补充
+            const isSpeakerRef = Boolean(ref.isSpeaker)
+              || String(data.speakerName || '').split(',').map((name) => name.trim()).includes(String(ref.name || '').trim())
+            return (
             <Tooltip key={String(ref.category) + '-' + String(ref.id)} label={ref.name} position="top" withArrow>
               <span className="lens-shot-ref" style={{ position: 'relative', display: 'inline-flex', cursor: ref.category === 1 ? 'pointer' : 'default' }}>
                 {ref.imgUrl ? (
@@ -1016,15 +1068,16 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
                 ) : (
                   <span className="lens-shot-ref-empty" style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '1px solid rgba(127,127,127,0.2)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
                 )}
+                {/* 节点引用行上的说话者角标：口径与工具栏一致（完整角色名、绿色=说话者/灰色=未说话） */}
                 {ref.category === 1 && (
                   <span
-                    className={['lens-shot-speaker', ref.isSpeaker ? 'is-speaker' : ''].filter(Boolean).join(' ')}
-                    onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref.baseName || ref.name) }}
-                    title={ref.isSpeaker ? '取消说话者' : '设为说话者'}
+                    className={['lens-shot-speaker', isSpeakerRef ? 'is-speaker' : ''].filter(Boolean).join(' ')}
+                    onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref) }}
+                    title={isSpeakerRef ? '取消说话者' : '设为说话者'}
                     style={{
                       position: 'absolute', right: -4, top: -4, width: 14, height: 14, borderRadius: '50%',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      background: ref.isSpeaker ? '#22c55e' : 'rgba(127,127,127,0.45)', color: '#fff',
+                      background: isSpeakerRef ? '#22c55e' : 'rgba(127,127,127,0.45)', color: '#fff',
                       fontSize: 9, boxShadow: '0 0 0 1.5px rgba(255,255,255,0.85)',
                     }}
                   >
@@ -1033,7 +1086,8 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
                 )}
               </span>
             </Tooltip>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -1097,6 +1151,11 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
                   const displayName = baseName.length > 4 ? baseName.slice(0, 4) + '…' : baseName
                   // 是否场景或道具（需要显示"无人"/"有真人"按钮）
                   const needsHumanToggle = ref.category === 2 || ref.category === 3
+                  // 是否角色（需要显示说话者开关）：与分镜板一致，只有角色能设说话者
+                  const isRoleRef = ref.category === 1
+                  // 说话者判定：以节点 speakerName（完整角色名，逗号分隔）为准，refs 里的 isSpeaker 只作补充
+                  const isSpeakerRef = Boolean(ref.isSpeaker)
+                    || String(data.speakerName || '').split(',').map((name) => name.trim()).includes(String(ref.name || '').trim())
                   
                   return (
                     <div key={String(ref.category) + '-' + String(ref.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
@@ -1161,7 +1220,49 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
                         ) : (
                           <span style={{ width: 64, height: 64, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid rgba(127,127,127,0.18)', fontSize: 12, opacity: 0.7 }}>{baseName.slice(0, 1)}</span>
                         )}
-                        
+
+                        {/*
+                         * 说话者开关（仅角色）：与分镜板「说话者/未说话」按钮等价。
+                         * 放在左下角，图标用微信语音消息那种「声波」形，选中绿色、未选中灰色。
+                         */}
+                        {isRoleRef && (
+                          <span
+                            className="nodrag nopan"
+                            role="button"
+                            aria-label={isSpeakerRef ? '取消说话者' : '设为说话者'}
+                            title={isSpeakerRef ? '取消说话者' : '设为说话者'}
+                            style={{
+                              position: 'absolute',
+                              left: 2,
+                              bottom: 2,
+                              width: 18,
+                              height: 18,
+                              borderRadius: 9,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              // 选中绿色、未选中灰色；加半透明白描边保证在任意底色上可辨
+                              background: isSpeakerRef ? 'rgba(34,197,94,0.92)' : 'rgba(110,110,110,0.78)',
+                              color: 'rgba(255,255,255,0.95)',
+                              backdropFilter: 'blur(4px)',
+                              boxShadow: '0 0 0 1px rgba(255,255,255,0.6)',
+                              zIndex: 3,
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setSaveState(toggleSpeaker(id, data, ref))
+                            }}
+                          >
+                            {/* 声波图标：左侧圆点 + 两道弧，视觉近似微信语音消息按钮 */}
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                              <circle cx="3.2" cy="8" r="1.15" fill="currentColor" stroke="none" />
+                              <path d="M6.6 4.9a4.6 4.6 0 0 1 0 6.2" />
+                              <path d="M9.4 2.9a8 8 0 0 1 0 10.2" />
+                            </svg>
+                          </span>
+                        )}
+
                         {/* 删除按钮 */}
                         <ActionIcon
                           className="lens-shot-toolbar-reference-remove nodrag nopan"
