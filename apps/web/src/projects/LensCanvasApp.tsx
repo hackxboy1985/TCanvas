@@ -755,6 +755,13 @@ export default function LensCanvasApp(): JSX.Element {
             })
           }
           
+          console.log('[LensCanvasApp] 剧配置解析结果:', {
+            raw: config,
+            parsed: parsedConfig,
+            screenRatio: parsedConfig.screenRatio,
+            resolution: parsedConfig.resolution,
+            autoGenerateModel: parsedConfig.autoGenerateModel,
+          })
           setProjectConfig(parsedConfig)
           setLensProjectConfig(parsedConfig)
           try {

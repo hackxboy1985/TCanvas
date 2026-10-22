@@ -343,7 +343,16 @@ export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
         lensUnitConsume: typeof item?.unitConsume === 'number' ? item.unitConsume : undefined,
         lensCreditPricing: item.creditPricing,
         // 视频分辨率与报价均来自同一模型接口，不能借用生图配置或通用候选。
-        videoOptions: { resolutionOptions: item.resolutions || [] },
+        // 画幅（sizeOptions）取自模型 others.supportedRatios：剧配置里的 screenRatio（如 21:9）
+        // 必须能在该列表内命中，否则会被 pickVideoSizeValue 回退成列表首项。
+        videoOptions: {
+          resolutionOptions: item.resolutions || [],
+          sizeOptions: Array.isArray(item.others?.supportedRatios)
+            ? item.others.supportedRatios
+                .filter((ratio): ratio is string => typeof ratio === 'string' && ratio.trim().length > 0)
+                .map((ratio) => ratio.trim().replace(/\s+/g, ''))
+            : [],
+        },
         others: item?.others,
         imageOptions: {
           // 画幅只来自该模型的配置；未配置保持空列表，不伪造通用比例。

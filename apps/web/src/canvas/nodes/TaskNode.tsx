@@ -746,22 +746,9 @@ type ImageNodeBadgeKey = 'role' | 'clone' | 'scene' | 'subscene' | 'prop' | 'der
  * <p>亮色用深一档的颜色保证浅底可读，暗色用亮一档的颜色保证深底可读；
  * 背景与描边由主色按透明度派生，避免再维护一套色值。
  */
-/**
- * 把颜色提亮，用于深色模式下让角标文字与同色半透明底拉开对比度。
- * @param color 十六进制颜色，如 #60a5fa
- * @returns 提亮后的十六进制颜色
- */
-const lightenForReadableText = (color: string): string => {
-  const hex = color.replace('#', '')
-  if (hex.length !== 6) return color
-  const channels = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16))
-  const lifted = channels.map((value) => {
-    // 向白色方向插值 45%，保证文字始终比背景亮一档
-    const next = Math.round(value + (255 - value) * 0.45)
-    return Math.max(0, Math.min(255, next))
-  })
-  return '#' + lifted.map((value) => value.toString(16).padStart(2, '0')).join('')
-}
+
+/** 图片节点类型角标的文字色，统一用黑色保证对比度 */
+const BADGE_TEXT_COLOR = '#000000'
 
 const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: string; dark: string }> = {
   role: { light: '#2563eb', dark: '#60a5fa' },
@@ -2280,12 +2267,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     // 更新 videoSize
     if (lensProjectConfig.screenRatio && typeof lensProjectConfig.screenRatio === 'string') {
       const nextSize = lensProjectConfig.screenRatio.trim().replace(/\s+/g, '')
+      console.log('[TaskNode useEffect] 更新 videoSize:', { prev: videoSize, next: nextSize })
       setVideoSize((prev) => (prev === nextSize ? prev : nextSize))
     }
     
     // 更新 videoResolution
     if (lensProjectConfig.resolution && typeof lensProjectConfig.resolution === 'string') {
       const nextResolution = normalizeVideoResolution(lensProjectConfig.resolution)
+      console.log('[TaskNode useEffect] 更新 videoResolution:', { prev: videoResolution, next: nextResolution })
       setVideoResolution((prev) => (prev === nextResolution ? prev : nextResolution))
     }
     
@@ -7784,10 +7773,10 @@ const rewritePromptWithCharacters = React.useCallback(
     return {
       label: badgeLabel,
       color: accentColor,
-      // 深色模式用更亮的文字色，避免同色系文字叠在同色半透明底上看不清
-      textColor: isDarkUi ? lightenForReadableText(accentColor) : accentColor,
-      background: rgba(accentColor, isDarkUi ? 0.22 : 0.12),
-      borderColor: rgba(accentColor, isDarkUi ? 0.5 : 0.32),
+      // 角标文字统一用黑色，背景必须够浅才能保证黑字清晰可读
+      textColor: BADGE_TEXT_COLOR,
+      background: rgba(accentColor, isDarkUi ? 0.85 : 0.7),
+      borderColor: rgba(accentColor, isDarkUi ? 0.95 : 0.85),
     }
   })()
 
