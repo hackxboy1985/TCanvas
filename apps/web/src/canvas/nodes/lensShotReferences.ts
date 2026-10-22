@@ -40,8 +40,13 @@ export function referenceFromNode(node: Node): ReferenceAsset {
   const entityId = String(node.data.entityId || '')
   const imgUrl = pickPrimaryImageFromNode(node)
   if (!imgUrl) throw new Error('所选节点尚无可用参考图片')
+  // 子造型/子场景名取自节点数据（投影/资产库建节点写入 variantName|cloneName），父级ID取 parentEntityId
+  const childName = String(node.data.variantName || node.data.cloneName || node.data.childName || '').trim()
+  const parentEntityId = String(node.data.parentEntityId || '').trim()
   return { category: entityId && [ReferenceCategory.Role, ReferenceCategory.Scene, ReferenceCategory.Prop].includes(category) ? category : 0,
-    id: entityId || node.id, name: String(node.data.label || '参考图片'), imgUrl }
+    id: entityId || node.id, name: String(node.data.label || '参考图片'), imgUrl,
+    ...(childName ? { variantName: childName } : null),
+    ...(parentEntityId ? { parentId: parentEntityId } : null) }
 }
 
 const savingTargets = new Set<string>()
@@ -256,7 +261,9 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
         // 尺寸与主画布投影一致，否则节点按 TaskNode 默认尺寸渲染，底部工具栏会被算到很远处。
         source = { id: prefix + '-' + asset.id, type: 'taskNode', position: { x: target.position.x - NEW_ASSET_NODE_OFFSET_X, y: target.position.y + index * NEW_ASSET_NODE_GAP_Y },
           data: { label: asset.name, kind: 'image', source: 'lens_projection', sourceProjectId: dramaId, entityId: asset.id,
-            assetCategory: asset.category, imageUrl: asset.imgUrl, nodeWidth: LENS_ASSET_NODE_WIDTH, nodeHeight: LENS_ASSET_MEDIA_HEIGHT } }
+            assetCategory: asset.category, imageUrl: asset.imgUrl, nodeWidth: LENS_ASSET_NODE_WIDTH, nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
+            // 子造型/子场景名写进节点数据：之后从画布再选该节点作参考时，靠它还原参考卡片顶部的子造型名
+            ...(asset.variantName ? { childName: asset.variantName } : null) } }
         const newNode = source
         useRFStore.setState((current) => ({ nodes: [...current.nodes, newNode] }))
       }
@@ -271,7 +278,9 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
     const latest = useRFStore.getState().nodes.find((node) => node.id === targetId)
     const refs = (Array.isArray(latest?.data.refs) ? latest.data.refs : []) as LensShotRef[]
     const merged = new Map(refs.map((ref) => [referenceKey(ref), ref]))
-    additions.forEach((asset) => merged.set(referenceKey(asset), { category: asset.category, id: asset.id, name: asset.name, imgUrl: asset.imgUrl }))
+    // 带上主名与子造型名：存在时以它们为准，避免底部参考卡片再去反推完整名里的括号
+    additions.forEach((asset) => merged.set(referenceKey(asset), { category: asset.category, id: asset.id, name: asset.name, imgUrl: asset.imgUrl,
+      ...(asset.variantName ? { variantName: asset.variantName } : null) }))
     useRFStore.getState().updateNodeData(targetId, { refs: Array.from(merged.values()) })
   } finally { savingTargets.delete(targetId) }
 }

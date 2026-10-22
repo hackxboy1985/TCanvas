@@ -9407,12 +9407,15 @@ body {
   50% { transform: scale(1.45); opacity: 0.3; }
 }
 
-/* 引用容器与图片同尺寸，删除入口始终叠在图片内部，避免被组件默认定位挤到图片外。 */
+/*
+ * 引用容器只承载定位；实际圆角与裁剪由内部 img 自己负责（border-radius: 8px）。
+ * 容器不能再设置 overflow:hidden，否则浮在图片上层、贴边或轻微出界的删除按钮会被裁掉。
+ */
 .lens-shot-toolbar-reference {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  overflow: hidden;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  overflow: visible;
   border-radius: 10px;
 }
 

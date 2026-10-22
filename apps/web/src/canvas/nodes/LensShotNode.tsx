@@ -40,7 +40,7 @@ import {
 } from '../../config/useModelOptions'
 import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
-import { editStoryboard, clearStoryboardSpeaker, submitShotVideo, type LensAssetEnriched } from '../../api/lens'
+import { editStoryboard, clearStoryboardSpeaker, submitShotVideo, editReference, type LensAssetEnriched } from '../../api/lens'
 import { runPublicTask } from '../../api/server'
 import { extractTextFromTaskResult, genTaskNodeId } from './taskNodeHelpers'
 import { getAuthToken } from '../../auth/store'
@@ -72,6 +72,8 @@ export interface LensShotRef {
   isSpeaker?: boolean
   /** 父级资产ID（子角色/子场景才有）：用于角标区分「子角色」「子场景」 */
   parentId?: string
+  /** 子造型名/子场景名（如「连衣裙」「夜晚」）：参考卡片顶部展示，主身份为空 */
+  variantName?: string
   /** 是否包含真人（0=无人，1=有真人）：仅场景和道具使用，用于控制生成时是否同步真人风格 */
   hasHuman?: number
 }
@@ -189,6 +191,38 @@ function StatusDot({ data }: { data: LensShotNodeData }): JSX.Element {
  * @param speakerList 当前说话者基础名列表
  * @returns 分镜引用列表
  */
+/** 子造型名后缀：完整名「方怡静（连衣裙）」末尾的括号内容 */
+const REF_VARIANT_SUFFIX = /[（(]\s*([^（）()]*?)\s*[）)]\s*$/
+
+/**
+ * 拆分引用资产的「主角色名」与「子造型名」。
+ *
+ * <p><b>为什么分别存</b>：底部参考卡片要求「顶部子造型名、底部主角色名」，
+ * 不能靠正则去反向拆完整名（主名或造型名自身含括号时会拆错）。
+ * 主名取后端 parentId + 基础名口径，子造型名取快照 cloneName/variantName；
+ * 快照没给造型名时，才用完整名末尾的括号内容兜底。
+ *
+ * @param fullName 完整显示名（子角色「方怡静（连衣裙）」/ 主角色「方怡静」）
+ * @param parentId 父级资产ID（子角色/子场景才有）
+ * @param variantName 快照里的造型名（子角色 cloneName / 子场景 variantName）
+ * @returns 主角色名与子造型名（主身份时子造型名为空串）
+ */
+export function splitRefNames(fullName: string, parentId?: string, variantName?: string): { baseName: string; variantName: string } {
+  const name = String(fullName || '').trim()
+  const variant = String(variantName || '').trim()
+  if (!parentId) return { baseName: name, variantName: '' }
+  // 有明确造型名时，从完整名里剥掉末尾的「（造型名）」得到主角色名
+  const wrapped = '（' + variant + '）'
+  if (variant && name.endsWith(wrapped)) {
+    return { baseName: name.slice(0, name.length - wrapped.length).trim(), variantName: variant }
+  }
+  const matched = name.match(REF_VARIANT_SUFFIX)
+  if (matched && matched[1]) {
+    return { baseName: name.slice(0, matched.index ?? 0).trim(), variantName: variant || matched[1] }
+  }
+  return { baseName: name, variantName: variant }
+}
+
 export function buildShotRefsFromAssets(
   assets: LensAssetEnriched[],
   shotId: string,
@@ -198,18 +232,23 @@ export function buildShotRefsFromAssets(
     .filter((asset) => String(asset.refId) === String(shotId))
     .map((asset) => {
       const displayName = asset.characterName || asset.imgName || ''
-      // 子角色取父角色名作为基础名；主角色基础名即自身名称。
-      const roleBaseName = asset.assetCategory === 1
-        ? (asset.parentId ? displayName.replace(/[（(].*?[）)]$/, '').trim() : displayName)
-        : ''
+      const parentId = asset.parentId ? String(asset.parentId) : ''
+      // 角色取 cloneName 作造型名，场景取 variantName（后端快照字段口径不同）
+      const variantName = String((asset.assetCategory === 1 ? asset.cloneName : asset.variantName) || '').trim()
+      // 拆出主名与子造型名：主身份的子造型名必为空串
+      const { baseName: roleBaseName, variantName: refVariantName } = splitRefNames(displayName, parentId, variantName)
       return {
         category: asset.assetCategory ?? 0,
         id: String(asset.roleId || asset.assetId || ''),
         name: displayName,
         imgUrl: asset.threeImg || asset.roleImg || asset.imgUrl || '',
         ...(roleBaseName ? { baseName: roleBaseName } : null),
+        ...(refVariantName ? { variantName: refVariantName } : null),
         // 子角色/子场景角标需要 parentId 区分（refBadgeLabel 按它判断是否子资产）
-        ...(asset.parentId ? { parentId: String(asset.parentId) } : null),
+        ...(parentId ? { parentId } : null),
+        // 是否含真人（lens_asset_image.has_human，由 assetsByEpisode 下发）：
+        // 场景/道具据此显示「无人/有真人」，提交生视频时转成 needsSync
+        ...(typeof asset.hasHuman === 'number' ? { hasHuman: asset.hasHuman } : null),
         isSpeaker: asset.assetCategory === 1 && Boolean(roleBaseName) && speakerList.includes(roleBaseName),
       }
     })
@@ -564,6 +603,44 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
     smartPromptLoading,
   ])
 
+  /**
+   * 切换场景/道具的"有真人"标记。
+   *
+   * <p>与分镜板一致：写回 lens_asset_image.has_human（PUT /api/lensImage），
+   * 成功后再同步画布节点 refs，保证提交生视频任务时 needsSync 与业务表一致。
+   *
+   * @param ref 引用对象（场景/道具的 id 即 lens_asset_image.id）
+   */
+  const toggleHasHuman = useCallback(async (ref: LensShotRef) => {
+    if (ref.category !== 2 && ref.category !== 3) return // 只允许场景和道具
+    if (!ref.id) return
+
+    // 有真人=1，无人=0（与分镜板 toggleHasHuman 口径一致）
+    const newVal = ref.hasHuman ? 0 : 1
+    const imageId = Number(ref.id)
+    if (!Number.isFinite(imageId) || imageId <= 0) {
+      setSaveState('标记失败：资产图片ID无效')
+      return
+    }
+
+    try {
+      await editReference(imageId, ref.name || null, null, null, newVal)
+
+      // 接口成功后同步画布节点 refs（提交任务时据此写 needsSync）
+      const updatedRefs = (data.refs || []).map((r) =>
+        r.id === ref.id && r.category === ref.category
+          ? { ...r, hasHuman: newVal }
+          : r
+      )
+      useRFStore.getState().updateNodeData(id, { refs: updatedRefs })
+
+      setSaveState(newVal ? '已标记为有真人' : '已标记为无人')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setSaveState('标记失败：' + msg)
+    }
+  }, [data.refs, id])
+
   /** 提交分镜生视频任务（走 lens /api/storyboardTask/submit，与分镜板一致） */
   const handleGenerate = useCallback(async () => {
     const storyboardId = String(data.entityId ?? '')
@@ -571,6 +648,11 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
     if (!storyboardId || !dramaId) return
     if (!modelValue) {
       setSaveState('请先选择生视频模型')
+      return
+    }
+    // 检查模型列表是否加载完成
+    if (models.length === 0) {
+      setSaveState('模型列表加载中，请稍后重试')
       return
     }
     // 时长：按秒/按时长计费模型的必填参数，缺失时后端 /api/storyboardTask/submit
@@ -585,7 +667,10 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
     // 获取所选模型的 channel（后端 StoryboardTaskController.submit 必填参数）
     const selectedModelChannel = selectedModel?.channel || ''
     if (!selectedModelChannel) {
-      setSaveState('提交失败：模型配置缺少 channel')
+      // 调试信息：列出所有模型的 value 和 channel，便于排查
+      const modelDebug = models.map((m) => ({ value: m.value, label: m.label, channel: m.channel }))
+      console.warn('[LensShotNode] channel 缺失调试:', { modelValue, models: modelDebug })
+      setSaveState(`提交失败：模型 ${modelValue} 缺少 channel 配置`)
       return
     }
     try {
@@ -955,11 +1040,16 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
       {/* 选中时节点下方浮出编辑面板（底部工具栏保持分镜视频节点原有布局） */}
       {selected && (
         <NodeToolbar className="lens-shot-edit-toolbar" position={Position.Bottom} align="center">
+          {/* 工具栏内双击一律吞掉：不放大节点、不触发画布聚焦，避免编辑时误触导致视图位移。
+              必须在捕获阶段拦截（onDoubleClickCapture），冒泡阶段画布可能已先响应。 */}
           <div
             className="tc-task-node__toolbar-frame tc-task-node__toolbar-frame--media"
             data-no-node-dblclick="1"
+            onDoubleClickCapture={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+            }}
             onDoubleClick={(e) => {
-              // 阻止双击冒泡到画布节点（快速切换开关会被识别为双击→聚焦）
               e.stopPropagation()
             }}
             onWheelCapture={(e) => {
@@ -995,35 +1085,108 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, roleName: string)
                 </Group>
               </div>
 
-              {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，右上角类型胶囊） */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
-                {refs.length > 0 ? refs.map((ref) => (
-                  <Tooltip key={String(ref.category) + '-' + String(ref.id)} label={ref.name} position="top" withArrow>
-                    <span className="lens-shot-toolbar-reference" style={{ position: 'relative', display: 'inline-flex', cursor: 'grab' }}>
-                      {ref.imgUrl ? (
-                        <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)' }} />
-                      ) : (
-                        <span style={{ width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px solid rgba(127,127,127,0.18)', fontSize: 10, opacity: 0.7 }}>{ref.name.slice(0, 1)}</span>
-                      )}
-                      <span style={{ position: 'absolute', left: 3, bottom: 3, fontSize: 9, lineHeight: 1, padding: '2px 5px', borderRadius: 999, background: 'rgba(10,14,20,0.72)', color: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)' }}>{REF_LABEL[ref.category] ?? '引'}</span>
-                      <ActionIcon
-                        className="lens-shot-toolbar-reference-remove nodrag nopan"
-                        size={18} variant="filled" color="dark"
-                        aria-label={'删除 ' + ref.name + ' 引用及连线'}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void disconnectShotReference(id, ref).catch((error: unknown) => {
-                            const msg = error instanceof Error ? error.message : String(error)
-                            setSaveState('删除参考失败：' + msg)
-                          })
+              {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，底部显示名称，顶部显示分身名） */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                {refs.length > 0 ? refs.map((ref) => {
+                  const fullName = ref.name || ''
+                  // 子角色/子场景：底部主名取 refs 里存的主名（后端 parentId 口径），顶部显示子造型名
+                  const { baseName, variantName } = ref.parentId
+                    ? splitRefNames(fullName, ref.baseName || fullName, ref.variantName)
+                    : { baseName: fullName, variantName: '' }
+                  // 底部名称截取（超过4个字）
+                  const displayName = baseName.length > 4 ? baseName.slice(0, 4) + '…' : baseName
+                  // 是否场景或道具（需要显示"无人"/"有真人"按钮）
+                  const needsHumanToggle = ref.category === 2 || ref.category === 3
+                  
+                  return (
+                    <div key={String(ref.category) + '-' + String(ref.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      {/* 顶部：子角色/子场景的子造型名（主身份不显示，保持行高一致用固定高度占位） */}
+                      <Text
+                        size="xs"
+                        c={isDark ? 'gray.3' : 'dark.6'}
+                        fw={600}
+                        title={variantName ? fullName : undefined}
+                        style={{
+                          height: 14,
+                          maxWidth: 64,
+                          lineHeight: '14px',
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                         }}
                       >
-                        <IconX size={12} stroke={2.5} />
-                      </ActionIcon>
-                    </span>
-                  </Tooltip>
-                )) : (
+                        {variantName || '\u00A0'}
+                      </Text>
+                      <span className="lens-shot-toolbar-reference" style={{ position: 'relative', display: 'inline-flex', cursor: 'grab', flexDirection: 'column' }}>
+                        {/* 左上角"无人"/"有真人"按钮（仅场景和道具） */}
+                        {needsHumanToggle && (
+                          <span 
+                            className="nodrag nopan"
+                            style={{ 
+                              position: 'absolute', 
+                              top: 2, 
+                              left: 2, 
+                              fontSize: 9, 
+                              lineHeight: 1, 
+                              padding: '2px 4px', 
+                              borderRadius: 3, 
+                              background: ref.hasHuman ? 'rgba(30,144,255,0.85)' : 'rgba(100,100,100,0.75)', 
+                              color: 'rgba(255,255,255,0.95)', 
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              backdropFilter: 'blur(4px)',
+                              // 文案不换行：2 个字 + 图标在 64px 图内单行放得下
+                              whiteSpace: 'nowrap',
+                              zIndex: 2
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void toggleHasHuman(ref)
+                            }}
+                            title={ref.hasHuman ? '点击标记为无人' : '点击标记为真人'}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                            </svg>
+                            {/* 角标文案精简为「真人」/「无人」，避免小尺寸下折行遮挡图片 */}
+                            <span>{ref.hasHuman ? '真人' : '无人'}</span>
+                          </span>
+                        )}
+                        
+                        {ref.imgUrl ? (
+                          <img src={ossThumb(ref.imgUrl)} alt={ref.name} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(127,127,127,0.18)' }} />
+                        ) : (
+                          <span style={{ width: 64, height: 64, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid rgba(127,127,127,0.18)', fontSize: 12, opacity: 0.7 }}>{baseName.slice(0, 1)}</span>
+                        )}
+                        
+                        {/* 删除按钮 */}
+                        <ActionIcon
+                          className="lens-shot-toolbar-reference-remove nodrag nopan"
+                          size={18} variant="filled" color="dark"
+                          aria-label={'删除 ' + ref.name + ' 引用及连线'}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void disconnectShotReference(id, ref).catch((error: unknown) => {
+                              const msg = error instanceof Error ? error.message : String(error)
+                              setSaveState('删除参考失败：' + msg)
+                            })
+                          }}
+                          /* 容器已取消 overflow 裁剪，按钮可轻微出界并浮在图片上层（zIndex 3） */
+                          style={{ position: 'absolute', right: -4, top: -4, zIndex: 3 }}
+                        >
+                          <IconX size={12} stroke={2.5} />
+                        </ActionIcon>
+                      </span>
+                      
+                      {/* 底部：主角色名/主场景名（子资产的名称只在顶部显示） */}
+                      <Text size="xs" c="dimmed" style={{ maxWidth: 64, textAlign: 'center', lineHeight: 1.2 }} title={variantName ? baseName : fullName}>{displayName}</Text>
+                    </div>
+                  )
+                }) : (
                   <Text size="xs" c="dimmed">暂无引用资产</Text>
                 )}
                 <Menu trigger="click-hover" openDelay={100} closeDelay={180} withinPortal zIndex={3500}>
