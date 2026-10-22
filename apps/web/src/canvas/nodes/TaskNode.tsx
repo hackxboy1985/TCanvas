@@ -746,6 +746,23 @@ type ImageNodeBadgeKey = 'role' | 'clone' | 'scene' | 'subscene' | 'prop' | 'der
  * <p>亮色用深一档的颜色保证浅底可读，暗色用亮一档的颜色保证深底可读；
  * 背景与描边由主色按透明度派生，避免再维护一套色值。
  */
+/**
+ * 把颜色提亮，用于深色模式下让角标文字与同色半透明底拉开对比度。
+ * @param color 十六进制颜色，如 #60a5fa
+ * @returns 提亮后的十六进制颜色
+ */
+const lightenForReadableText = (color: string): string => {
+  const hex = color.replace('#', '')
+  if (hex.length !== 6) return color
+  const channels = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16))
+  const lifted = channels.map((value) => {
+    // 向白色方向插值 45%，保证文字始终比背景亮一档
+    const next = Math.round(value + (255 - value) * 0.45)
+    return Math.max(0, Math.min(255, next))
+  })
+  return '#' + lifted.map((value) => value.toString(16).padStart(2, '0')).join('')
+}
+
 const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: string; dark: string }> = {
   role: { light: '#2563eb', dark: '#60a5fa' },
   clone: { light: '#7c3aed', dark: '#a78bfa' },
@@ -2196,12 +2213,17 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const lensProjectConfig = useUIStore((state) => state.lensProjectConfig)
   const defaultVideoModel = React.useMemo(() => {
     // 从项目配置中读取默认视频模型（autoGenerateModel 对应后端的视频执行模型配置）
+    console.log('[TaskNode] 计算 defaultVideoModel, lensProjectConfig:', lensProjectConfig)
     if (lensProjectConfig?.autoGenerateModel) {
-      return String(lensProjectConfig.autoGenerateModel)
+      const model = String(lensProjectConfig.autoGenerateModel)
+      console.log('[TaskNode] 从项目配置读取到 videoModel:', model)
+      return model
     }
+    console.log('[TaskNode] 使用兜底 videoModel: veo3.1-fast')
     return 'veo3.1-fast'
   }, [lensProjectConfig])
   const [videoModel, setVideoModel] = React.useState<string>(defaultVideoModel)
+  console.log('[TaskNode] videoModel state 初始化为:', defaultVideoModel)
   const [videoHd, setVideoHd] = React.useState<boolean>(() => {
     const raw = (data as any)?.videoHd
     return typeof raw === 'boolean' ? raw : false
@@ -2242,11 +2264,16 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const orientationRef = React.useRef<Orientation>(orientation)
   // 监听项目配置变化，动态更新视频配置 state
   React.useEffect(() => {
-    if (!lensProjectConfig) return
+    console.log('[TaskNode useEffect] lensProjectConfig 变化:', lensProjectConfig)
+    if (!lensProjectConfig) {
+      console.log('[TaskNode useEffect] lensProjectConfig 为空，跳过')
+      return
+    }
     
     // 更新 videoModel
     if (lensProjectConfig.autoGenerateModel) {
       const nextModel = String(lensProjectConfig.autoGenerateModel)
+      console.log('[TaskNode useEffect] 更新 videoModel:', { prev: videoModel, next: nextModel })
       setVideoModel((prev) => (prev === nextModel ? prev : nextModel))
     }
     
@@ -7757,6 +7784,8 @@ const rewritePromptWithCharacters = React.useCallback(
     return {
       label: badgeLabel,
       color: accentColor,
+      // 深色模式用更亮的文字色，避免同色系文字叠在同色半透明底上看不清
+      textColor: isDarkUi ? lightenForReadableText(accentColor) : accentColor,
       background: rgba(accentColor, isDarkUi ? 0.22 : 0.12),
       borderColor: rgba(accentColor, isDarkUi ? 0.5 : 0.32),
     }

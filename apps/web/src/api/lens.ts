@@ -631,12 +631,19 @@ export async function saveFlow(dramaId: string, episodeNum: number, payload: { n
   })
 }
 
-/** 剧的风格配置（角色/场景生图、分镜生视频风格） */
+/**
+ * 剧的风格配置（角色/场景生图、分镜生视频风格）
+ *
+ * <p>该接口返回裸业务体（无 RuoYi AjaxResult 的 code 包装），
+ * 必须走 lensFetchBare，否则会被业务码校验误判为失败。
+ */
 export async function getStyleConfig(dramaId: string): Promise<Record<string, unknown> | null> {
-  return lensFetch<Record<string, unknown> | null>('/api/sysApi/baseConfig/list', {
+  const raw = await lensFetchBare('/api/sysApi/baseConfig/list', {
     method: 'POST',
     body: JSON.stringify({ pkg: String(dramaId), type: 'style_config' }),
   })
+  if (!raw || typeof raw !== 'object') return null
+  return raw as Record<string, unknown>
 }
 
 /** lens 模型条目（/api/model/* 返回 data 数组元素） */
