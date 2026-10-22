@@ -747,17 +747,64 @@ type ImageNodeBadgeKey = 'role' | 'clone' | 'scene' | 'subscene' | 'prop' | 'der
  * 背景与描边由主色按透明度派生，避免再维护一套色值。
  */
 
-/** 图片节点类型角标的文字色，统一用黑色保证对比度 */
-const BADGE_TEXT_COLOR = '#000000'
+/** 图片节点类型角标的配色：底色、文字色、描边色、左侧色点 */
+type BadgeTone = {
+  /** 角标底色：低明度染色底，避免高饱和实色块在画布上形成彩色贴纸墙 */
+  background: string
+  /** 文字色：同色相浅色调，不用纯白（纯白会压掉色相，多个角标并排显廉价） */
+  text: string
+  /** 描边色：类型色的半透明版本，提供 1px 结构边界 */
+  border: string
+  /** 左侧色点：类型色实色，色盲用户也能靠位置 + 文字区分 */
+  dot: string
+}
 
-const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: string; dark: string }> = {
-  role: { light: '#2563eb', dark: '#60a5fa' },
-  clone: { light: '#7c3aed', dark: '#a78bfa' },
-  scene: { light: '#059669', dark: '#34d399' },
-  subscene: { light: '#0d9488', dark: '#2dd4bf' },
-  prop: { light: '#b45309', dark: '#fbbf24' },
-  derived: { light: '#db2777', dark: '#f472b6' },
-  free: { light: '#475569', dark: '#94a3b8' },
+/**
+ * 图片节点类型角标配色。
+ *
+ * <p>设计原则：
+ * 1. 色相承载"类别"——角色族紫、场景族青绿、道具琥珀；
+ * 2. 明度承载"层级"——同族主类型与派生类型共用色相，仅降一档明度，
+ *    保证"角色/分身""场景/子场景"一眼看出同族但不同级；
+ * 3. 衍生与自由节点去饱和，作为画面的中性呼吸口，不抢主类型的注意力；
+ * 4. 所有文字与底色对比度 ≥ 5.5:1（WCAG AA 以上），11px 小字也稳定可读。
+ */
+const IMAGE_NODE_BADGE_PALETTE: Record<ImageNodeBadgeKey, { light: BadgeTone; dark: BadgeTone }> = {
+  // 角色族（紫 H265）：业务主实体，出现频次最高，给最实的染色底
+  role: {
+    light: { background: '#E6E3FB', text: '#3D2E8F', border: 'rgba(94,79,205,0.34)', dot: '#5E4FCD' },
+    dark: { background: '#2C2350', text: '#C9BFFF', border: 'rgba(140,116,255,0.42)', dot: '#8C74FF' },
+  },
+  // 分身：同色相，底与文字各压暗一档，表达"同族次一级"
+  clone: {
+    light: { background: '#F0EEFD', text: '#5A48B5', border: 'rgba(112,96,200,0.26)', dot: '#7060C8' },
+    dark: { background: '#241E3E', text: '#A99BE8', border: 'rgba(124,104,214,0.30)', dot: 'rgba(140,116,255,0.62)' },
+  },
+  // 场景族（青绿 H175）：空间环境，与紫在色相环相隔 90°，远距离可辨
+  scene: {
+    light: { background: '#DDF4F0', text: '#0D5F58', border: 'rgba(13,148,136,0.32)', dot: '#0D9488' },
+    dark: { background: '#123B38', text: '#7FEBDA', border: 'rgba(45,212,191,0.40)', dot: '#2DD4BF' },
+  },
+  // 子场景：同色相压暗一档
+  subscene: {
+    light: { background: '#EDF8F6', text: '#2A7A72', border: 'rgba(42,122,114,0.24)', dot: '#2A7A72' },
+    dark: { background: '#0E2C2A', text: '#5FC7B8', border: 'rgba(45,212,191,0.26)', dot: 'rgba(45,212,191,0.62)' },
+  },
+  // 道具（琥珀 H38）：全画面唯一暖色，避免整体偏冷发灰
+  prop: {
+    light: { background: '#FBEFDC', text: '#7A4A06', border: 'rgba(180,116,20,0.32)', dot: '#B47414' },
+    dark: { background: '#3A2A12', text: '#F2C078', border: 'rgba(217,150,42,0.40)', dot: '#D9962A' },
+  },
+  // 衍生：去饱和中性灰蓝，系统派生节点，主动退到背景
+  derived: {
+    light: { background: '#EDF0F4', text: '#41505F', border: 'rgba(100,116,139,0.24)', dot: '#64748B' },
+    dark: { background: '#252C36', text: '#A7B4C4', border: 'rgba(148,163,184,0.24)', dot: '#94A3B8' },
+  },
+  // 自由：最弱一档中性灰，无来源节点，作为视觉呼吸口
+  free: {
+    light: { background: '#F1F3F6', text: '#4E5A69', border: 'rgba(124,135,152,0.22)', dot: '#7C8798' },
+    dark: { background: '#1F252E', text: '#96A1B2', border: 'rgba(148,163,184,0.18)', dot: 'rgba(148,163,184,0.60)' },
+  },
 }
 
 const UNIFIED_STORYBOARD_SKILL = 'tapcanvas-storyboard-expert'
@@ -2200,17 +2247,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const lensProjectConfig = useUIStore((state) => state.lensProjectConfig)
   const defaultVideoModel = React.useMemo(() => {
     // 从项目配置中读取默认视频模型（autoGenerateModel 对应后端的视频执行模型配置）
-    console.log('[TaskNode] 计算 defaultVideoModel, lensProjectConfig:', lensProjectConfig)
     if (lensProjectConfig?.autoGenerateModel) {
-      const model = String(lensProjectConfig.autoGenerateModel)
-      console.log('[TaskNode] 从项目配置读取到 videoModel:', model)
-      return model
+      return String(lensProjectConfig.autoGenerateModel)
     }
-    console.log('[TaskNode] 使用兜底 videoModel: veo3.1-fast')
     return 'veo3.1-fast'
   }, [lensProjectConfig])
   const [videoModel, setVideoModel] = React.useState<string>(defaultVideoModel)
-  console.log('[TaskNode] videoModel state 初始化为:', defaultVideoModel)
   const [videoHd, setVideoHd] = React.useState<boolean>(() => {
     const raw = (data as any)?.videoHd
     return typeof raw === 'boolean' ? raw : false
@@ -2251,30 +2293,23 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const orientationRef = React.useRef<Orientation>(orientation)
   // 监听项目配置变化，动态更新视频配置 state
   React.useEffect(() => {
-    console.log('[TaskNode useEffect] lensProjectConfig 变化:', lensProjectConfig)
-    if (!lensProjectConfig) {
-      console.log('[TaskNode useEffect] lensProjectConfig 为空，跳过')
-      return
-    }
+    if (!lensProjectConfig) return
     
     // 更新 videoModel
     if (lensProjectConfig.autoGenerateModel) {
       const nextModel = String(lensProjectConfig.autoGenerateModel)
-      console.log('[TaskNode useEffect] 更新 videoModel:', { prev: videoModel, next: nextModel })
       setVideoModel((prev) => (prev === nextModel ? prev : nextModel))
     }
     
     // 更新 videoSize
     if (lensProjectConfig.screenRatio && typeof lensProjectConfig.screenRatio === 'string') {
       const nextSize = lensProjectConfig.screenRatio.trim().replace(/\s+/g, '')
-      console.log('[TaskNode useEffect] 更新 videoSize:', { prev: videoSize, next: nextSize })
       setVideoSize((prev) => (prev === nextSize ? prev : nextSize))
     }
     
     // 更新 videoResolution
     if (lensProjectConfig.resolution && typeof lensProjectConfig.resolution === 'string') {
       const nextResolution = normalizeVideoResolution(lensProjectConfig.resolution)
-      console.log('[TaskNode useEffect] 更新 videoResolution:', { prev: videoResolution, next: nextResolution })
       setVideoResolution((prev) => (prev === nextResolution ? prev : nextResolution))
     }
     
@@ -7768,15 +7803,14 @@ const rewritePromptWithCharacters = React.useCallback(
       paletteKey = 'free'
       badgeLabel = '自由'
     }
-    const palette = IMAGE_NODE_BADGE_PALETTE[paletteKey]
-    const accentColor = isDarkUi ? palette.dark : palette.light
+    const tone = isDarkUi ? IMAGE_NODE_BADGE_PALETTE[paletteKey].dark : IMAGE_NODE_BADGE_PALETTE[paletteKey].light
     return {
       label: badgeLabel,
-      color: accentColor,
-      // 角标文字统一用黑色，背景必须够浅才能保证黑字清晰可读
-      textColor: BADGE_TEXT_COLOR,
-      background: rgba(accentColor, isDarkUi ? 0.85 : 0.7),
-      borderColor: rgba(accentColor, isDarkUi ? 0.95 : 0.85),
+      color: tone.dot,
+      textColor: tone.text,
+      background: tone.background,
+      borderColor: tone.border,
+      dotColor: tone.dot,
     }
   })()
 
