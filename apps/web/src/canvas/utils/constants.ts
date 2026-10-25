@@ -39,6 +39,13 @@ export const CANVAS_CONFIG = {
 export const IMAGE_NODE_DEFAULT_WIDTH = 384
 export const IMAGE_NODE_DEFAULT_HEIGHT = 250
 
+/** 双击聚焦节点时的放大倍率（与角色节点保持一致） */
+export const NODE_FOCUS_ZOOM = 1.2
+/** 双击聚焦节点时的最小放大倍率：不小于 80%，避免小节点被缩得过小 */
+export const NODE_FOCUS_MIN_ZOOM = 0.8
+/** 双击聚焦节点时的视图动画时长（毫秒） */
+export const NODE_FOCUS_DURATION_MS = 250
+
 // 节点类型
 export const NODE_TYPES = {
   TASK: 'taskNode',

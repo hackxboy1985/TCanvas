@@ -1181,6 +1181,8 @@ function collectDynamicUpstreamReferenceEntriesForNode(
 }
 
 function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>): JSX.Element {
+  // 临时调试日志：只打印视频节点渲染，避免图片/文本节点刷屏
+  if (data?.kind === 'video') console.warn('[DEBUG] TaskNode 渲染:', { id, kind: data?.kind, selected })
   // 任务列表仅保存界面显隐，不写入节点数据或 flow；原右侧抽屉保持不变。
   const [assetTaskPanelOpened, setAssetTaskPanelOpened] = React.useState(false)
   const openAssetTaskPanel = React.useCallback(() => {
@@ -2284,6 +2286,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const orientationRef = React.useRef<Orientation>(orientation)
   // 监听项目配置变化，动态更新视频配置 state
   React.useEffect(() => {
+    // 临时调试日志：只在视频节点打印，避免非视频节点刷屏
+    if (isVideoNode) console.warn('[DEBUG] lensProjectConfig effect:', { lensProjectConfig, isVideoNode })
     if (!lensProjectConfig) return
     
     // 更新 videoModel
@@ -4371,24 +4375,72 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     : hasOrientation
   React.useEffect(() => {
     if (!modelList.length) return
+    /**
+     * 模型选择优先级：剧配置 > 节点已有值 > 模型接口默认首项
+     *
+     * <p>剧配置是唯一权威来源：配置里指定了 autoGenerateModel 就用它，
+     * 不能被节点里存的旧值覆盖（否则改了剧配置对已有节点不生效）。
+     * 只有剧配置未指定时，才沿用节点已有值；两者都没有时，才取模型接口返回的首项。</p>
+     */
+    // 剧配置对应的默认模型：视频节点用 autoGenerateModel、
+    // 图片编辑节点用 autoImage2ImageModel（图生图）、文生图节点用 autoImageModel
+    let configModelValue = ''
+    if (isVideoNode) {
+      configModelValue = lensProjectConfig?.autoGenerateModel
+        ? String(lensProjectConfig.autoGenerateModel).trim()
+        : ''
+    } else if (kind === 'imageEdit') {
+      configModelValue = lensProjectConfig?.autoImage2ImageModel
+        ? String(lensProjectConfig.autoImage2ImageModel).trim()
+        : ''
+    } else if (coreKind === 'image') {
+      configModelValue = lensProjectConfig?.autoImageModel
+        ? String(lensProjectConfig.autoImageModel).trim()
+        : ''
+    }
+    const configMatched = configModelValue
+      ? findModelOptionByIdentifier(modelList, configModelValue)
+      : null
     const matched = findModelOptionByIdentifier(modelList, activeModelKey)
-    const next = matched || modelList[0]
+    const next = configMatched || matched || modelList[0]
     if (!next) return
     const nextRequestedModel = resolveRequestedModelIdentifier(next.value)
     if (!nextRequestedModel) return
-    if (String(activeModelKey || '').trim() === nextRequestedModel) return
+    // 检查 state 和 node.data 是否都已是目标值（视频看 videoModel，图片看 imageModel）
+    const currentStateModel = String(activeModelKey || '').trim()
+    const currentDataModel = isVideoNode
+      ? String((data as any)?.videoModel || '').trim()
+      : String((data as any)?.imageModel || '').trim()
+    const alreadyCorrect = currentStateModel === nextRequestedModel && currentDataModel === nextRequestedModel
+    if (alreadyCorrect) return
+    // state 或 data 有一个不对，就更新：按节点类型只写自己那套模型字段，
+    // 避免图片节点把生图模型写进 videoModel（反之亦然）造成数据串味
     setModelKey(nextRequestedModel)
-    setImageModel(nextRequestedModel)
-    setVideoModel(nextRequestedModel)
-    updateNodeData(id, {
-      geminiModel: nextRequestedModel,
-      imageModel: nextRequestedModel,
-      videoModel: nextRequestedModel,
-      modelVendor: next.vendor || null,
-      imageModelVendor: null,
-      videoModelVendor: next.vendor || null,
-    })
-  }, [activeModelKey, modelList, id, resolveRequestedModelIdentifier, updateNodeData])
+    if (isVideoNode) {
+      setImageModel(nextRequestedModel)
+      setVideoModel(nextRequestedModel)
+      updateNodeData(id, {
+        geminiModel: nextRequestedModel,
+        imageModel: nextRequestedModel,
+        videoModel: nextRequestedModel,
+        modelVendor: next.vendor || null,
+        imageModelVendor: null,
+        videoModelVendor: null,
+      })
+    } else if (kind === 'imageEdit' || coreKind === 'image') {
+      setImageModel(nextRequestedModel)
+      updateNodeData(id, {
+        imageModel: nextRequestedModel,
+        modelVendor: next.vendor || null,
+        imageModelVendor: null,
+      })
+    } else {
+      updateNodeData(id, {
+        geminiModel: nextRequestedModel,
+        modelVendor: next.vendor || null,
+      })
+    }
+  }, [activeModelKey, isVideoNode, lensProjectConfig, modelList, id, resolveRequestedModelIdentifier, updateNodeData])
 
   React.useEffect(() => {
     if (!isVideoNode) return
@@ -4396,30 +4448,48 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       data && typeof data === 'object'
         ? (data as Record<string, unknown>)
         : {}
-    const nextDuration = readVideoDurationSeconds(
-      dataRecord,
-      isStoryboardNode ? STORYBOARD_MAX_TOTAL_DURATION : 15,
-    )
+    // 节点未存时长时，兜底优先取剧配置的 maxVideoDuration，再到节点类型默认值
+    const configDuration = lensProjectConfig?.maxVideoDuration
+    const fallbackDuration =
+      typeof configDuration === 'number' && configDuration > 0
+        ? configDuration
+        : isStoryboardNode ? STORYBOARD_MAX_TOTAL_DURATION : 15
+    const nextDuration = readVideoDurationSeconds(dataRecord, fallbackDuration)
     setVideoDuration((prev) => (prev === nextDuration ? prev : nextDuration))
-  }, [data, isStoryboardNode, isVideoNode])
+  }, [data, isStoryboardNode, isVideoNode, lensProjectConfig])
 
   React.useEffect(() => {
     if (!isVideoNode || !videoModelConfig) return
 
     const patch: Record<string, unknown> = {}
-    const nextDuration = pickVideoDurationValue(videoModelConfig, videoDuration)
+    /**
+     * 校正优先级同样以剧配置为准：剧配置有值就用剧配置，没有才用节点当前值。
+     * 否则节点里存的旧画幅/分辨率会一直是「合法值」，把剧配置永久顶掉。
+     */
+    const configDuration = lensProjectConfig?.maxVideoDuration
+    const configSize = typeof lensProjectConfig?.screenRatio === 'string'
+      ? lensProjectConfig.screenRatio.trim().replace(/\s+/g, '')
+      : ''
+    const configResolution = typeof lensProjectConfig?.resolution === 'string'
+      ? normalizeVideoResolution(lensProjectConfig.resolution)
+      : ''
+
+    const nextDuration = pickVideoDurationValue(
+      videoModelConfig,
+      typeof configDuration === 'number' && configDuration > 0 ? configDuration : videoDuration,
+    )
     if (nextDuration !== null && nextDuration !== videoDuration) {
       setVideoDuration(nextDuration)
       Object.assign(patch, buildVideoDurationPatch(nextDuration))
     }
 
-    const nextSize = pickVideoSizeValue(videoModelConfig, videoSize)
+    const nextSize = pickVideoSizeValue(videoModelConfig, configSize || videoSize)
     if (nextSize !== null && nextSize !== videoSize) {
       setVideoSize(nextSize)
       patch.videoSize = nextSize
     }
 
-    const nextResolution = pickVideoResolutionValue(videoModelConfig, videoResolution)
+    const nextResolution = pickVideoResolutionValue(videoModelConfig, configResolution || videoResolution)
     if (nextResolution !== null && nextResolution !== videoResolution) {
       setVideoResolution(nextResolution)
       patch.videoResolution = nextResolution
@@ -4459,7 +4529,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (Object.keys(patch).length) {
       updateNodeData(id, patch)
     }
-  }, [aspect, id, isVideoNode, updateNodeData, videoDuration, videoModelConfig, videoResolution, videoSize])
+  }, [aspect, id, isVideoNode, updateNodeData, videoDuration, videoModelConfig, videoResolution, videoSize, lensProjectConfig])
 
   React.useEffect(() => {
     if (isVideoNode || !imageModelConfig) return
@@ -4477,7 +4547,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       patch.imageSize = nextImageSize
     }
 
-    const nextImageResolution = pickImageResolutionValue(imageModelConfig, imageResolution)
+    // 分辨率优先级：剧配置 imageResolution > 节点已存值 > 模型允许的首项
+    const configImageResolution = typeof lensProjectConfig?.imageResolution === 'string'
+      ? lensProjectConfig.imageResolution.trim()
+      : ''
+    const nextImageResolution = pickImageResolutionValue(imageModelConfig, configImageResolution || imageResolution)
     if (nextImageResolution && nextImageResolution !== imageResolution) {
       setImageResolution(nextImageResolution)
       patch.imageResolution = nextImageResolution
@@ -4487,7 +4561,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (Object.keys(patch).length) {
       updateNodeData(id, patch)
     }
-  }, [aspect, id, imageModelConfig, imageResolution, imageSize, isVideoNode, updateNodeData])
+  }, [aspect, id, imageModelConfig, imageResolution, imageSize, isVideoNode, lensProjectConfig, updateNodeData])
 
   React.useEffect(() => {
     if (!isVideoNode) return
@@ -7779,7 +7853,7 @@ const rewritePromptWithCharacters = React.useCallback(
     let badgeLabel = ''
     if (category === 1) {
       paletteKey = hasParent ? 'clone' : 'role'
-      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? '分身' : '角色')
+      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? '子造型' : '角色')
     } else if (category === 2) {
       paletteKey = hasParent ? 'subscene' : 'scene'
       badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? '子场景' : '场景')

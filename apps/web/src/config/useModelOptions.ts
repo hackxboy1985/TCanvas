@@ -327,6 +327,8 @@ export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
       value,
       label,
       vendor: undefined,
+      // 渠道：后端 /api/storyboardTask/submit 提交时必填，直接透传 lens 模型配置
+      channel: typeof item.channel === 'string' ? item.channel : undefined,
       // 不设 modelKey：显示优先 label（应用名），任务提交时用 value（应用 ID）
       modelKey: undefined,
       modelAlias: null,
@@ -377,7 +379,10 @@ export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
 
 /** lens 模式下的模型选项：按节点类型走 lens 现有模型接口（生图 /api/model/image，生视频 /api/model/shot_video） */
 async function getLensModelOptions(kind?: NodeKind): Promise<ModelOption[]> {
-  const cacheKey = `lens:${kind || 'default'}`
+  // image / imageEdit 共用同一个 lens 生图模型接口，缓存 key 必须归一，
+  // 否则同一份数据会被请求两次（node 各自挂载时各拉一遍）
+  const requestKind = kind === 'image' || kind === 'imageEdit' ? 'image' : (kind || 'default')
+  const cacheKey = `lens:${requestKind}`
   const cached = catalogOptionsCache.get(cacheKey)
   if (cached) return cached
   const inflight = catalogPromiseCache.get(cacheKey)
@@ -445,6 +450,57 @@ export async function resolveExecutableImageModel(params: {
 }): Promise<ResolvedExecutableImageModel> {
   const options = await preloadModelOptions(params.kind)
   return resolveExecutableImageModelFromOptions(options, params)
+}
+
+/**
+ * 预加载 lens 模型选项：由画布入口在挂载时调用，让节点首帧就能拿到模型能力
+ * （画幅/分辨率/时长区间），避免先渲染兜底值再被修正。
+ *
+ * @param kind 节点类型（video / image / imageEdit）；image 与 imageEdit 共用一次请求
+ * @returns 模型选项列表（与 useLensModelOptions 同源，共享缓存）
+ */
+export async function preloadLensModelOptions(kind: 'video' | 'image' | 'imageEdit'): Promise<ModelOption[]> {
+  return getLensModelOptions(kind)
+}
+
+/**
+ * lens 画布专用模型选项：始终走 lens 模型接口（生图 /api/model/image、生视频 /api/model/shot_video），
+ * 不依赖 URL 是否带 dramaId 判断模式。
+ *
+ * <p>画布内的 lens 节点（分镜节点等）只存在于 lens 画布，模型能力（画幅/分辨率/时长区间）
+ * 必须来自 lens 模型配置；用 {@link useModelOptions} 一旦模式判断不准就会拿到 catalog 数据，
+ * 导致画幅/分辨率缺失并静默退回兜底值。因此这里显式指定数据源。</p>
+ *
+ * @param kind 节点类型（video / image / imageEdit）
+ * @returns lens 模型选项列表
+ */
+export function useLensModelOptions(kind: 'video' | 'image' | 'imageEdit'): ModelOption[] {
+  const [options, setOptions] = useState<ModelOption[]>([])
+  const [refreshSeq, setRefreshSeq] = useState(0)
+
+  useEffect(() => {
+    let canceled = false
+    ;(async () => {
+      try {
+        const lensOptions = await getLensModelOptions(kind)
+        if (!canceled) setOptions(lensOptions)
+      } catch {
+        if (!canceled) setOptions([])
+      }
+    })()
+    return () => {
+      canceled = true
+    }
+  }, [kind, refreshSeq])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => setRefreshSeq((prev) => prev + 1)
+    window.addEventListener(MODEL_REFRESH_EVENT, handler)
+    return () => window.removeEventListener(MODEL_REFRESH_EVENT, handler)
+  }, [])
+
+  return options
 }
 
 export function useModelOptions(kind?: NodeKind): ModelOption[] {

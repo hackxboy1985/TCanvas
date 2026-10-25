@@ -41,7 +41,11 @@ import { useAuth } from '../auth/store'
 import { isLensMode } from '../config/useModelOptions'
 import { createServerAsset, listProjectFlows, listProjects, recoverUploadedServerAssetFile, saveProjectFlow, updateProjectTemplate, upsertProject, uploadServerAssetFile, type ProjectDto } from '../api/server'
 import { genTaskNodeId } from './nodes/taskNodeHelpers'
-import { CANVAS_CONFIG, IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from './utils/constants'
+import {
+  CANVAS_CONFIG,
+  IMAGE_NODE_DEFAULT_HEIGHT,
+  IMAGE_NODE_DEFAULT_WIDTH,
+} from './utils/constants'
 import { buildEdgeValidator } from './utils/edgeRules'
 import { buildCanvasThemeColors } from './utils/canvasTheme'
 import {
@@ -54,7 +58,8 @@ import {
 import { usePreventBrowserSwipeNavigation } from '../utils/usePreventBrowserSwipeNavigation'
 import { formatErrorMessage } from './utils/formatErrorMessage'
 import { getPointToRectDistance, screenPathIntersectsRect } from './utils/connectionAutoSnap'
-import { getNodeAbsPosition, getNodeSize } from './utils/nodeBounds'
+import { getNodeAbsPosition, getNodeAbsRect, getNodeSize } from './utils/nodeBounds'
+import { focusNodeInViewport } from './utils/nodeFocus'
 import { downloadGroupAssets } from './utils/groupAssetDownload'
 import { GroupTemplateModal, type TemplateSaveMode, type TemplateVisibility } from './components/GroupTemplateModal'
 import { CanvasBottomToolbar } from './components/CanvasBottomToolbar'
@@ -2130,34 +2135,25 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const target = _evt?.target as HTMLElement | null
     if (target && typeof target.closest === 'function'
       && (target.closest('.react-flow__node-toolbar') || target.closest('[data-no-node-dblclick="1"]'))) return
-    // 双击统一「放大到该节点」：分镜、lens 资产投影（角色/场景/道具）、
-    // 图片编辑（角度/打光等衍生节点）、自由图片节点行为完全一致。
+    // 双击统一「放大到该节点」：所有生图节点（自由图片、图片编辑、lens 资产投影角色/场景/道具）、
+    // 分镜、视频节点行为完全一致，均以角色节点为准：居中 + 120% + 不小于 80%。
     // 图片大图预览由节点上的预览按钮触发，不再占用双击。
     const source = String((node.data as { source?: string })?.source ?? '')
     const nodeKind = String((node.data as { kind?: string })?.kind ?? '')
-    if (node.type === 'lensShot' || source === 'lens_projection' || nodeKind === 'image' || nodeKind === 'imageEdit') {
-      const w = Number(node.measured?.width ?? node.width ?? 400)
-      const h = Number(node.measured?.height ?? node.height ?? 300)
-      // 组内节点 position 为相对坐标：累加父链得到绝对坐标
+    const isImageLikeTaskNode = getTaskNodeCoreType(nodeKind) === 'image'
+    if (
+      node.type === 'lensShot'
+      || source === 'lens_projection'
+      || isImageLikeTaskNode
+      || getTaskNodeCoreType(nodeKind) === 'video'
+    ) {
+      // 组内子节点（子造型/子场景）的 position 是相对父级组框的坐标，measured 尺寸也可能
+      // 滞后于媒体加载：只按位置累加算中心容易偏，因此统一用节点真实 DOM 矩形换算画布坐标，
+      // 取不到 DOM 时再回退到位置累加。
       const allNodes = useRFStore.getState().nodes
       const byId = new Map(allNodes.map((n) => [n.id, n] as const))
-      let absX = Number(node.position?.x ?? 0)
-      let absY = Number(node.position?.y ?? 0)
-      let parentId = (node as unknown as { parentId?: string }).parentId
-      while (parentId) {
-        const parent = byId.get(parentId)
-        if (!parent) break
-        absX += Number(parent.position?.x ?? 0)
-        absY += Number(parent.position?.y ?? 0)
-        parentId = (parent as unknown as { parentId?: string }).parentId
-      }
-      const cx = absX + (Number.isFinite(w) ? w / 2 : 200)
-      const cy = absY + (Number.isFinite(h) ? h / 2 : 150)
-      if (Number.isFinite(cx) && Number.isFinite(cy)) {
-        // 固定放大倍率，保证双击必有视图反馈
-        rf.setCenter(cx, cy, { zoom: 1.2, duration: 250 })
-        return
-      }
+      const focused = focusNodeInViewport(rf, node.id, _evt, () => getNodeAbsRect(node, byId))
+      if (focused) return
     }
     focusNodeSubgraph(node.id)
     setTimeout(() => rf.fitView?.({ padding: 0.2 }), 50)
@@ -3469,6 +3465,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         onNodeDragStop={viewOnly ? undefined : onNodeDragStop}
         onNodeClick={viewOnly ? undefined : onNodeClick}
         onNodeDoubleClick={viewOnly ? undefined : onNodeDoubleClick}
+        // 关闭 React Flow 内置的双击缩放：它在画布容器上挂了 d3 的 dblclick 监听，
+        // 命中时会 stopPropagation，使双击事件到不了 React 根监听、节点双击处理不会触发。
+        // 可拖拽节点带 nopan 类会被 d3 过滤器拦下，所以只有「不可拖拽的节点」（如分镜组/父子组
+        // 内的子造型、子场景、分镜）会中招——表现就是双击后画布被放大 2 倍且不居中。
+        // 双击聚焦统一由 onNodeDoubleClick 处理，这里必须关掉内置行为。
+        zoomOnDoubleClick={false}
         onMoveEnd={(_evt, vp) => {
           setCanvasViewport(vp)
           const lastPointer = lastPointerScreenRef.current

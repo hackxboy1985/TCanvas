@@ -701,19 +701,70 @@ export async function saveFlow(dramaId: string, episodeNum: number, payload: { n
   })
 }
 
+/** 剧配置在 sessionStorage 的缓存 key（按剧隔离，刷新一次请求一次） */
+function buildStyleConfigCacheKey(dramaId: string): string {
+  return `lens_project_config_${dramaId}`
+}
+
 /**
  * 剧的风格配置（角色/场景生图、分镜生视频风格）
  *
  * <p>该接口返回裸业务体（无 RuoYi AjaxResult 的 code 包装），
  * 必须走 lensFetchBare，否则会被业务码校验误判为失败。
+ *
+ * <p><b>缓存策略</b>：结果存 sessionStorage（刷新一次请求一次），
+ * 缓存读写全部收敛在本函数内，调用方不需要自己判断缓存。
+ *
+ * @param dramaId     剧 ID
+ * @param forceRequest 是否跳过缓存强制请求（默认 false）；
+ *                     页面打开时才传 true，其余场景读缓存即可
+ * @returns 解析后的扁平配置；接口无数据或解析失败时返回 null
  */
-export async function getStyleConfig(dramaId: string): Promise<Record<string, unknown> | null> {
+export async function getStyleConfig(
+  dramaId: string,
+  forceRequest = false,
+): Promise<Record<string, unknown> | null> {
+  const cacheKey = buildStyleConfigCacheKey(dramaId)
+  // 未强制刷新：优先读缓存
+  if (!forceRequest) {
+    try {
+      const cached = window.sessionStorage.getItem(cacheKey)
+      if (cached) return JSON.parse(cached) as Record<string, unknown>
+    } catch {
+      // 缓存损坏按未命中处理，继续走接口
+    }
+  }
+
   const raw = await lensFetchBare('/api/sysApi/baseConfig/list', {
     method: 'POST',
     body: JSON.stringify({ pkg: String(dramaId), type: 'style_config' }),
   })
   if (!raw || typeof raw !== 'object') return null
-  return raw as Record<string, unknown>
+
+  // 解析嵌套结构：style_config -> { key: { valueStr: "JSON" } }，合并为扁平对象
+  const parsedConfig: Record<string, unknown> = {}
+  const styleConfig = (raw as Record<string, unknown>).style_config
+  if (styleConfig && typeof styleConfig === 'object') {
+    Object.values(styleConfig as Record<string, unknown>).forEach((item) => {
+      if (item && typeof item === 'object') {
+        const valueStr = (item as Record<string, unknown>).valueStr
+        if (typeof valueStr === 'string') {
+          try {
+            Object.assign(parsedConfig, JSON.parse(valueStr) as Record<string, unknown>)
+          } catch {
+            // 单条 valueStr 解析失败不影响其余配置项
+          }
+        }
+      }
+    })
+  }
+
+  try {
+    window.sessionStorage.setItem(cacheKey, JSON.stringify(parsedConfig))
+  } catch {
+    // 缓存写入失败不影响本次返回
+  }
+  return parsedConfig
 }
 
 /** lens 模型条目（/api/model/* 返回 data 数组元素） */

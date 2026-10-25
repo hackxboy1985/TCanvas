@@ -36,6 +36,7 @@ import {
   lensErrorReason,
   type LensScriptContent,
 } from '../api/lens'
+import { preloadLensModelOptions } from '../config/useModelOptions'
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
 import { TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
@@ -739,51 +740,28 @@ export default function LensCanvasApp(): JSX.Element {
   const [assetLibraryOpened, setAssetLibraryOpened] = useState(false)
   const [assetLibraryMode, setAssetLibraryMode] = useState<'manage' | 'select'>('manage')
   
-  // 项目配置（从后端获取并缓存到 sessionStorage，用于画布节点默认值）
-  const [projectConfig, setProjectConfig] = useState<Record<string, unknown> | null>(() => {
-    if (typeof window === 'undefined' || !dramaId) return null
-    try {
-      const cached = window.sessionStorage.getItem(`lens_project_config_${dramaId}`)
-      return cached ? JSON.parse(cached) : null
-    } catch {
-      return null
-    }
-  })
-
-  // 获取项目配置（仅在没有缓存时请求接口）
+  // 加载剧配置到全局 store，供画布节点读取默认模型/画幅/分辨率。
+  // 缓存策略收敛在 getStyleConfig 内部：本处传 forceRequest=true，
+  // 保证每次打开页面（含刷新）都拿一次最新配置，其余场景读缓存不重复请求。
+  //
+  // 同时预加载模型列表：节点渲染时就能拿到模型能力（画幅/分辨率/时长区间），
+  // 避免先按兜底值渲染再被修正的闪烁。image 与 imageEdit 共用一次请求。
   useEffect(() => {
-    if (!dramaId || projectConfig !== null) return
-    getStyleConfig(dramaId)
+    if (!dramaId) return
+    getStyleConfig(dramaId, true)
       .then((config) => {
-        if (config) {
-          // 解析嵌套的配置数据：style_config -> { key: { valueStr: "JSON" } }
-          let parsedConfig: Record<string, unknown> = {}
-          if (config.style_config && typeof config.style_config === 'object') {
-            Object.values(config.style_config).forEach((item: any) => {
-              if (item && typeof item.valueStr === 'string') {
-                try {
-                  const parsed = JSON.parse(item.valueStr)
-                  parsedConfig = { ...parsedConfig, ...parsed }
-                } catch {
-                  // ignore parse error
-                }
-              }
-            })
-          }
-          
-          setProjectConfig(parsedConfig)
-          setLensProjectConfig(parsedConfig)
-          try {
-            window.sessionStorage.setItem(`lens_project_config_${dramaId}`, JSON.stringify(parsedConfig))
-          } catch {
-            // ignore
-          }
-        }
+        // 接口无配置时保持 store 为 null，节点按模型接口默认值兜底
+        if (config) setLensProjectConfig(config)
       })
       .catch((err) => {
-        console.warn('获取项目配置失败:', err)
+        console.warn('[lens] 剧配置加载失败:', err)
       })
-  }, [dramaId, projectConfig, setLensProjectConfig])
+    // 预加载失败不阻断画布：节点内各自有兜底，此处只放弃预热
+    void Promise.all([
+      preloadLensModelOptions('video'),
+      preloadLensModelOptions('image'),
+    ]).catch(() => undefined)
+  }, [dramaId, setLensProjectConfig])
   
   // 已保存 flow 里的布局设置（排列方向 + 分组开关）：与当前一致时沿用保存的位置，不重新排列
   const loadedLayoutMetaRef = useRef<{ direction: 'column' | 'flow'; groupOn: boolean } | null>(null)

@@ -25,6 +25,8 @@ import {
   IconX,
 } from '@tabler/icons-react'
 import { useRFStore } from '../../canvas/store'
+import { getNodeAbsRect } from '../utils/nodeBounds'
+import { focusNodeInViewport } from '../utils/nodeFocus'
 import { useMantineColorScheme } from '@mantine/core'
 import { LensReferencePicker } from '../components/LensReferencePicker'
 import { connectShotReferences, disconnectShotReference, referenceFromNode, referenceKey } from './lensShotReferences'
@@ -36,7 +38,7 @@ import {
   findModelOptionByIdentifier,
   getModelOptionRequestAlias,
   readLensModelIsDefault,
-  useModelOptions,
+  useLensModelOptions,
 } from '../../config/useModelOptions'
 import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
@@ -362,21 +364,25 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   const hasResult = Boolean(data.selectedImageUrl && String(data.selectedImageUrl).trim())
   // 分镜时长（秒）：优先 lens 分镜 time 字段，有视频时用视频实际时长
   const [mediaSeconds, setMediaSeconds] = useState<number | null>(typeof data.time === 'number' && data.time > 0 ? data.time : null)
-  // lens 模式下 useModelOptions('video') 走 /api/model/shot_video（分镜生视频模型）
-  const models = useModelOptions('video')
+  // 分镜节点只存在于 lens 画布：显式走 /api/model/shot_video，不依赖 URL 判断模式
+  // （模型能力 supportedRatios / resolutions 决定画幅与分辨率选项，取错数据源会静默回退兜底值）
+  const models = useLensModelOptions('video')
+  // 剧配置（唯一权威来源）：模型/画幅/分辨率/时长均以它为准
+  const lensProjectConfig = useUIStore((state) => state.lensProjectConfig)
   // 编辑区草稿（选中展开时显示，保存时写回节点 + 同步分镜板）
   const [scriptDraft, setScriptDraft] = useState<string>(String(data.scriptContent ?? ''))
   const [timeDraft, setTimeDraft] = useState<string>(String(data.timeOfDay ?? ''))
-  const [modelValue, setModelValue] = useState<string | null>(typeof data.model === 'string' && data.model ? data.model : null)
+  // 模型：剧配置 autoGenerateModel 优先，其次节点已存值，最后由接口默认/首项兜底（见下方 effect）
+  const [modelValue, setModelValue] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<string>('')
   // 编辑模式：prompt=分镜提示词（默认展示），script=分镜剧本
   const [promptMode, setPromptMode] = useState<'script' | 'prompt'>('prompt')
   const [promptDraft, setPromptDraft] = useState<string>(String(data.prompt ?? ''))
   // 智能提示词生成中（能力迁移自视频节点底部的智能提示词按钮）
   const [smartPromptLoading, setSmartPromptLoading] = useState<boolean>(false)
-  // 画幅 / 分辨率（生成参数，随节点持久化）
-  const [aspectValue, setAspectValue] = useState<string>(String(data.aspectRatio ?? '16:9'))
-  const [resolutionValue, setResolutionValue] = useState<string>(String(data.resolution ?? '1080p'))
+  // 画幅 / 分辨率：剧配置 screenRatio / resolution 优先，其次节点已存值，最后按模型能力收敛
+  const [aspectValue, setAspectValue] = useState<string>(String(data.aspectRatio ?? ''))
+  const [resolutionValue, setResolutionValue] = useState<string>(String(data.resolution ?? ''))
   const selectedModel = models.find((m) => m.value === modelValue)
   // 生成时长 / 画幅 / 分辨率：全部随所选模型的能力配置联动（解析逻辑见 lensShotModelParams）
   const [durationValue, setDurationValue] = useState<number | null>(
@@ -386,6 +392,13 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   const durationOptions = useMemo(() => buildDurationOptions(minDuration, maxDuration), [minDuration, maxDuration])
   const aspectOptions = useMemo(() => resolveModelAspectOptions(selectedModel?.meta), [selectedModel])
   const resolutionOptions = useMemo(() => resolveModelResolutionOptions(selectedModel?.meta), [selectedModel])
+  // 剧配置指定的画幅/分辨率（配置页与模型能力同源，正常情况下必然命中模型选项）
+  const configAspect = typeof lensProjectConfig?.screenRatio === 'string'
+    ? lensProjectConfig.screenRatio.trim().replace(/\s+/g, '')
+    : ''
+  const configResolution = typeof lensProjectConfig?.resolution === 'string'
+    ? lensProjectConfig.resolution.trim()
+    : ''
   // 与提交使用相同的生成时长，报价来自后端计费器；不把价格保存到 flow。
   const consumePoints = useMemo(() => selectedModel
     ? resolveModelGenerationCredits({
@@ -395,39 +408,68 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         durationSeconds: clampDuration(durationValue, minDuration, maxDuration),
       })
     : null, [selectedModel, resolutionValue, durationValue, minDuration, maxDuration])
-  // 换模型后若当前时长超出该模型区间，收敛到边界值（避免下发超限时长被渠道拒绝）
+  // 时长优先级：剧配置 maxVideoDuration > 节点已存值 > 模型区间边界收敛
   useEffect(() => {
-    setDurationValue((prev) => clampDuration(prev, minDuration, maxDuration))
-  }, [minDuration, maxDuration])
+    const configDuration = lensProjectConfig?.maxVideoDuration
+    const next = typeof configDuration === 'number' && configDuration > 0 ? configDuration : null
+    setDurationValue((prev) => clampDuration(next ?? prev, minDuration, maxDuration))
+  }, [minDuration, maxDuration, lensProjectConfig])
 
   // 换模型后若当前画幅/分辨率不在该模型支持范围内，收敛到该模型允许的值
   // （避免下发模型不支持的画幅/分辨率，被渠道直接拒绝或按默认值静默改写）
   // 依赖里同时带上节点持久化值：切集/刷新后 data.aspectRatio 变化时重新按当前模型收敛
+  // 画幅/分辨率优先级：剧配置 > 节点已存值 > 模型允许的首项
+  // 剧配置有值时直接采用（已补入选项列表），不再经过「不在列表就换成首项」的回退
   useEffect(() => {
+    if (aspectOptions.length === 0) return
     const persisted = typeof data.aspectRatio === 'string' && data.aspectRatio ? data.aspectRatio : null
-    setAspectValue((prev) => convergeToOptions(persisted ?? prev, aspectOptions) ?? prev)
-  }, [aspectOptions, data.aspectRatio])
+    setAspectValue((prev) => convergeToOptions(configAspect || persisted || prev, aspectOptions) ?? prev)
+  }, [configAspect, aspectOptions, data.aspectRatio])
   useEffect(() => {
+    if (resolutionOptions.length === 0) return
     const persisted = typeof data.resolution === 'string' && data.resolution ? data.resolution : null
-    setResolutionValue((prev) => convergeToOptions(persisted ?? prev, resolutionOptions) ?? prev)
-  }, [resolutionOptions, data.resolution])
+    setResolutionValue((prev) => convergeToOptions(configResolution || persisted || prev, resolutionOptions) ?? prev)
+  }, [configResolution, resolutionOptions, data.resolution])
 
-  // 模型默认值：节点未存模型时取剧配置页配置的默认生视频模型（后端 /api/model/shot_video 的 markDefault → isDefault），
-  // 未配置默认模型才回退到列表第一个模型，避免「模型默认为空」导致无法直接生成。
-  //
-  // 注意必须用「渲染期派生」而不是 effect：模型列表首帧为空（异步加载），
-  // 若依赖 effect 会出现「下拉框先显示列表第一项、随后被改回默认模型」的闪烁。
+  // 异常自检：仅当「剧配置缺失」或「最终选中值与剧配置不一致」时告警，正常情况不输出。
+  // 检查的是 state 最终值而非中间值，可区分「模型列表未加载完的瞬时兜底」与「真的没生效」。
   useEffect(() => {
-    const current = typeof modelValue === 'string' ? modelValue.trim() : ''
-    if (current) return
+    if (aspectOptions.length === 0 || resolutionOptions.length === 0) return
+    if (!lensProjectConfig) {
+      console.warn('[LensShotNode] 剧配置为空', { id })
+      return
+    }
+    if (configAspect && aspectValue !== configAspect) {
+      console.warn('[LensShotNode] 画幅最终值未生效', {
+        id, configAspect, aspectValue, aspectOptions,
+      })
+    }
+    if (configResolution && resolutionValue !== configResolution) {
+      console.warn('[LensShotNode] 分辨率最终值未生效', {
+        id, configResolution, resolutionValue, resolutionOptions,
+      })
+    }
+  }, [id, lensProjectConfig, configAspect, configResolution, aspectValue, resolutionValue, aspectOptions, resolutionOptions])
+
+  // 模型选择优先级：剧配置 autoGenerateModel > 节点已存值 > 接口默认(isDefault) > 列表首项
+  // 剧配置是唯一权威来源，不能被节点里存的旧值覆盖（否则改了剧配置对已有节点不生效）。
+  useEffect(() => {
     if (models.length === 0) return
+    // 1) 剧配置指定的模型
+    const configModel = lensProjectConfig?.autoGenerateModel
+    const configValue = configModel === undefined || configModel === null ? '' : String(configModel).trim()
+    const configMatched = configValue ? findModelOptionByIdentifier(models, configValue) : null
+    if (configMatched && !configMatched.disabled) {
+      if (modelValue !== configMatched.value) setModelValue(configMatched.value)
+      return
+    }
+    // 2) 节点已存值
+    if (modelValue) return
+    // 3) 接口默认 / 首项
     const configuredDefault = models.find((option) => readLensModelIsDefault(option.meta) && !option.disabled)
     const fallback = configuredDefault || models[0]
-    if (!fallback) return
-    setModelValue(fallback.value)
-    // 持久化到节点数据：flow 只存模型 id（模型能力/报价仍在 lens_application，不复制到 flow）
-    useRFStore.getState().updateNodeData(id, { model: fallback.value })
-  }, [id, models, modelValue])
+    if (fallback) setModelValue(fallback.value)
+  }, [models, modelValue, lensProjectConfig])
 
   // 媒体实际宽高比（用于节点高度随视频比例：宽度恒 384 填满，高度按比例）
   const [mediaAspect, setMediaAspect] = useState<number | null>(null)
@@ -446,15 +488,6 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     setTimeDraft(String(data.timeOfDay ?? ''))
     setPromptDraft(String(data.prompt ?? ''))
   }, [data.scriptContent, data.timeOfDay, data.prompt])
-
-  // 模型回填：只跟随「节点数据里真实的模型变化」（如切集/刷新后后端投影了新模型）。
-  // 不能在 data.model 为空时把本地已选模型清掉 —— 那会把默认模型/用户选择打回空值，
-  // 表现为「下拉框短暂显示默认模型后又变回列表第一项」。
-  useEffect(() => {
-    const persisted = typeof data.model === 'string' && data.model ? data.model : ''
-    if (!persisted) return
-    setModelValue((prev) => (prev === persisted ? prev : persisted))
-  }, [data.model])
 
   /** 聚焦或播放当前视频时，暂停同一画布的其他视频，保留其播放进度。 */
   const pauseOtherVideos = useCallback(() => {
@@ -486,22 +519,11 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     playCurrentVideo()
     const node = rf.getNode(id)
     if (!node) return
-    const w = Number(node?.measured?.width ?? node?.width ?? 400)
-    const h = Number(node?.measured?.height ?? node?.height ?? 300)
-    // 分镜组内节点的 position 是相对组坐标：累加父链得到绝对坐标，否则放大位置对不上
+    // 分镜组内节点的 position 是相对组坐标：统一走 focusNodeInViewport（优先用真实 DOM 矩形），
+    // 取不到 DOM 时回退到父链累加。
     const storeNodes = useRFStore.getState().nodes
     const byId = new Map(storeNodes.map((n) => [n.id, n] as const))
-    let absX = Number(node.position.x ?? 0)
-    let absY = Number(node.position.y ?? 0)
-    let parentId = (node as unknown as { parentId?: string }).parentId
-    while (parentId) {
-      const parent = byId.get(parentId)
-      if (!parent) break
-      absX += Number(parent.position.x ?? 0)
-      absY += Number(parent.position.y ?? 0)
-      parentId = (parent as unknown as { parentId?: string }).parentId
-    }
-    rf.setCenter(absX + w / 2, absY + h / 2, { zoom: 1.2, duration: 250 })
+    focusNodeInViewport(rf, id, e, () => getNodeAbsRect(node, byId))
   }, [rf, id, pauseOtherVideos, playCurrentVideo])
 
   /** 播放/暂停切换 */
@@ -530,7 +552,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     return String(scriptDraft || '').trim()
   }, [promptDraft, scriptDraft])  /** 保存到分镜板：写回节点数据 + /api/storyboard/edit */
   const handleSave = useCallback(async () => {
-    useRFStore.getState().updateNodeData(id, { scriptContent: scriptDraft, timeOfDay: timeDraft, model: modelValue })
+    useRFStore.getState().updateNodeData(id, { scriptContent: scriptDraft, timeOfDay: timeDraft })
     const storyboardId = String(data.entityId ?? '')
     const dramaId = String(data.sourceProjectId ?? '')
     if (storyboardId && dramaId) {
@@ -605,7 +627,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         return
       }
       // 精修模型沿用节点当前选择的模型（lens 模型 value 即应用ID，接口接受该标识）
-      const candidateModel = String(data.model || modelValue || '').trim()
+      const candidateModel = String(modelValue || data.model || '').trim()
       const matchedModel = candidateModel ? findModelOptionByIdentifier(models, candidateModel) : null
       const promptRefineModelAlias = matchedModel ? getModelOptionRequestAlias(models, matchedModel.value) : ''
       const taskRes = await runPublicTask(apiKey, {
@@ -636,7 +658,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     }
   }, [
     aspectValue,
-    data.model,
+    modelValue,
     data.scriptContent,
     data.time,
     durationValue,
