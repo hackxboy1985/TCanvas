@@ -35,6 +35,22 @@ const POSE_BONE_STROKE_WIDTH = Math.round(4 * POSE_RENDER_SCALE)
 const POSE_POINT_RADIUS = Math.round(8 * POSE_RENDER_SCALE)
 const POSE_POINT_STROKE_WIDTH = Math.round(2 * POSE_RENDER_SCALE)
 const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
+/**
+ * 左侧画布最大边长（按模式区分）。
+ *
+ * <p>画布宽度跟随左半部自适应，但必须同时受视口高度约束，否则 1:1 画布会把
+ * 弹窗撑出滚动条。不同模式左面板的附加控件高度不同，预留值也不同：</p>
+ * <ul>
+ *   <li>局部修改：只有圈选提示与操作行</li>
+ *   <li>姿势调整：额外有「补充提示词」输入框（2~4 行自适应）与底部按钮行</li>
+ *   <li>尺寸调整：额外有尺寸预设选择与自定义宽高输入</li>
+ * </ul>
+ * <p>剩余高度全部给画布；同时限制不超过面板可用宽度，保证正方形不变形。</p>
+ */
+const POSE_CANVAS_DEPTH_MAX_SIZE_CSS = 'min(100%, calc(92vh - 260px))'
+const POSE_CANVAS_POSE_MAX_SIZE_CSS = 'min(100%, calc(92vh - 430px))'
+const POSE_CANVAS_SIZE_MAX_SIZE_CSS = 'min(100%, calc(92vh - 400px))'
+
 /** 圈选笔迹默认宽度（中档） */
 const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
 /**
@@ -819,10 +835,12 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               className="pose-editor__mask-canvas"
               style={{
                 position: 'relative',
-                // 占满左半部整个面板宽度，正方形随宽度自适应
+                // 占满左半部整个面板宽度，正方形随宽度自适应，并受视口高度约束
                 width: '100%',
+                maxWidth: POSE_CANVAS_DEPTH_MAX_SIZE_CSS,
                 aspectRatio: '1 / 1',
                 height: 'auto',
+                margin: '0 auto',
                 borderRadius: 12,
                 border: `1px solid ${options.inlineDividerColor}`,
                 overflow: 'hidden',
@@ -937,8 +955,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       height={POSE_CANVAS_SIZE.height}
                       style={{
                         width: '100%',
+                        maxWidth: POSE_CANVAS_POSE_MAX_SIZE_CSS,
                         aspectRatio: '1 / 1',
                         height: 'auto',
+                        margin: '0 auto',
                         borderRadius: 12,
                         border: `1px solid ${options.inlineDividerColor}`,
                         background: options.isDarkUi ? 'rgba(5,8,16,0.92)' : 'rgba(245,248,255,0.95)',
@@ -1111,8 +1131,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       className="pose-editor__size-preview-stage"
                       style={{
                         width: '100%',
+                        maxWidth: POSE_CANVAS_SIZE_MAX_SIZE_CSS,
                         aspectRatio: '1 / 1',
                         height: 'auto',
+                        margin: '0 auto',
                         borderRadius: 12,
                         border: `1px solid ${options.inlineDividerColor}`,
                         background: options.isDarkUi ? 'rgba(5,8,16,0.92)' : 'rgba(245,248,255,0.95)',
