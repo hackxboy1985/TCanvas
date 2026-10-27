@@ -19,29 +19,57 @@ import {
 
 export type PosePoint = { name: string; x: number; y: number }
 
-export const POSE_CANVAS_SIZE = { width: 260, height: 260 }
-const EDIT_PANEL_HEIGHT = POSE_CANVAS_SIZE.height + 220
+/**
+ * 左侧原图/圈选画布的像素尺寸。
+ * 画布放大不会改变圈选与引导图的坐标语义（仍以该尺寸为基准等比换算），
+ * 只是让用户看得更清楚、圈选更精细。
+ */
+export const POSE_CANVAS_SIZE = { width: 700, height: 700 }
+/** 火柴人默认点/线宽原本按 260px 画布设计，画布放大后按同比例缩放，保持视觉比例不变 */
+const POSE_BASE_CANVAS_SIZE = 260
+/** 画布相对基准设计稿的缩放比 */
+const POSE_RENDER_SCALE = POSE_CANVAS_SIZE.width / POSE_BASE_CANVAS_SIZE
+/** 火柴人肢体线宽 */
+const POSE_BONE_STROKE_WIDTH = Math.round(4 * POSE_RENDER_SCALE)
+/** 火柴人关节点半径 / 描边宽度 / 拖拽命中半径 */
+const POSE_POINT_RADIUS = Math.round(8 * POSE_RENDER_SCALE)
+const POSE_POINT_STROKE_WIDTH = Math.round(2 * POSE_RENDER_SCALE)
+const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
+/** 圈选笔迹默认宽度（中档） */
+const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
+/**
+ * 弹窗宽度：占视口 80%，超宽屏限制 1600px 上限。
+ *
+ * <p>Mantine 的 size 属性只接受数字或预设名（内部 rem 换算依赖根字号），
+ * 因此宽度统一用 CSS 变量 --modal-size 控制，浏览器原生计算，不受根字号影响。</p>
+ */
+const MODAL_WIDTH_CSS = 'min(1600px, 80vw)'
+/** 圈选笔触档位：细 / 中 / 粗 */
+const MASK_BRUSH_THIN = Math.round(MASK_STROKE_WIDTH / 2)
+const MASK_BRUSH_MEDIUM = MASK_STROKE_WIDTH
+const MASK_BRUSH_THICK = Math.round(MASK_STROKE_WIDTH * 1.8)
 
 export const createDefaultPosePoints = (): PosePoint[] => {
   const w = POSE_CANVAS_SIZE.width
   const h = POSE_CANVAS_SIZE.height
   const cx = w / 2
   const cy = h / 2
+  const scale = w / POSE_BASE_CANVAS_SIZE
   return [
-    { name: 'head', x: cx, y: cy - 110 },
-    { name: 'neck', x: cx, y: cy - 80 },
-    { name: 'shoulderL', x: cx - 40, y: cy - 70 },
-    { name: 'elbowL', x: cx - 70, y: cy - 20 },
-    { name: 'wristL', x: cx - 60, y: cy + 40 },
-    { name: 'shoulderR', x: cx + 40, y: cy - 70 },
-    { name: 'elbowR', x: cx + 70, y: cy - 20 },
-    { name: 'wristR', x: cx + 60, y: cy + 40 },
-    { name: 'hipL', x: cx - 25, y: cy - 10 },
-    { name: 'kneeL', x: cx - 30, y: cy + 70 },
-    { name: 'ankleL', x: cx - 25, y: cy + 130 },
-    { name: 'hipR', x: cx + 25, y: cy - 10 },
-    { name: 'kneeR', x: cx + 30, y: cy + 70 },
-    { name: 'ankleR', x: cx + 25, y: cy + 130 },
+    { name: 'head', x: cx, y: cy - 110 * scale },
+    { name: 'neck', x: cx, y: cy - 80 * scale },
+    { name: 'shoulderL', x: cx - 40 * scale, y: cy - 70 * scale },
+    { name: 'elbowL', x: cx - 70 * scale, y: cy - 20 * scale },
+    { name: 'wristL', x: cx - 60 * scale, y: cy + 40 * scale },
+    { name: 'shoulderR', x: cx + 40 * scale, y: cy - 70 * scale },
+    { name: 'elbowR', x: cx + 70 * scale, y: cy - 20 * scale },
+    { name: 'wristR', x: cx + 60 * scale, y: cy + 40 * scale },
+    { name: 'hipL', x: cx - 25 * scale, y: cy - 10 * scale },
+    { name: 'kneeL', x: cx - 30 * scale, y: cy + 70 * scale },
+    { name: 'ankleL', x: cx - 25 * scale, y: cy + 130 * scale },
+    { name: 'hipR', x: cx + 25 * scale, y: cy - 10 * scale },
+    { name: 'kneeR', x: cx + 30 * scale, y: cy + 70 * scale },
+    { name: 'ankleR', x: cx + 25 * scale, y: cy + 130 * scale },
   ]
 }
 
@@ -102,6 +130,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
   const [draggingIndex, setDraggingIndex] = React.useState<number | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [maskDrawing, setMaskDrawing] = React.useState(false)
+  // 圈选笔触宽度：只影响之后画的新笔迹，不会清空已有圈选
+  const [maskBrushSize, setMaskBrushSize] = React.useState<number>(MASK_BRUSH_MEDIUM)
   const [maskDirty, setMaskDirty] = React.useState(false)
   /**
    * 本次是否显式点过「清除圈选」。
@@ -200,7 +230,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     ctx.fillRect(0, 0, POSE_CANVAS_SIZE.width, POSE_CANVAS_SIZE.height)
 
     ctx.strokeStyle = options.isDarkUi ? '#7dd3fc' : '#0ea5e9'
-    ctx.lineWidth = 4
+    ctx.lineWidth = POSE_BONE_STROKE_WIDTH
     ctx.lineCap = 'round'
     lines.forEach(([a, b]) => {
       const pa = points.find((p) => p.name === a)
@@ -216,8 +246,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       ctx.beginPath()
       ctx.fillStyle = options.isDarkUi ? '#e0f2fe' : '#0f172a'
       ctx.strokeStyle = options.isDarkUi ? '#38bdf8' : '#0ea5e9'
-      ctx.lineWidth = 2
-      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2)
+      ctx.lineWidth = POSE_POINT_STROKE_WIDTH
+      ctx.arc(p.x, p.y, POSE_POINT_RADIUS, 0, Math.PI * 2)
       ctx.fill()
       ctx.stroke()
     })
@@ -258,7 +288,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.strokeStyle = '#ff7a1a'
-    ctx.lineWidth = 18
+    ctx.lineWidth = MASK_STROKE_WIDTH
     ctx.globalAlpha = 0.92
     ctx.globalCompositeOperation = 'source-over'
     ctx.shadowBlur = 0
@@ -308,9 +338,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       const canvas = maskCanvasRef.current
       const ctx = maskCtxRef.current
       if (!canvas || !ctx) return
+      // 同火柴人画布：按 CSS 与内部像素尺寸的比例换算，保证圈选位置与所见一致
       const rect = canvas.getBoundingClientRect()
-      const x = evt.clientX - rect.left
-      const y = evt.clientY - rect.top
+      const x = (evt.clientX - rect.left) * (POSE_CANVAS_SIZE.width / Math.max(1, rect.width))
+      const y = (evt.clientY - rect.top) * (POSE_CANVAS_SIZE.height / Math.max(1, rect.height))
 
       if (phase === 'down') {
         setMaskDrawing(true)
@@ -318,6 +349,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         setMaskDirty(true)
         setMaskCleared(false)
         lastMaskPointRef.current = { x, y }
+        // 笔触宽度在每次下笔时应用：调粗细只影响后续笔迹，已画好的保持不变
+        ctx.lineWidth = maskBrushSize
         ctx.beginPath()
         ctx.moveTo(x, y)
         ctx.stroke()
@@ -336,7 +369,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       maskDrawingRef.current = false
       lastMaskPointRef.current = null
     },
-    [maskEnabled],
+    [maskBrushSize, maskEnabled],
   )
 
   const clearMask = React.useCallback(() => {
@@ -353,12 +386,13 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     (evt: React.MouseEvent<HTMLCanvasElement>, phase: PointerPhase) => {
       const canvas = canvasRef.current
       if (!canvas) return
+      // 画布 CSS 尺寸随左半部宽度自适应，与内部像素尺寸不一致，必须按比例换算
       const rect = canvas.getBoundingClientRect()
-      const x = evt.clientX - rect.left
-      const y = evt.clientY - rect.top
+      const x = (evt.clientX - rect.left) * (POSE_CANVAS_SIZE.width / Math.max(1, rect.width))
+      const y = (evt.clientY - rect.top) * (POSE_CANVAS_SIZE.height / Math.max(1, rect.height))
 
       if (phase === 'down') {
-        const hitIndex = points.findIndex((p) => Math.hypot(p.x - x, p.y - y) <= 12)
+        const hitIndex = points.findIndex((p) => Math.hypot(p.x - x, p.y - y) <= POSE_POINT_HIT_RADIUS)
         if (hitIndex >= 0) {
           setDraggingIndex(hitIndex)
         }
@@ -709,6 +743,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     }
   }, [activeBaseImageUrl, requestImageDescription])
 
+  // 弹窗宽度由 MODAL_WIDTH_CSS 控制（见常量注释）
   const modal = open ? (
     <Modal
       className="pose-editor__modal"
@@ -736,7 +771,19 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         </Group>
       )}
       centered
-      size={1100}
+      // 宽度占视口 80%：覆盖 Modal 的 --modal-size 变量，content 的 max-width 直接取该变量
+      style={{ '--modal-size': MODAL_WIDTH_CSS } as React.CSSProperties}
+      styles={{
+        content: {
+          width: MODAL_WIDTH_CSS,
+          maxWidth: MODAL_WIDTH_CSS,
+        },
+        // 视口较矮时可滚动，避免内容被裁掉
+        body: {
+          maxHeight: 'calc(92vh - 72px)',
+          overflowY: 'auto',
+        },
+      }}
       withinPortal
       zIndex={320}
     >
@@ -748,8 +795,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               ? '使用方法：先在原图上圈出需要修改的区域，再编辑画面描述（可点「反推画面描述」自动生成）。圈选会转成高亮引导图，模型只修改该区域，其余保持原样。'
               : '使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。'}
         </Text>
-        <Group className="pose-editor__panels" align="flex-start" gap="md" grow>
-          <Stack className="pose-editor__panel" gap={8} style={{ height: EDIT_PANEL_HEIGHT }}>
+        <Group className="pose-editor__panels" align="stretch" gap="md" grow>
+          <Stack className="pose-editor__panel" gap={8}>
             <Group className="pose-editor__panel-header" gap={8} align="center">
               <Text className="pose-editor__panel-title" size="sm" fw={600}>
                 {maskEnabled ? '原图圈选（可选）' : '原图预览'}
@@ -772,8 +819,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               className="pose-editor__mask-canvas"
               style={{
                 position: 'relative',
-                width: POSE_CANVAS_SIZE.width,
-                height: POSE_CANVAS_SIZE.height,
+                // 占满左半部整个面板宽度，正方形随宽度自适应
+                width: '100%',
+                aspectRatio: '1 / 1',
+                height: 'auto',
                 borderRadius: 12,
                 border: `1px solid ${options.inlineDividerColor}`,
                 overflow: 'hidden',
@@ -808,6 +857,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                   style={{
                     position: 'absolute',
                     inset: 0,
+                    // CSS 尺寸铺满容器，内部像素仍按 POSE_CANVAS_SIZE 绘制
+                    width: '100%',
+                    height: '100%',
                     cursor: maskDrawing ? 'crosshair' : 'cell',
                     zIndex: 2,
                     pointerEvents: 'auto',
@@ -830,7 +882,21 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     已保存过圈选引导图：不重新圈选将沿用，重新圈选会覆盖。
                   </Text>
                 ) : null}
-                <Group className="pose-editor__panel-actions" gap={6}>
+                <Group className="pose-editor__panel-actions" gap={8} align="center" justify="space-between">
+                  <Group className="pose-editor__brush-size" gap={6} align="center">
+                    <Text size="xs" c="dimmed">笔触</Text>
+                    <SegmentedControl
+                      className="pose-editor__brush-size-control"
+                      size="xs"
+                      value={String(maskBrushSize)}
+                      onChange={(value) => setMaskBrushSize(Number(value))}
+                      data={[
+                        { value: String(MASK_BRUSH_THIN), label: '细' },
+                        { value: String(MASK_BRUSH_MEDIUM), label: '中' },
+                        { value: String(MASK_BRUSH_THICK), label: '粗' },
+                      ]}
+                    />
+                  </Group>
                   <Button
                     className="pose-editor__clear-mask"
                     variant="subtle"
@@ -852,7 +918,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               </Text>
             )}
           </Stack>
-          <Stack className="pose-editor__panel" gap={8} style={{ height: EDIT_PANEL_HEIGHT }}>
+          <Stack className="pose-editor__panel" gap={8}>
               {editMode === 'pose' ? (
                 <>
                   <Stack className="pose-editor__panel-stack" gap={8}>
@@ -870,8 +936,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       width={POSE_CANVAS_SIZE.width}
                       height={POSE_CANVAS_SIZE.height}
                       style={{
-                        width: POSE_CANVAS_SIZE.width,
-                        height: POSE_CANVAS_SIZE.height,
+                        width: '100%',
+                        aspectRatio: '1 / 1',
+                        height: 'auto',
                         borderRadius: 12,
                         border: `1px solid ${options.inlineDividerColor}`,
                         background: options.isDarkUi ? 'rgba(5,8,16,0.92)' : 'rgba(245,248,255,0.95)',
@@ -1043,8 +1110,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     <div
                       className="pose-editor__size-preview-stage"
                       style={{
-                        width: POSE_CANVAS_SIZE.width,
-                        height: POSE_CANVAS_SIZE.height,
+                        width: '100%',
+                        aspectRatio: '1 / 1',
+                        height: 'auto',
                         borderRadius: 12,
                         border: `1px solid ${options.inlineDividerColor}`,
                         background: options.isDarkUi ? 'rgba(5,8,16,0.92)' : 'rgba(245,248,255,0.95)',

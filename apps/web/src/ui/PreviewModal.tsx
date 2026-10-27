@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react'
-import { ActionIcon, Group, Paper, Title, Portal } from '@mantine/core'
-import { IconX, IconDownload } from '@tabler/icons-react'
+import React, { useEffect, useState } from 'react'
+import { ActionIcon, Button, Group, Title, Portal } from '@mantine/core'
+import { IconX, IconDownload, IconPhoto } from '@tabler/icons-react'
 import { useUIStore } from './uiStore'
 import { appendDownloadSuffix, downloadUrl } from '../utils/download'
-import { useImageResource } from '../domain/resource-runtime'
+import { toOssResponsiveUrl } from '../canvas/utils/ossResponsive'
 
 export default function PreviewModal({ className }: { className?: string }): JSX.Element | null {
   const preview = useUIStore(s => s.preview)
@@ -17,15 +17,25 @@ export default function PreviewModal({ className }: { className?: string }): JSX
     return () => window.removeEventListener('keydown', onKey)
   }, [close])
 
-  const previewImageResource = useImageResource({
-    url: previewKind === 'image' ? previewUrl : null,
-    kind: 'preview',
-    variantKey: 'original',
-    priority: 'critical',
-    ownerSurface: 'preview-modal',
-    ownerRequestKey: `preview-modal:${previewUrl ?? 'none'}`,
-    enabled: previewKind === 'image' && Boolean(previewUrl),
-  })
+  // 是否展示原图：默认关闭（展示 OSS 压缩图，加载快）
+  const [showOriginal, setShowOriginal] = useState(false)
+
+  // 切换预览对象时回到压缩图
+  useEffect(() => {
+    setShowOriginal(false)
+  }, [previewUrl])
+
+  // 目标地址：原图 or OSS 压缩图
+  // 压缩档位按「视口宽度 × 设备像素比」选取（2x 屏取更高档），档位上限 1600，
+  // 既保证 4K 屏清晰度，又避免直接拉 4K 原图
+  const previewTargetSrc = React.useMemo(() => {
+    if (previewKind !== 'image' || !previewUrl) return ''
+    if (showOriginal) return previewUrl
+    const viewportWidth = typeof window === 'undefined' ? 1600 : window.innerWidth
+    const dpr = typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2)
+    return toOssResponsiveUrl(previewUrl, Math.round(viewportWidth * 0.92 * dpr))
+  }, [previewKind, previewUrl, showOriginal])
+
   if (!preview) return null
   const { url, kind, name } = preview
   const download = () => {
@@ -66,6 +76,18 @@ export default function PreviewModal({ className }: { className?: string }): JSX
             {name || '预览'}
           </Title>
           <Group className="preview-modal-actions" gap={6}>
+            {kind === 'image' && (
+              <Button
+                className="preview-modal-original-toggle"
+                variant="light"
+                size="compact-sm"
+                leftSection={<IconPhoto size={14} />}
+                onClick={() => setShowOriginal((prev) => !prev)}
+                title={showOriginal ? '切换回压缩图' : '加载并展示原图'}
+              >
+                {showOriginal ? '显示压缩图' : '展示原图'}
+              </Button>
+            )}
             <ActionIcon className="preview-modal-download" variant="light" onClick={download} title="下载">
               <IconDownload className="preview-modal-download-icon" size={16} />
             </ActionIcon>
@@ -86,7 +108,9 @@ export default function PreviewModal({ className }: { className?: string }): JSX
             {kind === 'image' && (
               <img
                 className="preview-modal-image"
-                src={previewImageResource.renderUrl || url}
+                src={previewTargetSrc || url}
+                decoding="async"
+                loading="eager"
                 alt={name || 'preview'}
                 style={{
                   maxWidth: '92vw',
