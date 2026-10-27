@@ -9527,7 +9527,9 @@ body {
 .lens-asset-task-panel__card { padding: 12px 0; border-bottom: 1px solid var(--mantine-color-default-border); }
 .lens-asset-task-panel__card:first-child { padding-top: 0; }
 .lens-asset-task-panel__meta { margin-bottom: 4px; min-width: 0; flex-wrap: nowrap; }
-.lens-asset-task-panel__model { flex: 1 1 auto; min-width: 0; }
+/* 模型名按内容自适应宽度（不抢占剩余空间），让状态徽章紧跟在模型名后面，
+   否则模型名会撑满整行、把状态推到最右侧，中间留出一大片空白。 */
+.lens-asset-task-panel__model { flex: 0 1 auto; min-width: 0; }
 .lens-asset-task-panel__badge { flex-shrink: 0; }
 .lens-asset-task-panel__submitter, .lens-asset-task-panel__channel { flex: 0 1 auto; min-width: 0; max-width: 24%; }
 .lens-asset-task-panel__model, .lens-asset-task-panel__submitter, .lens-asset-task-panel__channel, .lens-asset-task-panel__details { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
