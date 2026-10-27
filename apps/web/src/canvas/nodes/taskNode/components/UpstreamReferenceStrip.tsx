@@ -64,6 +64,12 @@ export function UpstreamReferenceStrip({
               onDragEnd={() => {
                 setDraggedEdgeId(null)
               }}
+              onClick={(event) => {
+                // 单击打开站内大图预览（原图）；拖拽排序结束不会触发 click，删除按钮已 stopPropagation，互不冲突
+                event.preventDefault()
+                event.stopPropagation()
+                useUIStore.getState().openPreview({ url: item.previewUrl, kind: 'image', name: item.label })
+              }}
               onDragOver={(event) => {
                 event.preventDefault()
                 event.dataTransfer.dropEffect = 'move'

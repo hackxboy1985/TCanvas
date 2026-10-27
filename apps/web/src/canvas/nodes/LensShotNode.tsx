@@ -21,6 +21,7 @@ import {
   IconListSearch,
   IconPlayerPause,
   IconPlayerPlay,
+  IconPlus,
   IconScissors,
   IconX,
 } from '@tabler/icons-react'
@@ -55,6 +56,13 @@ import {
   resolveModelDurationRange,
   resolveModelResolutionOptions,
 } from '../utils/lensShotModelParams'
+
+/** 上游参考卡片底部名称最多显示的字数，超出部分直接截断并补一个「.」 */
+const REF_NAME_MAX_CHARS = 5
+
+/** 上游参考卡片（缩略图 / 添加按钮）的边长，单位 px */
+const REF_CARD_SIZE = 64
+
 /** 分镜引用（底部引用行）：场景/道具/角色/站位 */
 export interface LensShotRef {
   /** 1=角色 2=场景 3=道具 4=站位 */
@@ -1169,8 +1177,8 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                   const { baseName, variantName } = ref.parentId
                     ? splitRefNames(fullName, ref.baseName || fullName, ref.variantName)
                     : { baseName: fullName, variantName: '' }
-                  // 底部名称截取（超过4个字）
-                  const displayName = baseName.length > 4 ? baseName.slice(0, 4) + '…' : baseName
+                  // 底部名称截取：超过 5 个字直接截断为前 5 个字，末尾补一个「.」（不用省略号）
+                  const displayName = baseName.length > REF_NAME_MAX_CHARS ? baseName.slice(0, REF_NAME_MAX_CHARS) + '.' : baseName
                   // 是否场景或道具（需要显示"无人"/"有真人"按钮）
                   const needsHumanToggle = ref.category === 2 || ref.category === 3
                   // 是否角色（需要显示说话者开关）：与分镜板一致，只有角色能设说话者
@@ -1199,7 +1207,21 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       >
                         {variantName || '\u00A0'}
                       </Text>
-                      <span className="lens-shot-toolbar-reference" style={{ position: 'relative', display: 'inline-flex', cursor: 'grab', flexDirection: 'column' }}>
+                      {/*
+                       * 参考图卡片：单击打开站内大图预览（用原图，与任务结果参考图一致）。
+                       * 原先只有 grab 光标、无任何点击/拖拽逻辑；角标（真人/说话者）与删除按钮内部已 stopPropagation，不会误触预览。
+                       */}
+                      <span
+                        className="lens-shot-toolbar-reference"
+                        role={ref.imgUrl ? 'button' : undefined}
+                        aria-label={ref.imgUrl ? '预览参考图 ' + ref.name : undefined}
+                        style={{ position: 'relative', display: 'inline-flex', cursor: ref.imgUrl ? 'zoom-in' : 'default', flexDirection: 'column' }}
+                        onClick={(event) => {
+                          if (!ref.imgUrl) return
+                          event.stopPropagation()
+                          useUIStore.getState().openPreview({ url: ref.imgUrl, kind: 'image', name: ref.name })
+                        }}
+                      >
                         {/* 左上角"无人"/"有真人"按钮（仅场景和道具） */}
                         {needsHumanToggle && (
                           <span 
@@ -1306,19 +1328,37 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       </span>
                       
                       {/* 底部：主角色名/主场景名（子资产的名称只在顶部显示） */}
-                      <Text size="xs" c="dimmed" style={{ maxWidth: 64, textAlign: 'center', lineHeight: 1.2 }} title={variantName ? baseName : fullName}>{displayName}</Text>
+                      <Text size="xs" c="dimmed" style={{ maxWidth: 64, textAlign: 'center', lineHeight: 1.2, whiteSpace: 'nowrap' }} title={variantName ? baseName : fullName}>{displayName}</Text>
                     </div>
                   )
                 }) : (
                   <Text size="xs" c="dimmed">暂无引用资产</Text>
                 )}
-                <Menu trigger="click-hover" openDelay={100} closeDelay={180} withinPortal zIndex={3500}>
-                  <Menu.Target><ActionIcon className="lens-shot-reference-add nodrag nopan" variant="subtle" size={44} aria-label="添加参考">+</ActionIcon></Menu.Target>
-                  <Menu.Dropdown className="lens-shot-reference-menu nodrag nopan">
-                    <Menu.Item className="lens-shot-reference-menu__canvas" onClick={openCanvasPicker}>从画布选择参考</Menu.Item>
-                    <Menu.Item className="lens-shot-reference-menu__library" onClick={() => { useUIStore.getState().closeCanvasReferencePicker(); setAssetPickerOpened(true) }}>从资产库选择参考</Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
+                {/*
+                 * 添加参考按钮：复用生图节点上游参考的「+」样式（tc-task-node__upstream-reference-add：虚线框 + IconPlus 居中），
+                 * 尺寸放大到与参考卡片一致（64×64）；外层与参考卡片同样的「顶部占位 + 图 + 底部占位」三段结构，保证与图片同一行对齐。
+                 */}
+                <div className="lens-shot-reference-add-column" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <Text size="xs" style={{ height: 14, lineHeight: '14px' }}>{'\u00A0'}</Text>
+                  <Menu trigger="click-hover" openDelay={100} closeDelay={180} withinPortal zIndex={3500}>
+                    <Menu.Target>
+                      <button
+                        type="button"
+                        className="tc-task-node__upstream-reference-add lens-shot-reference-add nodrag nopan"
+                        aria-label="添加参考"
+                        // 生图节点该样式只按暗色设计（浅色图标），亮色下改用深色图标，避免看不清
+                        style={{ width: REF_CARD_SIZE, height: REF_CARD_SIZE, borderRadius: 8, ...(isDark ? null : { color: '#4e5969', background: 'rgba(148,163,184,0.12)' }) }}
+                      >
+                        <IconPlus size={20} stroke={2} />
+                      </button>
+                    </Menu.Target>
+                    <Menu.Dropdown className="lens-shot-reference-menu nodrag nopan">
+                      <Menu.Item className="lens-shot-reference-menu__canvas" onClick={openCanvasPicker}>从画布选择参考</Menu.Item>
+                      <Menu.Item className="lens-shot-reference-menu__library" onClick={() => { useUIStore.getState().closeCanvasReferencePicker(); setAssetPickerOpened(true) }}>从资产库选择参考</Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                  <Text size="xs" style={{ lineHeight: 1.2 }}>{'\u00A0'}</Text>
+                </div>
               </div>
               {/* 编辑区：时长 + 分镜提示词/剧本 切换 + 智能提示词 + 保存；提示词为分镜生视频提示词 data.prompt */}
               <Group justify="space-between" align="center" mb={6} style={{ marginTop: 10 }}>

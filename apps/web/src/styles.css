@@ -6293,7 +6293,8 @@ body {
   border-radius: 6px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.38);
-  cursor: grab;
+  /* 单击放大预览，按住拖动可排序（:active 时切回 grabbing） */
+  cursor: zoom-in;
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
