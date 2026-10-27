@@ -36,20 +36,14 @@ const POSE_POINT_RADIUS = Math.round(8 * POSE_RENDER_SCALE)
 const POSE_POINT_STROKE_WIDTH = Math.round(2 * POSE_RENDER_SCALE)
 const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
 /**
- * 左侧画布最大边长（按模式区分）。
+ * 左侧画布最大边长（三种模式统一）。
  *
- * <p>画布宽度跟随左半部自适应，但必须同时受视口高度约束，否则 1:1 画布会把
- * 弹窗撑出滚动条。不同模式左面板的附加控件高度不同，预留值也不同：</p>
- * <ul>
- *   <li>局部修改：只有圈选提示与操作行</li>
- *   <li>姿势调整：额外有「补充提示词」输入框（2~4 行自适应）与底部按钮行</li>
- *   <li>尺寸调整：额外有尺寸预设选择与自定义宽高输入</li>
- * </ul>
- * <p>剩余高度全部给画布；同时限制不超过面板可用宽度，保证正方形不变形。</p>
+ * <p>画布宽度跟随左半部自适应，同时受视口高度约束，避免 1:1 画布把弹窗撑出滚动条。
+ * 取值对齐附加控件最少的「局部修改」：其余模式画布大小完全一致，
+ * 切换「姿势调整 / 局部修改 / 尺寸调整」时画面不缩放、弹窗不跳动。
+ * 弹窗高度本身已固定为 92vh，画布只剩宽度差异。</p>
  */
-const POSE_CANVAS_DEPTH_MAX_SIZE_CSS = 'min(100%, calc(92vh - 260px))'
-const POSE_CANVAS_POSE_MAX_SIZE_CSS = 'min(100%, calc(92vh - 430px))'
-const POSE_CANVAS_SIZE_MAX_SIZE_CSS = 'min(100%, calc(92vh - 400px))'
+const POSE_CANVAS_MAX_SIZE_CSS = 'min(100%, calc(92vh - 260px))'
 
 /** 圈选笔迹默认宽度（中档） */
 const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
@@ -759,7 +753,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     }
   }, [activeBaseImageUrl, requestImageDescription])
 
-  // 弹窗宽度由 MODAL_WIDTH_CSS 控制（见常量注释）
+  // 弹窗宽度由 MODAL_WIDTH_CSS 控制：覆盖 Modal 的 --modal-size 变量，content 的 max-width 直接取该变量。
+  // 高度固定为 92vh，切换编辑模式时外框不变，避免弹窗跳高跳矮。
   const modal = open ? (
     <Modal
       className="pose-editor__modal"
@@ -787,23 +782,24 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         </Group>
       )}
       centered
-      // 宽度占视口 80%：覆盖 Modal 的 --modal-size 变量，content 的 max-width 直接取该变量
       style={{ '--modal-size': MODAL_WIDTH_CSS } as React.CSSProperties}
       styles={{
         content: {
           width: MODAL_WIDTH_CSS,
           maxWidth: MODAL_WIDTH_CSS,
+          // 固定高度：切换「姿势调整 / 局部修改 / 尺寸调整」时弹窗不再跳高跳矮
+          height: '92vh',
         },
-        // 视口较矮时可滚动，避免内容被裁掉
         body: {
-          maxHeight: 'calc(92vh - 72px)',
+          height: 'calc(92vh - 72px)',
+          // 极端小屏兜底：内容确实放不下时才滚动
           overflowY: 'auto',
         },
       }}
       withinPortal
       zIndex={320}
     >
-      <Stack className="pose-editor__content" gap="sm">
+      <Stack className="pose-editor__content" gap="sm" style={{ height: '100%' }}>
         <Text className="pose-editor__intro" size="xs" c="dimmed">
           {editMode === 'pose'
             ? '使用方法：拖动火柴人指定新的动作参考，再补充提示词。姿势模式只使用火柴人参考，不支持局部圈选。'
@@ -811,7 +807,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               ? '使用方法：先在原图上圈出需要修改的区域，再编辑画面描述（可点「反推画面描述」自动生成）。圈选会转成高亮引导图，模型只修改该区域，其余保持原样。'
               : '使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。'}
         </Text>
-        <Group className="pose-editor__panels" align="stretch" gap="md" grow>
+        <Group className="pose-editor__panels" align="stretch" gap="md" grow style={{ flex: 1, minHeight: 0 }}>
           <Stack className="pose-editor__panel" gap={8}>
             <Group className="pose-editor__panel-header" gap={8} align="center">
               <Text className="pose-editor__panel-title" size="sm" fw={600}>
@@ -837,7 +833,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 position: 'relative',
                 // 占满左半部整个面板宽度，正方形随宽度自适应，并受视口高度约束
                 width: '100%',
-                maxWidth: POSE_CANVAS_DEPTH_MAX_SIZE_CSS,
+                maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
                 aspectRatio: '1 / 1',
                 height: 'auto',
                 margin: '0 auto',
@@ -955,7 +951,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       height={POSE_CANVAS_SIZE.height}
                       style={{
                         width: '100%',
-                        maxWidth: POSE_CANVAS_POSE_MAX_SIZE_CSS,
+                        maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
                         aspectRatio: '1 / 1',
                         height: 'auto',
                         margin: '0 auto',
@@ -1131,7 +1127,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       className="pose-editor__size-preview-stage"
                       style={{
                         width: '100%',
-                        maxWidth: POSE_CANVAS_SIZE_MAX_SIZE_CSS,
+                        maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
                         aspectRatio: '1 / 1',
                         height: 'auto',
                         margin: '0 auto',
