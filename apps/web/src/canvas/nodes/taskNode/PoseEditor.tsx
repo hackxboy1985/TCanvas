@@ -40,10 +40,17 @@ const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
  *
  * <p>画布宽度跟随左半部自适应，同时受视口高度约束，避免 1:1 画布把弹窗撑出滚动条。
  * 取值对齐附加控件最少的「局部修改」：其余模式画布大小完全一致，
- * 切换「姿势调整 / 局部修改 / 尺寸调整」时画面不缩放、弹窗不跳动。
- * 弹窗高度本身已固定为 92vh，画布只剩宽度差异。</p>
+ * 切换「姿势调整 / 局部修改 / 尺寸调整」时画面不缩放、弹窗不跳动。</p>
+ *
+ * <p>三个 tab 共用同一尺寸，因此预留值必须按**附加控件最多**的「尺寸调整」来定，
+ * 否则另两个 tab 会撑出滚动条。构成：弹窗上下内边距 32 + 标题栏 64 + 内容区内边距 32 +
+ * 顶部使用说明 40 + 底部效果提示 40 + 面板标题行 30 + 间距 24 +
+ * 右面板附加控件（尺寸预设 + 自定义宽高 + 按钮行，约 170）。</p>
+ *
+ * <p>「局部修改」用不到这么多预留，会出现一点下方留白，这是保证切换 tab 时
+ * 画布尺寸稳定、且三个 tab 都不出现滚动条的代价。</p>
  */
-const POSE_CANVAS_MAX_SIZE_CSS = 'min(100%, calc(92vh - 260px))'
+const POSE_CANVAS_MAX_SIZE_CSS = 'min(100%, calc(92vh - 440px))'
 
 /** 圈选笔迹基准宽度（对应当前「粗」档，700px 画布下约 48px） */
 const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
@@ -796,8 +803,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
           height: '92vh',
         },
         body: {
-          height: 'calc(92vh - 72px)',
-          // 极端小屏兜底：内容确实放不下时才滚动
+          // 不能用固定 height：content 自身还有上下内边距与标题栏，叠加后会超过 92vh，
+          // 导致弹窗定位容器（.inner）出现整页滚动条。这里只限制上限并允许兜底滚动。
+          maxHeight: 'calc(92vh - 96px)',
           overflowY: 'auto',
         },
       }}
@@ -909,6 +917,19 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       { value: String(MASK_BRUSH_THICK), label: '粗' },
                     ]}
                   />
+                  {/* 清除圈选紧跟笔触之后，避免单独占一行挤压画布高度 */}
+                  <Button
+                    className="pose-editor__clear-mask"
+                    variant="subtle"
+                    size="compact-xs"
+                    fz={10}
+                    px={4}
+                    style={{ width: '100%' }}
+                    onClick={clearMask}
+                    disabled={!maskDirty && (!options.poseMaskUrl || maskCleared)}
+                  >
+                    清除圈选
+                  </Button>
                 </Stack>
               ) : null}
             </Group>
@@ -923,17 +944,6 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     已保存过圈选引导图：不重新圈选将沿用，重新圈选会覆盖。
                   </Text>
                 ) : null}
-                <Group className="pose-editor__panel-actions" gap={8} align="center" justify="flex-end">
-                  <Button
-                    className="pose-editor__clear-mask"
-                    variant="subtle"
-                    size="xs"
-                    onClick={clearMask}
-                    disabled={!maskDirty && (!options.poseMaskUrl || maskCleared)}
-                  >
-                    清除圈选
-                  </Button>
-                </Group>
               </>
             ) : editMode === 'pose' ? (
               <Text className="pose-editor__size-preview-note" size="xs" c="dimmed">
