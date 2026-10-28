@@ -774,6 +774,7 @@ export function PromptSection({
               { value: 'asset', label: '资产' },
               { value: 'context', label: '上下文' },
               { value: 'authority_base_frame', label: '权威基底帧' },
+              { value: 'staging', label: '站位' },
             ]}
             value={anchorBindingKind}
             onChange={setAnchorBindingKind}

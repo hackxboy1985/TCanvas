@@ -757,6 +757,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             imageUrl: preferred,
             imageResults: [{ url: preferred }],
             imagePrimaryIndex: 0,
+            // 视频抽帧来源标记：抽帧图是空间站位/画面参考，默认锚点类型按「站位」处理
+            source: 'video_frame',
             nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
             nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
           },
@@ -815,6 +817,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           label,
           kind: 'image',
           imageUrl: localUrl,
+          // 视频抽帧来源标记：抽帧图是空间站位/画面参考，默认锚点类型按「站位」处理
+          source: 'video_frame',
           nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
           nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
         },

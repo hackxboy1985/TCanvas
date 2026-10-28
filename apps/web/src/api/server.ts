@@ -578,7 +578,7 @@ export type AgentsChatRequestDto = {
       label?: string
       kind?: string
       anchorBindings?: Array<{
-        kind: 'character' | 'scene' | 'prop' | 'shot' | 'story' | 'asset' | 'context' | 'authority_base_frame'
+        kind: 'character' | 'scene' | 'prop' | 'shot' | 'story' | 'asset' | 'context' | 'authority_base_frame' | 'staging'
         refId?: string
         entityId?: string
         label?: string

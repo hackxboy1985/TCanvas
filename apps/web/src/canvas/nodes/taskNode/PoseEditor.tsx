@@ -3,7 +3,7 @@ import { Button, Group, Modal, Stack, Text, Textarea, Badge, Tooltip, SegmentedC
 import { IconAdjustments } from '@tabler/icons-react'
 
 import { runPublicTask, uploadServerAssetFile } from '../../../api/server'
-import { understandImage } from '../../../api/lens'
+import { getFrameToPrompts, understandImage } from '../../../api/lens'
 import { isLensMode } from '../../../config/useModelOptions'
 import { toast } from '../../../ui/toast'
 import { useUIStore } from '../../../ui/uiStore'
@@ -36,21 +36,87 @@ const POSE_POINT_RADIUS = Math.round(8 * POSE_RENDER_SCALE)
 const POSE_POINT_STROKE_WIDTH = Math.round(2 * POSE_RENDER_SCALE)
 const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
 /**
- * 左侧画布最大边长（三种模式统一）。
+ * 左侧圈选/预览区的高度。
  *
- * <p>画布宽度跟随左半部自适应，同时受视口高度约束，避免 1:1 画布把弹窗撑出滚动条。
- * 取值对齐附加控件最少的「局部修改」：其余模式画布大小完全一致，
- * 切换「姿势调整 / 局部修改 / 尺寸调整」时画面不缩放、弹窗不跳动。</p>
+ * <p>宽度固定占满左半部（含笔触栏以外的全部空间），高度吃掉可用高度，
+ * 让原图显示区域尽可能大、便于圈选。图片本身用 object-fit: contain，
+ * 因此不是正方形时也不会变形。</p>
  *
- * <p>三个 tab 共用同一尺寸，因此预留值必须按**附加控件最多**的「尺寸调整」来定，
- * 否则另两个 tab 会撑出滚动条。构成：弹窗上下内边距 32 + 标题栏 64 + 内容区内边距 32 +
- * 顶部使用说明 40 + 底部效果提示 40 + 面板标题行 30 + 间距 24 +
- * 右面板附加控件（尺寸预设 + 自定义宽高 + 按钮行，约 170）。</p>
- *
- * <p>「局部修改」用不到这么多预留，会出现一点下方留白，这是保证切换 tab 时
- * 画布尺寸稳定、且三个 tab 都不出现滚动条的代价。</p>
+ * <p>预留 300px 构成：弹窗上下内边距 32 + 标题栏 64 + 内容区内边距 32 +
+ * 顶部使用说明 40 + 底部效果提示 40 + 面板标题行与间距 92。</p>
  */
-const POSE_CANVAS_MAX_SIZE_CSS = 'min(100%, calc(92vh - 440px))'
+const POSE_CANVAS_LEFT_HEIGHT_CSS = 'calc(92vh - 300px)'
+/** 左侧圈选/预览区的最大宽度（避免超宽屏下过度拉伸） */
+const POSE_CANVAS_LEFT_MAX_SIZE_CSS = '100%'
+
+/**
+ * 右侧面板内画布的最大边长（姿势调整的火柴人、尺寸调整的预览）。
+ *
+ * <p>右面板除画布外还有提示词输入框、尺寸选择与底部按钮行，留给画布的可用高度更少，
+ * 预留值必须更大，否则这些 tab 会撑出滚动条。弹窗整体高度由左右两列的较高者决定，
+ * 左面板更大不会把弹窗撑高。</p>
+ */
+const POSE_CANVAS_PANEL_MAX_SIZE_CSS = 'min(100%, calc(92vh - 440px))'
+
+/** 编辑模式：pose=姿势调整，depth=局部修改（沿用历史标识），size=尺寸调整，其余为风格转换 */
+export type PoseEditMode = 'pose' | 'depth' | 'size' | 'sketch' | 'depthmap' | 'clay'
+
+/** 风格转换模式的配置（转线稿 / 转深度图 / 转白模） */
+type StyleConvertModeConfig = {
+  /** 编辑模式标识 */
+  value: Extract<PoseEditMode, 'sketch' | 'depthmap' | 'clay'>
+  /** 顶部模式切换里的短标签 */
+  tabLabel: string
+  /** 右面板标题 */
+  title: string
+  /** 右面板说明 */
+  hint: string
+  /** 生成按钮文案 */
+  actionLabel: string
+  /** 默认提示词（可编辑） */
+  defaultPrompt: string
+}
+
+/**
+ * 三种风格转换功能的配置。
+ *
+ * <p>三者实现一致：以原图为唯一参考、用一段固定的风格转换提示词走图生图，
+ * 产出新的图片编辑节点。差异只在提示词与文案。</p>
+ */
+const STYLE_CONVERT_MODE_CONFIGS: StyleConvertModeConfig[] = [
+  {
+    value: 'sketch',
+    tabLabel: '转线稿',
+    title: '转线稿',
+    hint: '把当前图片转换成黑白线稿：只保留主体轮廓与结构线，去掉颜色、光影与材质。',
+    actionLabel: '生成线稿图',
+    defaultPrompt:
+      '把这张图转换成干净的黑白线稿：只保留主体轮廓与结构线，白底黑线，轮廓清晰闭合；去掉颜色、光影、材质与渐变；线条粗细均匀，不添加任何文字或水印。',
+  },
+  {
+    value: 'depthmap',
+    tabLabel: '转深度图',
+    title: '转深度图',
+    hint: '把当前图片转换成深度图：用灰度表达远近关系，近亮远暗，只保留几何与空间层次。',
+    actionLabel: '生成深度图',
+    defaultPrompt:
+      '把这张图转换成深度图：用灰度表示远近，近处亮、远处暗；只保留几何结构与空间层次，忽略颜色、材质与文字；过渡平滑，不添加任何新物体。',
+  },
+  {
+    value: 'clay',
+    tabLabel: '转白模',
+    title: '转白模',
+    hint: '把当前图片转换成白模渲染：纯白石膏材质，去掉贴图与颜色，保留造型与比例。',
+    actionLabel: '生成白模图',
+    defaultPrompt:
+      '参考图片，将图片完整转化为画面100%全覆盖无残留的纯白石膏白模渲染图，保留原始构图、主体造型与空间纵深关系。按物理结构塑形：表面为纯净无贴图、无颜色的白色漫反射材质，仅靠柔和均匀的环境光与浅淡接触阴影表达体积与结构转折，禁止彩色、禁止材质纹理、禁止高光过曝的死白平面、禁止硬边分界与大面积纯色平面，结构轮廓清晰可辨，不添加任何文字或水印。',
+  },
+]
+
+/** 判断是否为风格转换模式 */
+function isStyleConvertMode(mode: PoseEditMode): mode is StyleConvertModeConfig['value'] {
+  return STYLE_CONVERT_MODE_CONFIGS.some((item) => item.value === mode)
+}
 
 /** 圈选笔迹基准宽度（对应当前「粗」档，700px 画布下约 48px） */
 const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
@@ -120,8 +186,8 @@ type UsePoseEditorOptions = {
   /** 节点上已保存的局部编辑引导图（node.data.poseMaskUrl），用于「不重圈则沿用」 */
   poseMaskUrl?: string
   onPoseSaved?: (payload: {
-    /** 编辑模式：pose=姿势调整，depth=局部修改（历史标识，界面已改名「局部修改」），size=尺寸调整 */
-    mode: 'pose' | 'depth' | 'size'
+    /** 编辑模式：pose=姿势调整，depth=局部修改，size=尺寸调整，sketch/depthmap/clay=风格转换 */
+    mode: PoseEditMode
     poseStickmanUrl: string | null
     poseReferenceImages: string[]
     baseImageUrl: string
@@ -164,7 +230,54 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
   const [maskCleared, setMaskCleared] = React.useState(false)
   const [promptInput, setPromptInput] = React.useState(() => options.promptValue || '')
   /** 编辑模式：pose=姿势调整，depth=局部修改（沿用历史标识，节点数据里已存在，不改名），size=尺寸调整 */
-  const [editMode, setEditMode] = React.useState<'pose' | 'depth' | 'size'>('pose')
+  const [editMode, setEditMode] = React.useState<PoseEditMode>('pose')
+  /** 风格转换模式的提示词：切换模式时重置为该模式的默认提示词 */
+  const [styleConvertPrompt, setStyleConvertPrompt] = React.useState('')
+  const activeStyleConvertConfig = STYLE_CONVERT_MODE_CONFIGS.find((item) => item.value === editMode) || null
+  /**
+   * 各风格转换模式的提示词。
+   *
+   * <p>转线稿与转深度图的提示词由后端从 Redis 读取（可在后台动态调整），
+   * 加载成功即覆盖前端的兜底文案；转白模没有后端配置，始终用前端默认值。</p>
+   */
+  const [stylePromptMap, setStylePromptMap] = React.useState<Record<StyleConvertModeConfig['value'], string>>(
+    () => ({
+      sketch: STYLE_CONVERT_MODE_CONFIGS[0].defaultPrompt,
+      depthmap: STYLE_CONVERT_MODE_CONFIGS[1].defaultPrompt,
+      clay: STYLE_CONVERT_MODE_CONFIGS[2].defaultPrompt,
+    }),
+  )
+  /** 保存最新提示词映射，供切换模式时读取，避免加载完成后覆盖用户正在编辑的内容 */
+  const stylePromptMapRef = React.useRef(stylePromptMap)
+
+  React.useEffect(() => {
+    let canceled = false
+    getFrameToPrompts()
+      .then((prompts) => {
+        if (canceled || !prompts) return
+        setStylePromptMap((prev) => {
+          const next = {
+            ...prev,
+            ...(prompts.lineartPrompt ? { sketch: prompts.lineartPrompt } : null),
+            ...(prompts.depthmapPrompt ? { depthmap: prompts.depthmapPrompt } : null),
+          }
+          stylePromptMapRef.current = next
+          return next
+        })
+      })
+      .catch((error: unknown) => {
+        // 读取失败时明确记录并保留前端兜底提示词，不静默吞掉
+        console.warn('[PoseEditor] 读取转绘提示词配置失败，使用内置默认提示词:', error)
+      })
+    return () => {
+      canceled = true
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (!activeStyleConvertConfig) return
+    setStyleConvertPrompt(stylePromptMapRef.current[activeStyleConvertConfig.value])
+  }, [activeStyleConvertConfig])
   const [descriptionText, setDescriptionText] = React.useState('')
   const [descriptionLoading, setDescriptionLoading] = React.useState(false)
   const [descriptionError, setDescriptionError] = React.useState<string | null>(null)
@@ -602,6 +715,29 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     }
     setUploading(true)
     try {
+      // 风格转换（转线稿 / 转深度图 / 转白模）：不需要圈选与火柴人，
+      // 直接以原图为唯一参考 + 提示词派生出新的图片编辑节点
+      if (isStyleConvertMode(editMode)) {
+        const stylePrompt = styleConvertPrompt.trim()
+        if (!stylePrompt) {
+          toast('请先填写提示词', 'warning')
+          return
+        }
+        if (!isRemoteUrl(activeBaseImageUrl)) {
+          toast('主图不是在线地址，无法作为转换参考', 'error')
+          return
+        }
+        options.onPoseSaved?.({
+          mode: editMode,
+          poseStickmanUrl: null,
+          poseReferenceImages: [activeBaseImageUrl],
+          baseImageUrl: activeBaseImageUrl,
+          prompt: stylePrompt,
+        })
+        setOpen(false)
+        return
+      }
+
       const mergedPrompt = (editMode === 'depth' ? descriptionText : promptInput).trim() || (options.promptValue || '')
       if (mergedPrompt && options.onPromptSave) {
         options.onPromptSave(mergedPrompt)
@@ -679,7 +815,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     } finally {
       setUploading(false)
     }
-  }, [activeBaseImageUrl, options, maskDirty, maskCleared, promptInput, editMode, descriptionText, selectedImageEditSize, exportResizedImage, maskEnabled, createMaskFocusGuideUrl, uploadCanvasAsset])
+  }, [activeBaseImageUrl, options, maskDirty, maskCleared, promptInput, editMode, descriptionText, selectedImageEditSize, exportResizedImage, maskEnabled, createMaskFocusGuideUrl, uploadCanvasAsset, styleConvertPrompt])
 
   /**
    * 把上游给的节点图片地址解析成服务端可直接拉取的 http(s) 地址。
@@ -781,11 +917,12 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
             className="pose-editor__mode"
             size="sm"
             value={editMode}
-            onChange={(value) => setEditMode(value as 'pose' | 'depth' | 'size')}
+            onChange={(value) => setEditMode(value as PoseEditMode)}
             data={[
               { value: 'pose', label: '姿势调整' },
               { value: 'depth', label: '局部修改' },
               { value: 'size', label: '尺寸调整' },
+              ...STYLE_CONVERT_MODE_CONFIGS.map((item) => ({ value: item.value, label: item.tabLabel })),
             ]}
             styles={{
               label: { color: options.isDarkUi ? '#e2e8f0' : '#0f172a' },
@@ -818,7 +955,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
             ? '使用方法：拖动火柴人指定新的动作参考，再补充提示词。姿势模式只使用火柴人参考，不支持局部圈选。'
             : editMode === 'depth'
               ? '使用方法：先在原图上圈出需要修改的区域，再编辑画面描述（可点「反推画面描述」自动生成）。圈选会转成高亮引导图，模型只修改该区域，其余保持原样。'
-              : '使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。'}
+              : editMode === 'size'
+                ? '使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。'
+                : `使用方法：以当前原图为唯一参考，按下方提示词转换为「${activeStyleConvertConfig?.title || ''}」。提示词可修改后再生成，结果会作为新图片节点。`}
         </Text>
         <Group className="pose-editor__panels" align="stretch" gap="md" grow style={{ flex: 1, minHeight: 0 }}>
           <Stack className="pose-editor__panel" gap={8}>
@@ -834,6 +973,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
                   姿势模式不支持圈选
                 </Badge>
+              ) : isStyleConvertMode(editMode) ? (
+                <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
+                  仅作为转换参考
+                </Badge>
               ) : (
                 <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="orange">
                   仅修改圈选区域
@@ -845,12 +988,12 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 className="pose-editor__mask-canvas"
                 style={{
                   position: 'relative',
-                  // 占据笔触栏以外的全部宽度，正方形随宽度自适应，并受视口高度约束
+                  // 宽度占满左半部剩余空间（扣掉笔触栏），高度吃满可用高度：
+                  // 原图按 contain 居中显示，圈选区域因此尽可能大
                   flex: '1 1 auto',
                   minWidth: 0,
-                  maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
-                  aspectRatio: '1 / 1',
-                  height: 'auto',
+                  maxWidth: POSE_CANVAS_LEFT_MAX_SIZE_CSS,
+                  height: POSE_CANVAS_LEFT_HEIGHT_CSS,
                   borderRadius: 12,
                   border: `1px solid ${options.inlineDividerColor}`,
                   overflow: 'hidden',
@@ -974,7 +1117,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       height={POSE_CANVAS_SIZE.height}
                       style={{
                         width: '100%',
-                        maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
+                        maxWidth: POSE_CANVAS_PANEL_MAX_SIZE_CSS,
                         aspectRatio: '1 / 1',
                         height: 'auto',
                         margin: '0 auto',
@@ -1078,6 +1221,49 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     </Tooltip>
                   </Group>
                 </>
+              ) : isStyleConvertMode(editMode) ? (
+                <>
+                  <Stack className="pose-editor__panel-stack" gap={8}>
+                    <Text className="pose-editor__panel-title" size="sm" fw={600}>
+                      {activeStyleConvertConfig?.title}
+                    </Text>
+                    <Text
+                      className="pose-editor__depth-hint"
+                      size="xs"
+                      c="dimmed"
+                      style={{ color: options.isDarkUi ? 'rgba(226,232,240,0.7)' : '#475569' }}
+                    >
+                      {activeStyleConvertConfig?.hint}
+                    </Text>
+                    <Textarea
+                      className="pose-editor__style-convert-textarea"
+                      label="提示词（可编辑）"
+                      placeholder="描述要转换成的画面风格与必须保留的结构"
+                      autosize
+                      minRows={4}
+                      maxRows={8}
+                      value={styleConvertPrompt}
+                      onChange={(e) => setStyleConvertPrompt(e.currentTarget.value)}
+                    />
+                  </Stack>
+                  <div className="pose-editor__spacer" style={{ flex: 1 }} />
+                  <Group className="pose-editor__panel-actions" gap={6}>
+                    <Tooltip
+                      className="pose-editor__save-tooltip"
+                      label="以当前原图为参考，按提示词生成新图片节点"
+                    >
+                      <Button
+                        className="pose-editor__save"
+                        size="xs"
+                        leftSection={<IconAdjustments size={14} />}
+                        onClick={handleApply}
+                        loading={uploading}
+                      >
+                        {activeStyleConvertConfig?.actionLabel}
+                      </Button>
+                    </Tooltip>
+                  </Group>
+                </>
               ) : (
                 <>
                   <Stack className="pose-editor__panel-stack" gap={8}>
@@ -1150,7 +1336,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       className="pose-editor__size-preview-stage"
                       style={{
                         width: '100%',
-                        maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
+                        maxWidth: POSE_CANVAS_PANEL_MAX_SIZE_CSS,
                         aspectRatio: '1 / 1',
                         height: 'auto',
                         margin: '0 auto',
@@ -1212,7 +1398,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
             ? '效果：火柴人姿势和补充提示词会引导模型重排人物动作，不支持局部圈选。'
             : editMode === 'depth'
               ? '效果：圈选过区域时，圈选高亮图会作为局部编辑区域引导，模型只修改高亮区域、其余保持原图不变；没有圈选则整张图都可能被修改。'
-              : '尺寸调整只做本地导出与上传，不触发远端图像编辑任务。'}
+              : editMode === 'size'
+                ? '尺寸调整只做本地导出与上传，不触发远端图像编辑任务。'
+                : `效果：以原图为唯一参考、按提示词生成「${activeStyleConvertConfig?.title || ''}」，结果作为新的图片编辑节点，不修改原节点。`}
         </Text>
       </Stack>
     </Modal>

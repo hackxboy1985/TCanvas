@@ -114,7 +114,10 @@ import { dedupeLocalFiles } from '../../utils/localUploadDedup'
 import { normalizeOrientation, type Orientation } from '../../utils/orientation'
 import { buildVideoBillingSpecKey, normalizeVideoResolution } from '../../utils/videoBillingSpec'
 import { buildVideoDurationPatch, readVideoDurationSeconds } from '../../utils/videoDuration'
-import { usePoseEditor } from './taskNode/PoseEditor'
+import { usePoseEditor, type PoseEditMode } from './taskNode/PoseEditor'
+
+/** 视频抽帧生成图片节点的来源标记（写在 node.data.source） */
+const VIDEO_FRAME_SOURCE = 'video_frame'
 import { useImageViewEditor, type ImageViewEditorApplyPayload } from './taskNode/ImageViewEditor'
 import { TaskNodeHandles } from './taskNode/components/TaskNodeHandles'
 import { TopToolbar } from './taskNode/components/TopToolbar'
@@ -1747,8 +1750,20 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   })
   const primarySemanticAnchor = React.useMemo(() => resolvePrimarySemanticAnchorBinding(data), [data])
   const semanticRoleBinding = React.useMemo(() => resolveSemanticNodeRoleBinding(data), [data])
+  /**
+   * 默认锚点类型。
+   *
+   * <p>视频抽帧图（node.data.source === 'video_frame'）表达的是空间站位/机位关系，
+   * 默认按「站位」处理；其它节点沿用已保存的锚点类型，都没有时默认「角色」。</p>
+   */
+  const defaultAnchorBindingKind = React.useMemo<PublicFlowAnchorBindingKind>(() => {
+    const savedKind = primarySemanticAnchor?.kind
+    if (savedKind) return savedKind
+    const source = String((data as any)?.source || '').trim()
+    return source === VIDEO_FRAME_SOURCE ? 'staging' : 'character'
+  }, [data, primarySemanticAnchor])
   const [anchorBindingKind, setAnchorBindingKind] = React.useState<PublicFlowAnchorBindingKind>(
-    () => primarySemanticAnchor?.kind || 'character',
+    () => defaultAnchorBindingKind,
   )
   const [anchorBindingLabel, setAnchorBindingLabel] = React.useState<string>(
     () => String(primarySemanticAnchor?.label || resolveSemanticNodeRoleBinding(data).roleName || '').trim(),
@@ -1759,7 +1774,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     String(primarySemanticAnchor?.label || resolveSemanticNodeRoleBinding(data).roleName || '').trim(),
   )
   const lastAnchorBindingExternalKindRef = React.useRef<PublicFlowAnchorBindingKind>(
-    primarySemanticAnchor?.kind || 'character',
+    defaultAnchorBindingKind,
   )
   const rawRoleName = String(semanticRoleBinding.roleName || '').trim()
   const rawAnchorLabel = String(primarySemanticAnchor?.label || rawRoleName || '').trim()
@@ -1964,7 +1979,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
                     ? '上下文'
                     : anchorKind === 'authority_base_frame'
                       ? '权威基底帧'
-                      : anchorKind
+                      : anchorKind === 'staging'
+                        ? '站位'
+                        : anchorKind
     const parts: string[] = []
     if (anchorKindLabel) parts.push(`当前锚点：${anchorKindLabel}`)
     if (anchorLabel) parts.push(`名称：${anchorLabel}`)
@@ -3429,7 +3446,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     editingShotSourceIndexRef.current = editingShotSourceIndex
   }, [editingShotSourceIndex])
   const handlePoseSaved = React.useCallback(
-    ({ mode, poseStickmanUrl: stickmanUrl, poseReferenceImages: refs, baseImageUrl, maskUrl, prompt: posePrompt, imageEditSize: nextImageEditSizeRaw, resizedImageUrl }: { mode: 'pose' | 'depth' | 'size'; poseStickmanUrl: string | null; poseReferenceImages: string[]; baseImageUrl: string; maskUrl?: string | null; prompt?: string; imageEditSize?: string; resizedImageUrl?: string | null }) => {
+    ({ mode, poseStickmanUrl: stickmanUrl, poseReferenceImages: refs, baseImageUrl, maskUrl, prompt: posePrompt, imageEditSize: nextImageEditSizeRaw, resizedImageUrl }: { mode: PoseEditMode; poseStickmanUrl: string | null; poseReferenceImages: string[]; baseImageUrl: string; maskUrl?: string | null; prompt?: string; imageEditSize?: string; resizedImageUrl?: string | null }) => {
       const normalizedBaseImageUrl = String(baseImageUrl || '').trim()
       const normalizedRefs = Array.from(
         new Set(
@@ -8544,6 +8561,7 @@ const rewritePromptWithCharacters = React.useCallback(
                   { value: 'asset', label: '资产' },
                   { value: 'context', label: '上下文' },
                   { value: 'authority_base_frame', label: '权威基底帧' },
+                  { value: 'staging', label: '站位' },
                 ]}
                 value={anchorBindingKind}
                 onChange={(value) => {

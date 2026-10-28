@@ -7,6 +7,9 @@ export const PUBLIC_FLOW_ANCHOR_BINDING_KINDS = [
 	"asset",
 	"context",
 	"authority_base_frame",
+	// 站位参考：镜头里的空间站位/机位关系参考（如视频抽帧图），
+	// 对应 Lens 的 lens_asset_image type=3，区别于角色、场景与普通道具
+	"staging",
 ] as const;
 
 export const PUBLIC_FLOW_ANCHOR_REFERENCE_VIEWS = [

@@ -767,6 +767,66 @@ export async function getStyleConfig(
   return parsedConfig
 }
 
+/** 抽帧转绘提示词在 sessionStorage 的缓存 key（全局一份，刷新一次请求一次） */
+const FRAME_TO_PROMPTS_CACHE_KEY = 'lens_frame_to_prompts'
+
+/** 抽帧转绘提示词（后端从 Redis 读取，可在后台动态调整） */
+export interface LensFrameToPrompts {
+  /** 转线稿提示词 */
+  lineartPrompt: string
+  /** 转深度图提示词 */
+  depthmapPrompt: string
+}
+
+/**
+ * 读取转线稿 / 转深度图提示词。
+ *
+ * <p>提示词配置在 Redis（frame_to_lineart_prompt / frame_to_depthmap_prompt），
+ * 由后台可调；这里缓存到 sessionStorage，刷新页面只请求一次。</p>
+ *
+ * @param forceRequest 是否跳过缓存强制请求
+ * @returns 提示词对象；接口无数据时返回 null
+ */
+export async function getFrameToPrompts(forceRequest = false): Promise<LensFrameToPrompts | null> {
+  if (!forceRequest) {
+    try {
+      const cached = window.sessionStorage.getItem(FRAME_TO_PROMPTS_CACHE_KEY)
+      if (cached) return JSON.parse(cached) as LensFrameToPrompts
+    } catch {
+      // 缓存损坏按未命中处理，继续走接口
+    }
+  }
+
+  // 画布上每个节点都会用到该配置，并发挂载时合并为一次请求
+  if (frameToPromptsInflight) return frameToPromptsInflight
+  frameToPromptsInflight = requestFrameToPrompts()
+  try {
+    return await frameToPromptsInflight
+  } finally {
+    frameToPromptsInflight = null
+  }
+}
+
+/** 抽帧转绘提示词的进行中请求（并发合并用） */
+let frameToPromptsInflight: Promise<LensFrameToPrompts | null> | null = null
+
+/** 实际请求抽帧转绘提示词并写缓存 */
+async function requestFrameToPrompts(): Promise<LensFrameToPrompts | null> {
+  const data = await lensFetch<Partial<LensFrameToPrompts> | null>('/api/common/config/frameToPrompts')
+  if (!data || typeof data !== 'object') return null
+
+  const prompts: LensFrameToPrompts = {
+    lineartPrompt: typeof data.lineartPrompt === 'string' ? data.lineartPrompt : '',
+    depthmapPrompt: typeof data.depthmapPrompt === 'string' ? data.depthmapPrompt : '',
+  }
+  try {
+    window.sessionStorage.setItem(FRAME_TO_PROMPTS_CACHE_KEY, JSON.stringify(prompts))
+  } catch {
+    // 缓存写入失败不影响本次返回
+  }
+  return prompts
+}
+
 /** lens 模型条目（/api/model/* 返回 data 数组元素） */
 export interface LensModelOption {
   value: string | number

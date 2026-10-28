@@ -288,7 +288,7 @@ export const canvasNodeSpecs = {
 				"optional ImagePromptSpecV2 JSON view of the same executable prompt. For chapter-grounded generation, prefer filling referenceBindings + identityConstraints instead of leaving reference reuse implicit.",
 			systemPrompt: "string (optional)",
 			anchorBindings:
-				"Array<{ kind: 'character'|'scene'|'prop'|'shot'|'story'|'asset'|'context'|'authority_base_frame'; label?: string; refId?: string; entityId?: string; imageUrl?: string; sourceBookId?: string; referenceView?: 'three_view'|'role_card'; category?: string }> (canonical semantic anchor definition shared across characters, scenes, props, story beats and assets)",
+				"Array<{ kind: 'character'|'scene'|'prop'|'shot'|'story'|'asset'|'context'|'authority_base_frame'|'staging'; label?: string; refId?: string; entityId?: string; imageUrl?: string; sourceBookId?: string; referenceView?: 'three_view'|'role_card'; category?: string }> (canonical semantic anchor definition shared across characters, scenes, props, story beats and assets; 'staging' means a spatial framing/blocking reference such as a video frame grab)",
 			referenceImages:
 				"string[] (optional but mandatory when this node must directly reuse request-carried reference images and no canvas edge carries them)",
 			assetInputs:

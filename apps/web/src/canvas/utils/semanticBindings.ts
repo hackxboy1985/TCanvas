@@ -286,6 +286,7 @@ export function resolvePrimarySemanticAnchorBinding(data: unknown): SemanticNode
     'character',
     'scene',
     'prop',
+    'staging',
     'shot',
     'story',
     'asset',

@@ -14,7 +14,7 @@
 | `lens_role`（角色） | `MaterialAsset kind='character'` + 角色卡 roleCards + 锚点 `kind='character'` | ✅ 高 |
 | `lens_asset_image type=1`（场景 location） | `MaterialAsset kind='scene'` + 锚点 `kind='scene'` | ✅ |
 | `lens_asset_image type=2`（道具） | `MaterialAsset kind='prop'` + 锚点 `kind='prop'` | ✅ |
-| `lens_asset_image type=3`（站位参考） | 无直接对应（可归入 scene/prop/context） | ⚠️ 缺失 |
+| `lens_asset_image type=3`（站位参考） | 锚点 `kind='staging'`（站位）；视频抽帧图默认按此类型 | ✅ |
 | `VisualStyleEnum`（视觉风格） | `MaterialAsset kind='style'`（styleBible） | ✅ |
 
 ## 2. 先厘清两边的"节点"概念（不对等，是差异根源）
@@ -25,7 +25,7 @@ TapCanvas（React Flow 画布项目）里"节点"分四层，容易混淆：
 |---|---|---|
 | 画布物理节点 `TaskNodeKind` | `text` / `image` / `imageEdit` / `video` / `storyboard` | 真正渲染在画布上的节点 |
 | 逻辑节点 `canvasNodeSpecs.kind` | `text`、`novelDoc`、`scriptDoc`、`storyboardScript`、`cameraRef`、`image`、`imageEdit`、`video`、`storyboard` | AI 画布能力清单里的逻辑种类 |
-| 语义锚点 `anchorBindings.kind` | `character` / `scene` / `prop` / `shot` / `story` / `asset` / `context` / `authority_base_frame` | **不是节点**，是绑定在 image/storyboard 节点上的"资产引用"字段 |
+| 语义锚点 `anchorBindings.kind` | `character` / `scene` / `prop` / `staging` / `shot` / `story` / `asset` / `context` / `authority_base_frame` | **不是节点**，是绑定在 image/storyboard 节点上的"资产引用"字段 |
 | 资产库 `MaterialAsset.kind` | `character` / `scene` / `prop` / `style` | "角色/场景/道具"的真实实体仓库 |
 
 Lens（短剧生成项目）是关系型数据模型（表），没有"画布节点"概念。
