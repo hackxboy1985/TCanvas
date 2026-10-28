@@ -45,7 +45,7 @@ const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
  */
 const POSE_CANVAS_MAX_SIZE_CSS = 'min(100%, calc(92vh - 260px))'
 
-/** 圈选笔迹默认宽度（中档） */
+/** 圈选笔迹基准宽度（对应当前「粗」档，700px 画布下约 48px） */
 const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
 /**
  * 弹窗宽度：占视口 80%，超宽屏限制 1600px 上限。
@@ -54,10 +54,15 @@ const MASK_STROKE_WIDTH = Math.round(18 * POSE_RENDER_SCALE)
  * 因此宽度统一用 CSS 变量 --modal-size 控制，浏览器原生计算，不受根字号影响。</p>
  */
 const MODAL_WIDTH_CSS = 'min(1600px, 80vw)'
-/** 圈选笔触档位：细 / 中 / 粗 */
-const MASK_BRUSH_THIN = Math.round(MASK_STROKE_WIDTH / 2)
-const MASK_BRUSH_MEDIUM = MASK_STROKE_WIDTH
-const MASK_BRUSH_THICK = Math.round(MASK_STROKE_WIDTH * 1.8)
+/**
+ * 圈选笔触档位：细 / 中 / 粗。
+ *
+ * <p>细档再收窄（原细档 24 显得偏粗），把原来的细、中两档整体上移：
+ * 细 12 / 中 24 / 粗 48，默认取中档。</p>
+ */
+const MASK_BRUSH_THIN = Math.round(MASK_STROKE_WIDTH / 4)
+const MASK_BRUSH_MEDIUM = Math.round(MASK_STROKE_WIDTH / 2)
+const MASK_BRUSH_THICK = MASK_STROKE_WIDTH
 
 export const createDefaultPosePoints = (): PosePoint[] => {
   const w = POSE_CANVAS_SIZE.width
@@ -298,7 +303,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.strokeStyle = '#ff7a1a'
-    ctx.lineWidth = MASK_STROKE_WIDTH
+    ctx.lineWidth = MASK_BRUSH_MEDIUM
     ctx.globalAlpha = 0.92
     ctx.globalCompositeOperation = 'source-over'
     ctx.shadowBlur = 0
@@ -827,22 +832,23 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 </Badge>
               )}
             </Group>
-            <div
-              className="pose-editor__mask-canvas"
-              style={{
-                position: 'relative',
-                // 占满左半部整个面板宽度，正方形随宽度自适应，并受视口高度约束
-                width: '100%',
-                maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
-                aspectRatio: '1 / 1',
-                height: 'auto',
-                margin: '0 auto',
-                borderRadius: 12,
-                border: `1px solid ${options.inlineDividerColor}`,
-                overflow: 'hidden',
-                background: options.isDarkUi ? 'rgba(5,8,16,0.9)' : 'rgba(245,248,255,0.95)',
-              }}
-            >
+            <Group className="pose-editor__mask-body" gap={10} align="flex-start" wrap="nowrap" style={{ width: '100%' }}>
+              <div
+                className="pose-editor__mask-canvas"
+                style={{
+                  position: 'relative',
+                  // 占据笔触栏以外的全部宽度，正方形随宽度自适应，并受视口高度约束
+                  flex: '1 1 auto',
+                  minWidth: 0,
+                  maxWidth: POSE_CANVAS_MAX_SIZE_CSS,
+                  aspectRatio: '1 / 1',
+                  height: 'auto',
+                  borderRadius: 12,
+                  border: `1px solid ${options.inlineDividerColor}`,
+                  overflow: 'hidden',
+                  background: options.isDarkUi ? 'rgba(5,8,16,0.9)' : 'rgba(245,248,255,0.95)',
+                }}
+              >
               {poseReady ? (
                 <img
                   className="pose-editor__base-image"
@@ -884,7 +890,28 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                   onMouseLeave={(e) => handleMaskPointer(e, 'up')}
                 />
               ) : null}
-            </div>
+              </div>
+              {/* 笔触档位：竖排常驻在画布右侧。放在右侧而不是左侧，
+                  是为了让画布左边缘在「姿势调整 / 局部修改 / 尺寸调整」三个 tab 下位置一致，
+                  避免切换时产生横向位移的错觉 */}
+              {maskEnabled ? (
+                <Stack className="pose-editor__brush-rail" gap={6} align="center" style={{ flex: '0 0 auto', paddingTop: 2 }}>
+                  <Text size="xs" c="dimmed">笔触</Text>
+                  <SegmentedControl
+                    className="pose-editor__brush-size-control"
+                    orientation="vertical"
+                    size="xs"
+                    value={String(maskBrushSize)}
+                    onChange={(value) => setMaskBrushSize(Number(value))}
+                    data={[
+                      { value: String(MASK_BRUSH_THIN), label: '细' },
+                      { value: String(MASK_BRUSH_MEDIUM), label: '中' },
+                      { value: String(MASK_BRUSH_THICK), label: '粗' },
+                    ]}
+                  />
+                </Stack>
+              ) : null}
+            </Group>
             {maskEnabled ? (
               <>
                 {maskCleared ? (
@@ -896,21 +923,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     已保存过圈选引导图：不重新圈选将沿用，重新圈选会覆盖。
                   </Text>
                 ) : null}
-                <Group className="pose-editor__panel-actions" gap={8} align="center" justify="space-between">
-                  <Group className="pose-editor__brush-size" gap={6} align="center">
-                    <Text size="xs" c="dimmed">笔触</Text>
-                    <SegmentedControl
-                      className="pose-editor__brush-size-control"
-                      size="xs"
-                      value={String(maskBrushSize)}
-                      onChange={(value) => setMaskBrushSize(Number(value))}
-                      data={[
-                        { value: String(MASK_BRUSH_THIN), label: '细' },
-                        { value: String(MASK_BRUSH_MEDIUM), label: '中' },
-                        { value: String(MASK_BRUSH_THICK), label: '粗' },
-                      ]}
-                    />
-                  </Group>
+                <Group className="pose-editor__panel-actions" gap={8} align="center" justify="flex-end">
                   <Button
                     className="pose-editor__clear-mask"
                     variant="subtle"
