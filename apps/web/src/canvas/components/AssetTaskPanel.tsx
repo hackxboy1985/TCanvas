@@ -1,9 +1,10 @@
 import React from 'react'
 import { ActionIcon, Badge, Button, Group, Loader, Pagination, Select, Text } from '@mantine/core'
 import { IconArrowsMaximize, IconRefresh, IconX } from '@tabler/icons-react'
-import { CANVAS_NODE_ASSET_TYPE, LensAssetTaskStatus, listAssetImageTasks, listCanvasFreeNodeTasks, canViewTaskParams, type LensModelOption } from '../../api/lens'
+import { CANVAS_NODE_ASSET_TYPE, LensAssetTaskStatus, listAssetImageTasks, listCanvasFreeNodeTasks, canViewTaskParams, type LensAssetTaskAdoptionTarget, type LensModelOption } from '../../api/lens'
 import { getLensCanvasFlowId, readCanvasNodeAssetId } from '../utils/canvasNodeAssetId'
 import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
+import { useRFStore } from '../store'
 import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
 import { AssetTaskPanelCard } from './AssetTaskPanelCard'
 import {
@@ -51,6 +52,54 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
   const canvasNodeAssetId = readCanvasNodeAssetId(data)
   const assetId = identity?.assetId
   const assetType = identity?.assetType
+  /**
+   * 「采纳结果」的目标资产。
+   *
+   * <p>只有业务资产节点（角色/场景/道具，带实体ID）才有可关联的业务记录；
+   * 画布自由节点与衍生节点（角度/打光/局部编辑）没有业务实体，关联接口无处落库，
+   * 因此不展示采纳按钮，避免给出一个点了必然失败的入口。
+   */
+  const adoptTarget: LensAssetTaskAdoptionTarget | undefined =
+    assetId && assetType !== undefined && dramaId
+      ? {
+          category: assetType + 1,
+          entityId: assetId,
+          dramaId,
+          label: typeof data.label === 'string' && data.label ? data.label : '当前资产',
+        }
+      : undefined
+  /**
+   * 是否为画布自由节点（含角度/打光/局部编辑等衍生节点）。
+   *
+   * <p>这类节点没有业务资产实体，但任务归属稳定（assetType=10 + 节点数字ID），
+   * 任务能正常查出来；「采纳结果」在这里的含义是把结果设为**节点自身的当前主图**，
+   * 由节点 data 承载，不写业务表。因此必须给它们保留采纳入口，
+   * 否则衍生节点产出的图只能看、不能选为节点的当前图。
+   */
+  const canAdoptToNode = !adoptTarget && canvasNodeAssetId !== null
+  /**
+   * 把选中的任务结果设为当前节点的主图。
+   *
+   * <p>命中原有结果则只切换主图下标，未命中则追加为新结果，
+   * 与节点自身生图写入的 imageResults/imageUrl/imagePrimaryIndex 结构保持一致。
+   *
+   * @param imageUrl 选中的结果图片地址
+   */
+  const handleAdoptNodeImage = React.useCallback((imageUrl: string): void => {
+    const store = useRFStore.getState()
+    // 以 store 里的最新 data 为准：面板渲染期间节点可能刚被生图回写过
+    const latestData = (store.nodes.find((node) => node.id === nodeId)?.data || data) as Record<string, unknown>
+    const previous = Array.isArray(latestData.imageResults)
+      ? (latestData.imageResults as Array<Record<string, unknown>>)
+      : []
+    const results = previous.map((item) => ({ ...item }))
+    let index = results.findIndex((item) => String(item?.url || '') === imageUrl)
+    if (index < 0) {
+      index = results.length
+      results.push({ url: imageUrl })
+    }
+    store.updateNodeData(nodeId, { imageResults: results, imageUrl, imagePrimaryIndex: index })
+  }, [data, nodeId])
   const [canViewParams, setCanViewParams] = React.useState(false)
   React.useEffect(() => {
     let active = true
@@ -170,8 +219,7 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
         {!error && loading && records.length === 0 && <Loader className="lens-asset-task-panel__loading" size="sm" />}
         {!error && !loading && records.length === 0 && <Text className="lens-asset-task-panel__empty" size="sm">暂无任务记录</Text>}
         {records.map((record, index) => <AssetTaskPanelCard key={record.id || index} record={record} derivedLabel={record.derivedLabel} applicationName={resolveLensTaskApplicationName(record.originAppId, applications)} canViewParams={canViewParams}
-          target={assetId && assetType !== undefined && dramaId ? { category: assetType + 1, entityId: assetId, dramaId,
-            label: typeof data.label === 'string' && data.label ? data.label : '当前资产' } : undefined} />)}
+          target={adoptTarget} onAdoptNodeImage={canAdoptToNode ? handleAdoptNodeImage : undefined} />)}
       </div>
       {total > PAGE_SIZE && <Pagination className="lens-asset-task-panel__pagination" size="xs" siblings={0} boundaries={1}
         total={Math.ceil(total / PAGE_SIZE)} value={page} onChange={setPage} />}

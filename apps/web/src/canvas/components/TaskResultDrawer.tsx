@@ -134,11 +134,19 @@ export interface TaskResultMedia {
   thumbnail?: string
 }
 
+/**
+ * 采纳目标为「画布节点自身当前图」时，填充到 {@link TaskResultAdoptedPayload.storyboardId} 的标记值。
+ *
+ * <p>画布自由节点与衍生节点没有分镜、也没有业务实体，采纳只改节点自身的图片字段。
+ * 用固定标记区分两类目标，避免宿主靠「storyboardId 是否为空」去猜目标类型。
+ */
+export const CANVAS_ADOPT_TARGET_ID = '__canvas_node__'
+
 /** 采纳成功后的回调载荷（供宿主同步画布节点，抽屉本身不依赖画布 store） */
 export interface TaskResultAdoptedPayload {
   /** 画布节点ID */
   nodeId: string
-  /** 被采纳到的分镜ID */
+  /** 被采纳到的分镜ID；画布节点采纳时为 {@link CANVAS_ADOPT_TARGET_ID} */
   storyboardId: string
   /** 被采纳的结果 URL */
   resultUrl: string
@@ -228,11 +236,21 @@ interface TaskCardModel {
   taskParams: string
 }
 
+/**
+ * 「采纳结果」的目标类型。
+ *
+ * <p>分镜节点回写自身分镜（后端 lens_image）；画布自由节点/衍生节点没有业务实体，
+ * 采纳即把结果设为该节点自身的当前主图（只写节点 data，不落业务表）。
+ */
+type AdoptTargetKind = 'storyboard' | 'canvas'
+
 /** 「采纳结果」二次确认弹窗的草稿状态（null 表示弹窗关闭） */
 interface AdoptDraft {
-  /** 目标分镜ID（恒为该节点自身分镜） */
+  /** 采纳目标类型 */
+  targetKind: AdoptTargetKind
+  /** 目标分镜ID（targetKind=storyboard 时必填；canvas 时为空串） */
   storyboardId: string
-  /** 分镜展示名，如「分镜3」 */
+  /** 目标展示名，如「分镜3」「该节点」 */
   shotLabel: string
   /** 该任务的全部结果（供多结果时显式选择） */
   results: TaskResultMedia[]
@@ -607,10 +625,16 @@ export function TaskResultDrawer({
    * @param resultIndex 默认选中的结果下标
    */
   const openAdoptConfirm = React.useCallback(
-    (card: TaskCardModel, storyboardId: string, resultIndex: number) => {
+    (card: TaskCardModel, targetKind: AdoptTargetKind, storyboardId: string, resultIndex: number) => {
       setAdoptDraft({
+        targetKind,
         storyboardId,
-        shotLabel: card.storyboardOrder !== null ? `分镜${card.storyboardOrder}` : '当前分镜',
+        shotLabel:
+          targetKind === 'storyboard'
+            ? card.storyboardOrder !== null
+              ? `分镜${card.storyboardOrder}`
+              : '当前分镜'
+            : '该节点',
         results: card.results,
         resultIndex,
       })
@@ -634,11 +658,15 @@ export function TaskResultDrawer({
     const uploadType: LensShotFileType = media.type === 'video' ? 1 : 0
     setAdopting(true)
     try {
-      await adoptShotResult({
-        storyboardId: adoptDraft.storyboardId,
-        url: media.url,
-        uploadType,
-      })
+      // 画布自由节点/衍生节点没有分镜与业务实体，采纳只把结果设为该节点自身的当前主图，
+      // 由宿主写节点 data（不落业务表，因此不调用 addForceSet，避免给不存在的分镜落库）
+      if (adoptDraft.targetKind !== 'canvas') {
+        await adoptShotResult({
+          storyboardId: adoptDraft.storyboardId,
+          url: media.url,
+          uploadType,
+        })
+      }
       setAdoptDraft(null)
       toast(`已采纳${media.type === 'video' ? '视频' : '图片'}到${adoptDraft.shotLabel}`, 'success')
       onAdoptResult?.({
@@ -721,11 +749,17 @@ export function TaskResultDrawer({
   /**
    * 「采纳结果」是否可用。
    *
-   * <p>只有分镜节点有自身对应的分镜（target.storyboardId）；角色/场景/道具
-   * 没有可回写的分镜，因此不显示该按钮（不猜测目标、不降级）。
+   * <p>两种节点各自有明确的目标，只有目标确定时才显示按钮（不猜测、不降级）：
+   * <ul>
+   *   <li>分镜节点：回写自身分镜（target.storyboardId）；</li>
+   *   <li>画布自由节点（含角度/打光等衍生节点）：没有业务实体与分镜，采纳即把该结果
+   *       设为节点自身的当前主图，由宿主写节点 data，不落任何业务表。</li>
+   * </ul>
+   * 角色/场景/道具的任务在本抽屉里不提供采纳（各自走资产面板的关联接口）。
    */
   const adoptStoryboardId = target?.kind === 'storyboard' ? target.storyboardId : undefined
-  const canAdopt = Boolean(adoptStoryboardId)
+  const canAdoptToCanvas = target?.kind === 'canvas'
+  const canAdopt = Boolean(adoptStoryboardId) || canAdoptToCanvas
   /** 当前采纳草稿选中的结果（用于弹窗预览与按钮文案） */
   const adoptSelectedMedia = adoptDraft ? adoptDraft.results[adoptDraft.resultIndex] : undefined
 
@@ -921,11 +955,20 @@ export function TaskResultDrawer({
 
               {/* 底部操作（对齐 lens 分镜板：采纳结果 / 复制提示词 / 查看参数，仅管理员） */}
               <div className="lens-task-card-actions">
-                {/* 采纳结果：仅分镜节点可用；多结果时默认第一条，可在弹窗内切换 */}
-                {canAdopt && adoptStoryboardId && (
+                {/* 采纳结果：分镜节点回写自身分镜；画布自由节点/衍生节点设为该节点当前图。
+                    多结果时默认第一条，可在弹窗内切换 */}
+                {canAdopt && (
                   <Tooltip
                     className="lens-task-adopt-tip"
-                    label={card.results.length > 1 ? '选择本任务中的一条结果采纳到该分镜' : '采纳该结果到本节点对应的分镜'}
+                    label={
+                      canAdoptToCanvas
+                        ? card.results.length > 1
+                          ? '选择本任务中的一条结果设为本节点当前图片'
+                          : '把该结果设为本节点当前图片'
+                        : card.results.length > 1
+                          ? '选择本任务中的一条结果采纳到该分镜'
+                          : '采纳该结果到本节点对应的分镜'
+                    }
                   >
                     <Button
                       className="lens-task-adopt-btn"
@@ -933,7 +976,15 @@ export function TaskResultDrawer({
                       size="compact-xs"
                       disabled={card.results.length === 0}
                       leftSection={<IconCheck size={13} />}
-                      onClick={() => openAdoptConfirm(card, adoptStoryboardId, 0)}
+                      onClick={() =>
+                        openAdoptConfirm(
+                          card,
+                          canAdoptToCanvas ? 'canvas' : 'storyboard',
+                          // 画布节点没有分镜，用固定标记让宿主明确按"节点当前图"回写
+                          canAdoptToCanvas ? CANVAS_ADOPT_TARGET_ID : adoptStoryboardId ?? '',
+                          0,
+                        )
+                      }
                     >
                       采纳结果
                     </Button>
@@ -980,7 +1031,7 @@ export function TaskResultDrawer({
         <pre className="lens-task-reqpar">{paramsText}</pre>
       </Modal>
 
-      {/* 采纳结果二次确认：目标分镜恒为本节点自身分镜，多结果时在此显式选择 */}
+      {/* 采纳结果二次确认：分镜节点目标恒为自身分镜；画布节点目标为该节点当前图。多结果时在此显式选择 */}
       <Modal
         opened={adoptDraft !== null}
         onClose={() => setAdoptDraft(null)}
@@ -991,7 +1042,10 @@ export function TaskResultDrawer({
         {adoptDraft && (
           <Stack className="lens-task-adopt-body" gap="sm">
             <Text className="lens-task-adopt-confirm">
-              确认将{adoptSelectedMedia?.type === 'video' ? '视频' : '图片'}采纳到{adoptDraft.shotLabel}吗？采纳后该分镜的选中结果会被覆盖。
+              确认将{adoptSelectedMedia?.type === 'video' ? '视频' : '图片'}采纳到{adoptDraft.shotLabel}吗？
+              {adoptDraft.targetKind === 'canvas'
+                ? '采纳后该节点的当前图片会被覆盖。'
+                : '采纳后该分镜的选中结果会被覆盖。'}
             </Text>
 
             {adoptDraft.results.length > 1 && (

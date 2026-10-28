@@ -4,7 +4,7 @@ import { LensAssetTaskStatus, type LensTaskRecord, type LensAssetTaskAdoptionTar
 import { useUIStore } from '../../ui/uiStore'
 import { toast } from '../../ui/toast'
 import { IconCopy, IconEye } from '@tabler/icons-react'
-import { AssetTaskAdoptButton } from './AssetTaskAdoptButton'
+import { AssetTaskAdoptButton, AssetTaskNodeImageAdoptButton } from './AssetTaskAdoptButton'
 import { toOssResponsiveUrl } from '../utils/ossResponsive'
 
 /** 参考图缩略图显示宽度（px），与 CSS .lens-asset-task-panel__reference 的 36px 一致 */
@@ -63,8 +63,10 @@ function safeMediaUrl(value: unknown): string {
  *
  * @param derivedLabel 衍生节点任务的来源标签（角度修改/打光调整/自定义编辑）；为空表示原资产任务
  */
-export function AssetTaskPanelCard({ record, canViewParams, target, applicationName, derivedLabel }: {
+export function AssetTaskPanelCard({ record, canViewParams, target, applicationName, derivedLabel, onAdoptNodeImage }: {
   record: LensTaskRecord; applicationName: string; canViewParams: boolean; target?: LensAssetTaskAdoptionTarget; derivedLabel?: string
+  /** 画布自由节点/衍生节点的采纳回调：把该结果设为节点自身当前图（无业务实体可落库时使用） */
+  onAdoptNodeImage?: (imageUrl: string) => void
 }) {
   const [paramsOpened, setParamsOpened] = React.useState(false)
   const status = record.taskStatus || record.status || ''
@@ -144,6 +146,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
       {details.errors.map((error) => <Text className="lens-asset-task-panel__error" key={error} size="xs" c="red">{error}</Text>)}
       <Group className="lens-asset-task-panel__actions" gap={6}>
         {target && <AssetTaskAdoptButton target={target} images={details.media.filter((media) => media.type === 'image' && /^https?:/.test(media.url)).map((media) => media.url)} />}
+        {!target && onAdoptNodeImage && <AssetTaskNodeImageAdoptButton images={details.media.filter((media) => media.type === 'image' && /^https?:/.test(media.url)).map((media) => media.url)} onAdopt={onAdoptNodeImage} />}
         {!!record.prompt && <Button className="lens-asset-task-panel__copy" size="compact-xs" variant="outline" color="gray" leftSection={<IconCopy className="lens-asset-task-panel__copy-icon" size={13} />} onClick={() => { void copyPrompt() }}>复制提示词</Button>}
         {canViewParams && rawParams && <Button className="lens-asset-task-panel__params" size="compact-xs" variant="light" color="gray" leftSection={<IconEye className="lens-asset-task-panel__params-icon" size={13} />} onClick={() => setParamsOpened(true)}>查看参数</Button>}
       </Group>

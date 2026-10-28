@@ -38,7 +38,7 @@ import {
 } from '../api/lens'
 import { preloadLensModelOptions } from '../config/useModelOptions'
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
-import { TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
+import { CANVAS_ADOPT_TARGET_ID, TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
 import { AssetLibraryModal } from './AssetLibraryModal'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
@@ -1650,7 +1650,32 @@ export default function LensCanvasApp(): JSX.Element {
    */
   const handleAdoptResult = useCallback(
     (payload: TaskResultAdoptedPayload) => {
-      useRFStore.getState().updateNodeData(payload.nodeId, {
+      const store = useRFStore.getState()
+      const node = store.nodes.find((item) => item.id === payload.nodeId)
+      const data = (node?.data || {}) as Record<string, unknown>
+      /**
+       * 画布自由节点（含角度/打光等衍生节点）的「采纳」是把结果设为本节点当前主图。
+       * 这类节点没有分镜也没有业务实体，改写的是节点自身的图片字段：
+       * 命中已有结果则只切主图下标，未命中则追加为新结果，与节点自身生图写入的结构保持一致。
+       */
+      if (payload.storyboardId === CANVAS_ADOPT_TARGET_ID) {
+        const previous = Array.isArray(data.imageResults)
+          ? (data.imageResults as Array<Record<string, unknown>>)
+          : []
+        const results = previous.map((item) => ({ ...item }))
+        let index = results.findIndex((item) => String(item?.url || '') === payload.resultUrl)
+        if (index < 0) {
+          index = results.length
+          results.push({ url: payload.resultUrl })
+        }
+        store.updateNodeData(payload.nodeId, {
+          imageResults: results,
+          imageUrl: payload.resultUrl,
+          imagePrimaryIndex: index,
+        })
+        return
+      }
+      store.updateNodeData(payload.nodeId, {
         selectedImageUrl: payload.resultUrl,
         // 0=图 1=视频，与 lens_storyboard.select_file_type 同口径
         selectFileType: payload.resultType === 'video' ? 1 : 0,

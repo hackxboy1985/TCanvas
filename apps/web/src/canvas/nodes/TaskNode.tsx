@@ -206,7 +206,7 @@ import {
 } from '../utils/semanticBindings'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { getCanvasTaskStatus, runTaskByCanvas } from '../../api/lens'
-import { getLensCanvasFlowId, readCanvasNodeAssetId } from '../utils/canvasNodeAssetId'
+import { ensureCanvasNodeAssetId, getLensCanvasFlowId, readCanvasNodeAssetId } from '../utils/canvasNodeAssetId'
 import { isLensMode, readLensModelQualities } from '../../config/useModelOptions'
 
 /** lens 生图质量档位中文名（后端 others.qualities 取值：medium/high/xhigh/max） */
@@ -3174,6 +3174,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         toast(failureMessage, 'error')
         return null
       }
+      // 创建时立即分配画布节点数字ID（任务归属 asset_id）：节点的数据只在生成任务启动后才会
+      // 分配该ID，衍生节点首轮任务仍排队时打开任务列表会因缺少归属而查不到任务、也没有采纳入口。
+      // 先分配可让任务列表与采纳按钮在任务产生前就可用；已分配时幂等返回，不覆盖既有值。
+      afterAdd.updateNodeData(newNode.id, ensureCanvasNodeAssetId(newNode, afterAdd.nodes))
       const sourceNode = afterAdd.nodes.find((node) => node.id === id)
       afterAdd.onNodesChange([
         {
