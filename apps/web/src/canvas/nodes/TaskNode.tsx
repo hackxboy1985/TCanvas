@@ -105,6 +105,7 @@ import { PromptSampleDrawer } from '../components/PromptSampleDrawer'
 import { toast } from '../../ui/toast'
 import { DEFAULT_REVERSE_PROMPT_INSTRUCTION } from '../constants'
 import { CANVAS_CONFIG, IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../utils/constants'
+import { getEditTypeLabel } from '../utils/node'
 import { resourceManager } from '../../domain/resource-runtime'
 import { getPendingUploadHandlesByOwnerNodeId, useUploadRuntimeStore } from '../../domain/upload-runtime/store/uploadRuntimeStore'
 import { captureFramesAtTimes } from '../../utils/videoFrameExtractor'
@@ -118,6 +119,22 @@ import { usePoseEditor, type PoseEditMode } from './taskNode/PoseEditor'
 
 /** 视频抽帧生成图片节点的来源标记（写在 node.data.source） */
 const VIDEO_FRAME_SOURCE = 'video_frame'
+
+/** 风格转换类编辑模式集合（对应 node.data.editType：转线稿/转深度图/转白模） */
+const STYLE_CONVERT_EDIT_TYPES = new Set<PoseEditMode>(['sketch', 'depthmap', 'clay'])
+
+/** 锚点类型中文标签（与「锚点绑定」下拉文案保持一致） */
+const ANCHOR_KIND_LABELS: Record<string, string> = {
+  character: '角色',
+  scene: '场景',
+  prop: '道具',
+  staging: '站位参考',
+  shot: '分镜',
+  story: '剧情',
+  asset: '资产',
+  context: '上下文',
+  authority_base_frame: '权威基底帧',
+}
 import { useImageViewEditor, type ImageViewEditorApplyPayload } from './taskNode/ImageViewEditor'
 import { TaskNodeHandles } from './taskNode/components/TaskNodeHandles'
 import { TopToolbar } from './taskNode/components/TopToolbar'
@@ -201,6 +218,7 @@ import {
   type LensPromptPolishBillingPreview,
 } from '../../api/lens'
 import imageViewControlsModule from '@tapcanvas/image-view-controls'
+import { normalizePublicFlowAnchorBindings } from '@tapcanvas/flow-anchor-bindings'
 import {
   resolvePrimarySemanticAnchorBinding,
   resolveSemanticNodeRoleBinding,
@@ -1753,13 +1771,16 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   /**
    * 默认锚点类型。
    *
-   * <p>视频抽帧图（node.data.source === 'video_frame'）表达的是空间站位/机位关系，
-   * 默认按「站位」处理；其它节点沿用已保存的锚点类型，都没有时默认「角色」。</p>
+   * <p>assetCategory=4 表示「站位参考图」（视频抽帧等），默认按站位处理；
+   * 历史抽帧节点可能只有 source='video_frame' 标记，一并兜底。
+   * 其它节点沿用已保存的锚点类型，都没有时默认「角色」。</p>
    */
   const defaultAnchorBindingKind = React.useMemo<PublicFlowAnchorBindingKind>(() => {
     const savedKind = primarySemanticAnchor?.kind
     if (savedKind) return savedKind
-    const source = String((data as any)?.source || '').trim()
+    const record = data as Record<string, unknown>
+    if (Number(record?.assetCategory) === 4) return 'staging'
+    const source = String(record?.source || '').trim()
     return source === VIDEO_FRAME_SOURCE ? 'staging' : 'character'
   }, [data, primarySemanticAnchor])
   const [anchorBindingKind, setAnchorBindingKind] = React.useState<PublicFlowAnchorBindingKind>(
@@ -1957,6 +1978,50 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     return fromResults || fromNode || ''
   }, [data, imagePrimaryIndex, imageResults])
 
+  /**
+   * 切换锚点类型并立即写入节点数据。
+   *
+   * <p>锚点类型是语义分类，不应要求先填名称、再点「绑定」才生效——那样用户改完
+   * 下拉会以为没起作用（角标、站位参考识别都读节点数据）。
+   * 这里在切换时用「已填名称 → 节点名称」作为锚点名称兜底写入，
+   * 并用 replaceKinds 清掉旧类型绑定，避免旧类型优先级更高导致读取结果不变。</p>
+   *
+   * @param value 新的锚点类型
+   */
+  const handleAnchorBindingKindChange = React.useCallback((value: string | null) => {
+    if (!value) return
+    const nextKind = value as PublicFlowAnchorBindingKind
+    const previousKind = primarySemanticAnchor?.kind
+    setAnchorBindingKind(nextKind)
+    // 只写用户填写的锚点名称。不要用节点自身 name 兜底：衍生节点标题会读
+    // anchorBindings[0].label 作为「原节点名」，写进自动生成名（如图片编辑-7）
+    // 会把标题的源节点名覆盖掉。normalize 只要求至少一个身份字段，
+    // sourceNodeId / imageUrl 已满足，label 可以留空。
+    const anchorName = anchorBindingLabel.trim()
+    // 强制替换：upsert 的 replaceKinds 只移除「身份（label/refId）匹配」的旧绑定，
+    // 旧节点上残留的不同名角色锚点会被保留，导致类型切换看起来没生效，因此这里直接重建数组
+    const rawBindings = (data as Record<string, unknown>)?.anchorBindings
+    const existingBindings = Array.isArray(rawBindings) ? rawBindings : []
+    const kindsToReplace = new Set<string>([nextKind])
+    if (previousKind) kindsToReplace.add(previousKind)
+    const keptBindings = existingBindings.filter((item) => {
+      if (!item || typeof item !== 'object') return false
+      return !kindsToReplace.has(String((item as Record<string, unknown>).kind || '').trim())
+    })
+    updateNodeData(id, {
+      anchorBindings: normalizePublicFlowAnchorBindings([
+        ...keptBindings,
+        {
+          kind: nextKind,
+          sourceNodeId: id,
+          ...(anchorName ? { label: anchorName } : null),
+          ...(primaryImageForAnchorBinding ? { imageUrl: primaryImageForAnchorBinding } : null),
+        },
+      ]),
+    })
+    toast('锚点类型已切换为：' + (ANCHOR_KIND_LABELS[nextKind] || nextKind))
+  }, [anchorBindingLabel, data, id, primaryImageForAnchorBinding, primarySemanticAnchor, updateNodeData])
+
   const anchorBindStatusText = React.useMemo(() => {
     const anchorKind = String(primarySemanticAnchor?.kind || '').trim()
     const anchorLabel = String(primarySemanticAnchor?.label || '').trim()
@@ -1980,7 +2045,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
                     : anchorKind === 'authority_base_frame'
                       ? '权威基底帧'
                       : anchorKind === 'staging'
-                        ? '站位'
+                        ? '站位参考'
                         : anchorKind
     const parts: string[] = []
     if (anchorKindLabel) parts.push(`当前锚点：${anchorKindLabel}`)
@@ -3162,7 +3227,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
    * <p>统一处理各分支都必须做、但以前各写一套容易漏掉的事：
    * 1）写入派生来源 refNodeId，供任务结果抽屉把衍生任务挂到来源资产节点下；
    * 2）继承来源节点 data 里的实际宽高，来源节点被调过尺寸时衍生节点也与之对齐；只在来源值是正数时带上，不写死常量；
-   * 3）放到来源节点右侧并自动连线来源节点的 out-image。
+   * 3）放到来源节点右侧并自动连线来源节点的 out-image；
+   * 4）来源是站位参考图时，衍生节点继承站位参考身份（assetCategory=4），
+   *    使它对下游分镜节点仍算站位参考；角标显示「站位参考」，一级标题按 editType 显示具体功能。
    *
    * @param nodeKind 节点类型（打光/角度、姿势/深度产出为 imageEdit；纯尺寸调整为 image）
    * @param nodeData 该分支特有的业务字段，不含 kind/refNodeId/宽高（这些由本方法统一注入）
@@ -3174,10 +3241,15 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const stateBefore = useRFStore.getState()
       const beforeIds = new Set(stateBefore.nodes.map((node) => node.id))
       const sourceDataRecord = data as Record<string, unknown>
+      // 源节点是站位参考图（assetCategory=4 或视频抽帧）时，衍生节点继承该身份；
+      // 普通图片节点的衍生节点不继承，仍保持普通编辑节点
+      const sourceIsStagingReference = Number(sourceDataRecord.assetCategory) === 4
+        || String(sourceDataRecord.source || '').trim() === VIDEO_FRAME_SOURCE
       addNode('taskNode', undefined, {
         ...nodeData,
         kind: nodeKind,
         refNodeId: id,
+        ...(sourceIsStagingReference ? { assetCategory: 4 } : null),
         ...(Number.isFinite(Number(sourceDataRecord.nodeWidth)) && Number(sourceDataRecord.nodeWidth) > 0
           ? { nodeWidth: Number(sourceDataRecord.nodeWidth) }
           : null),
@@ -3782,7 +3854,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const newDerivedNodeId = createDerivedImageNode(
         'imageEdit',
         {
-          editType: 'custom',
+          // 风格转换（转线稿/转深度图/转白模）用各自的 editType，
+          // 便于衍生节点标题与任务列表显示正确名称；其余编辑仍为 custom
+          editType: STYLE_CONVERT_EDIT_TYPES.has(mode) ? mode : 'custom',
           prompt: effectivePrompt,
           aspect: nextImageEditAspect,
           sampleCount,
@@ -4365,7 +4439,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     <Group className="tc-task-node__polish-actions" gap={4} wrap="nowrap">
       {lastPolishComparison ? <Button className="tc-task-node__polish-compare" size="compact-xs" variant="subtle" onClick={() => setShowLastPolishComparison(true)}>查看对比</Button> : null}
       {polishOriginal ? <Button className="tc-task-node__polish-restore" size="compact-xs" variant="subtle" disabled={viewOnly} onClick={handleRestorePolish}>恢复润色前</Button> : null}
-      {typeof (data as Record<string, unknown>).assetCategory === 'number' ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>保存提示词</Button> : null}
+      {typeof (data as Record<string, unknown>).assetCategory === 'number' && String((data as Record<string, unknown>).entityId ?? '').trim() ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>保存提示词</Button> : null}
       <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>{'AI润色'}</Button>
       {/* 费用说明：免费显示「（免费N次）」，免费用尽显示「（N积分）」；单独用 Text 渲染，不并入按钮文字 */}
       {polishBillingSuffix ? (
@@ -7832,17 +7906,19 @@ const rewritePromptWithCharacters = React.useCallback(
       parts.push(lightPresetLabels[String(activeLight?.presetId || '')] || '打光')
     }
 
-    // 原节点名：anchorBindings 的 label（生成时从源节点复制而来）→ 上游连线节点标题
+    // 原节点名：优先取上游连线的源节点标题（真正的「原节点」）；
+    // 没有上游连线时（如按角度/打光直接派生）才退回 anchorBindings 的 label。
+    // 顺序不能反：锚点 label 是用户可编辑的锚点名称，写入后不应改变标题。
     let sourceLabel = ''
-    const bindings = Array.isArray(selfData?.anchorBindings) ? selfData.anchorBindings : []
-    const firstBinding = bindings[0] as Record<string, unknown> | undefined
-    sourceLabel = String(firstBinding?.label || '').trim()
+    const { nodes, edges } = useRFStore.getState()
+    const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, id)
+    const sourceNode = orderedItems.length ? nodes.find((n) => n.id === orderedItems[0].sourceNodeId) : undefined
+    if (sourceNode) sourceLabel = getNodeLabel(sourceNode)
 
     if (!sourceLabel) {
-      const { nodes, edges } = useRFStore.getState()
-      const orderedItems = collectOrderedUpstreamReferenceItems(nodes, edges, id)
-      const sourceNode = orderedItems.length ? nodes.find((n) => n.id === orderedItems[0].sourceNodeId) : undefined
-      if (sourceNode) sourceLabel = getNodeLabel(sourceNode)
+      const bindings = Array.isArray(selfData?.anchorBindings) ? selfData.anchorBindings : []
+      const firstBinding = bindings[0] as Record<string, unknown> | undefined
+      sourceLabel = String(firstBinding?.label || '').trim()
     }
 
     // 没有任何角度/打光时（局部修改、尺寸调整），按「节点来源」兜底，
@@ -7855,7 +7931,11 @@ const rewritePromptWithCharacters = React.useCallback(
     //   - 局部修改产出 kind='imageEdit'
     // 不读 editType：历史节点可能没有这个字段，按它判定会把局部修改误显示成「图片编辑」。
     if (!parts.length) {
-      parts.push(kind === 'image' ? '尺寸调整' : '局部修改')
+      // 风格转换节点（转线稿/转深度图/转白模）按 editType 显示真实功能名，
+      // 不能一律回退成「局部修改」——那不是用户实际执行的操作
+      const styleConvertLabel = getEditTypeLabel(String(selfData?.editType || '').trim())
+      const isStyleConvert = STYLE_CONVERT_EDIT_TYPES.has(String(selfData?.editType || '').trim() as PoseEditMode)
+      parts.push(isStyleConvert ? styleConvertLabel : (kind === 'image' ? '尺寸调整' : '局部修改'))
     }
 
     const typeText = parts.join('+')
@@ -7864,6 +7944,16 @@ const rewritePromptWithCharacters = React.useCallback(
 
   // 图片节点类型角标：业务资产（角色/分身/场景/子场景/道具）、编辑、自由各用一种颜色，
   // 解决四类图片节点外观完全一致、只能靠文字辨认的问题。非图片节点返回 null。
+  /** 节点锚点绑定里是否存在「站位参考」类型 */
+  const hasStagingAnchorBinding = React.useMemo(() => {
+    const raw = (data as Record<string, unknown>)?.anchorBindings
+    if (!Array.isArray(raw)) return false
+    return raw.some((item) => {
+      if (!item || typeof item !== 'object') return false
+      return String((item as Record<string, unknown>).kind || '').trim() === 'staging'
+    })
+  }, [data])
+
   const imageCategoryBadge = (() => {
     if (!isImageNode) return null
     const nodeData = data as Record<string, unknown>
@@ -7881,12 +7971,26 @@ const rewritePromptWithCharacters = React.useCallback(
     } else if (category === 3) {
       paletteKey = 'prop'
       badgeLabel = String(nodeData.lensTypeLabel || '').trim() || '道具'
+    } else if (category === 4) {
+      // assetCategory=4：站位参考图（如视频抽帧），与 Lens 的站位参考分类一致
+      paletteKey = 'free'
+      badgeLabel = '站位参考'
+    } else if (hasStagingAnchorBinding) {
+      // 用户手动把锚点类型改成「站位参考」：角标跟随锚点，优先级高于「编辑」。
+      // 这里直接检查绑定的 kind 而不只用 primarySemanticAnchor：后者按优先级列表
+      // 取值，若节点还残留 character 等更早期绑定，会盖住 staging 导致角标不更新。
+      paletteKey = 'free'
+      badgeLabel = '站位参考'
     } else if (category !== null) {
-      // 站位等未投影为画布节点的资产分类，不显示角标
+      // 其它未投影为画布节点的资产分类，不显示角标
       return null
     } else if (String(nodeData.refNodeId ?? '').trim()) {
       paletteKey = 'derived'
       badgeLabel = '编辑'
+    } else if (String(nodeData.source ?? '').trim() === VIDEO_FRAME_SOURCE) {
+      // 视频抽帧图：空间站位/画面参考，角标与锚点类型保持一致
+      paletteKey = 'free'
+      badgeLabel = '站位参考'
     } else {
       paletteKey = 'free'
       badgeLabel = '自由'
@@ -8556,18 +8660,15 @@ const rewritePromptWithCharacters = React.useCallback(
                   { value: 'character', label: '角色' },
                   { value: 'scene', label: '场景' },
                   { value: 'prop', label: '道具' },
+                  { value: 'staging', label: '站位参考' },
                   { value: 'shot', label: '分镜' },
                   { value: 'story', label: '剧情' },
                   { value: 'asset', label: '资产' },
                   { value: 'context', label: '上下文' },
                   { value: 'authority_base_frame', label: '权威基底帧' },
-                  { value: 'staging', label: '站位' },
                 ]}
                 value={anchorBindingKind}
-                onChange={(value) => {
-                  if (!value) return
-                  setAnchorBindingKind(value as PublicFlowAnchorBindingKind)
-                }}
+                onChange={handleAnchorBindingKindChange}
                 allowDeselect={false}
               />
               <TextInput
@@ -9179,10 +9280,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     bindAssetStatusText={assetBindStatusText}
                     showAnchorBinding={hasAnchorBinding}
                     anchorBindingKind={anchorBindingKind}
-                    setAnchorBindingKind={(value) => {
-                      if (!value) return
-                      setAnchorBindingKind(value as PublicFlowAnchorBindingKind)
-                    }}
+                    setAnchorBindingKind={handleAnchorBindingKindChange}
                     anchorBindingLabel={anchorBindingLabel}
                     setAnchorBindingLabel={setAnchorBindingLabel}
                     onBindPrimaryAnchor={() => { void handleBindPrimaryAnchor() }}

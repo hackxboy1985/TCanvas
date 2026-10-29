@@ -33,7 +33,13 @@ export interface NodeData {
   /** 引用的原节点ID（用于衍生节点指向其源节点） */
   refNodeId?: string;
   /** 编辑类型标记（角度/打光/自定义等） */
-  editType?: 'angle' | 'lighting' | 'custom' | string;
+  /**
+   * 衍生节点的编辑类型。
+   *
+   * <p>angle/lighting=角度与打光，custom=局部修改等通用编辑，
+   * sketch/depthmap/clay=转线稿/转深度图/转白模。</p>
+   */
+  editType?: 'angle' | 'lighting' | 'custom' | 'sketch' | 'depthmap' | 'clay' | string;
   /** 画布节点资产ID（用于自由节点任务归属） */
   canvasNodeAssetId?: number;
   [key: string]: any;
@@ -521,6 +527,9 @@ export function getEditTypeLabel(editType?: string): string {
     angle: '角度修改',
     lighting: '打光调整',
     custom: '自定义编辑',
+    sketch: '转线稿',
+    depthmap: '转深度图',
+    clay: '转白模',
   };
   return labels[editType || ''] || editType || '';
 }

@@ -98,7 +98,7 @@ export function refBadgeLabel(ref: { category: number; parentId?: string }): str
   if (ref.category === 1) return ref.parentId ? '子角色' : '角色'
   if (ref.category === 2) return ref.parentId ? '子场景' : '场景'
   if (ref.category === 3) return '道具'
-  if (ref.category === 4) return '站位'
+  if (ref.category === 4) return '站位参考'
   return '引用'
 }
 
@@ -149,7 +149,7 @@ function formatSeconds(sec: number): string {
 
 /** 引用类别顺序：场景、道具、角色、站位 */
 const REF_ORDER: Record<number, number> = { 2: 0, 3: 1, 1: 2, 4: 3 }
-const REF_LABEL: Record<number, string> = { 1: '角色', 2: '场景', 3: '道具', 4: '站位' }
+const REF_LABEL: Record<number, string> = { 1: '角色', 2: '场景', 3: '道具', 4: '站位参考' }
 
 /** OSS 缩略图：小图展示追加 x-oss-process 缩放参数（与 lens 前端口径一致，避免拉原图） */
 function ossThumb(url: string | undefined, width = 100): string {
@@ -771,7 +771,11 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
           type: 'url',
           url: item.previewUrl,
           name: item.label || '参考图',
-          needsSync: false
+          needsSync: false,
+          // 站位参考图显式标记，后端 resolveUrlRef 会读取 assetType 并保留在 ImageRef 中
+          ...(item.isStagingReference
+            ? { assetType: 'staging_reference', assetRefId: item.sourceNodeId }
+            : null)
         }))
       ]
 
@@ -1205,7 +1209,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                           textOverflow: 'ellipsis',
                         }}
                       >
-                        {variantName || '\u00A0'}
+                        {variantName || (ref.category === 4 ? '站位参考' : '\u00A0')}
                       </Text>
                       {/*
                        * 参考图卡片：单击打开站内大图预览（用原图，与任务结果参考图一致）。

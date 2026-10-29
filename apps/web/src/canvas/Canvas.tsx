@@ -757,8 +757,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             imageUrl: preferred,
             imageResults: [{ url: preferred }],
             imagePrimaryIndex: 0,
-            // 视频抽帧来源标记：抽帧图是空间站位/画面参考，默认锚点类型按「站位」处理
+            // 视频抽帧来源标记：抽帧图是空间站位/画面参考
             source: 'video_frame',
+            // assetCategory=4 与 Lens 的「站位参考图」一致，锚点类型与角标据此判定
+            assetCategory: 4,
             nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
             nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
           },
@@ -817,8 +819,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           label,
           kind: 'image',
           imageUrl: localUrl,
-          // 视频抽帧来源标记：抽帧图是空间站位/画面参考，默认锚点类型按「站位」处理
+          // 视频抽帧来源标记：抽帧图是空间站位/画面参考
           source: 'video_frame',
+          // assetCategory=4 与 Lens 的「站位参考图」一致，锚点类型与角标据此判定
+          assetCategory: 4,
           nodeWidth: IMAGE_NODE_DEFAULT_WIDTH,
           nodeHeight: IMAGE_NODE_DEFAULT_HEIGHT,
         },

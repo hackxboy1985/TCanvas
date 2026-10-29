@@ -370,7 +370,7 @@ export interface LensRole {
   cloneName?: string
 }
 
-/** 场景/道具资产（lensImage/listHistory 返回） */
+/** 场景/道具/站位资产（lensImage/listHistory 返回） */
 export interface LensAssetImage {
   id: string
   name?: string
@@ -381,6 +381,13 @@ export interface LensAssetImage {
   variantName?: string
   subType?: string
   hasHuman?: number
+  /**
+   * 站位图的线稿转换状态：1=转换中、3=转换失败、4=转换完成。
+   *
+   * <p>与 RuoYi 分镜板「选择站位图」口径一致：只有转换中/失败不可选用，
+   * 其余（含未走转换的原始站位图）可选。</p>
+   */
+  state?: number
 }
 
 /**
@@ -593,7 +600,7 @@ export async function getFlow(dramaId: string, episodeNum: number): Promise<Lens
 }
 
 /** 按分镜板契约分页读取完整资产，避免父子资产跨页丢失。 */
-export async function listReferenceAssets<T extends LensRole | LensAssetImage>(dramaId: string, category: 1 | 2 | 3): Promise<T[]> {
+export async function listReferenceAssets<T extends LensRole | LensAssetImage>(dramaId: string, category: 1 | 2 | 3 | 4): Promise<T[]> {
   // 角色接口不分页，默认仅查主身份；与分镜板一致，独立查询全部子造型。
   if (category === 1) {
     const [roles, clones] = await Promise.all([

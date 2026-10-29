@@ -196,9 +196,17 @@ function isLensScriptNode(n: Node): boolean {
     && (n.data as { source?: string })?.source === 'lens_projection'
 }
 
-/** lens 资产节点（角色/场景/道具，带 assetCategory） */
+/**
+ * lens 资产节点（角色/场景/道具，带 assetCategory）。
+ *
+ * <p>只认 1/2/3：assetCategory=4 是「站位参考图」（视频抽帧等），
+ * 它不属于 Lens 资产表投影节点，不能被排进资产列或参与资产统计。</p>
+ */
 function isLensAssetNode(n: Node): boolean {
-  return n.type === 'taskNode' && typeof (n.data as { assetCategory?: number })?.assetCategory === 'number'
+  if (n.type !== 'taskNode') return false
+  const category = (n.data as { assetCategory?: unknown })?.assetCategory
+  if (typeof category !== 'number') return false
+  return category === 1 || category === 2 || category === 3
 }
 
 /**

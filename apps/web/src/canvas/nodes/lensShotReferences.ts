@@ -5,9 +5,14 @@ import { pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import type { LensShotRef } from './LensShotNode'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from '../../projects/lensCanvasNodeLayout'
 
-/** 分类与 Lens 资产关联表一致。 */
-export enum ReferenceCategory { Role = 1, Scene = 2, Prop = 3 }
-export interface ReferenceAsset extends LensShotRef { parentId?: string; variantName?: string; subType?: string }
+/**
+ * 分类与 Lens 资产关联表一致。
+ *
+ * <p>Staging=4 对应 lens_asset_image 的 type=3（站位图），
+ * 与 RuoYi 分镜板「选择站位图」弹窗的数据源完全一致。</p>
+ */
+export enum ReferenceCategory { Role = 1, Scene = 2, Prop = 3, Staging = 4 }
+export interface ReferenceAsset extends LensShotRef { parentId?: string; variantName?: string; subType?: string; state?: number }
 export interface ReferenceGroup { id: string; name: string; items: ReferenceAsset[] }
 export const referenceKey = (item: LensShotRef): string => item.category + ':' + item.id
 
@@ -22,7 +27,7 @@ export function groupReferenceAssets(category: ReferenceCategory, rows: LensRole
   const images = rows as LensAssetImage[]
   const assets: ReferenceAsset[] = category === ReferenceCategory.Role
     ? roles.map((row) => ({ category, id: String(row.id), name: row.roleName || '未命名角色', imgUrl: row.threeImg, parentId: row.roleType === 1 && row.parentId ? String(row.parentId) : undefined, variantName: row.cloneName }))
-    : images.map((row) => ({ category, id: String(row.id), name: row.name || '未命名资产', imgUrl: row.url, parentId: row.parentId ? String(row.parentId) : undefined, variantName: row.variantName, subType: row.subType }))
+    : images.map((row) => ({ category, id: String(row.id), name: row.name || '未命名资产', imgUrl: row.url, parentId: row.parentId ? String(row.parentId) : undefined, variantName: row.variantName, subType: row.subType, ...(typeof row.state === 'number' ? { state: row.state } : null) }))
   const groups = new Map<string, ReferenceGroup>()
   assets.forEach((asset) => {
     const groupId = asset.parentId || asset.id
@@ -43,7 +48,7 @@ export function referenceFromNode(node: Node): ReferenceAsset {
   // 子造型/子场景名取自节点数据（投影/资产库建节点写入 variantName|cloneName），父级ID取 parentEntityId
   const childName = String(node.data.variantName || node.data.cloneName || node.data.childName || '').trim()
   const parentEntityId = String(node.data.parentEntityId || '').trim()
-  return { category: entityId && [ReferenceCategory.Role, ReferenceCategory.Scene, ReferenceCategory.Prop].includes(category) ? category : 0,
+  return { category: entityId && [ReferenceCategory.Role, ReferenceCategory.Scene, ReferenceCategory.Prop, ReferenceCategory.Staging].includes(category) ? category : 0,
     id: entityId || node.id, name: String(node.data.label || '参考图片'), imgUrl,
     ...(childName ? { variantName: childName } : null),
     ...(parentEntityId ? { parentId: parentEntityId } : null) }
@@ -257,7 +262,13 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
       let source = useRFStore.getState().nodes.find((node) => sourceNodeId ? node.id === sourceNodeId : Number(node.data.assetCategory) === asset.category && String(node.data.entityId) === asset.id)
       if (!source) {
         // 使用投影相同的稳定 ID，重新打开后由业务快照补齐展示字段。
-        const prefix = asset.category === ReferenceCategory.Role ? 'role' : asset.category === ReferenceCategory.Scene ? 'scene' : 'prop'
+        const prefix = asset.category === ReferenceCategory.Role
+          ? 'role'
+          : asset.category === ReferenceCategory.Scene
+            ? 'scene'
+            : asset.category === ReferenceCategory.Staging
+              ? 'staging'
+              : 'prop'
         // 尺寸与主画布投影一致，否则节点按 TaskNode 默认尺寸渲染，底部工具栏会被算到很远处。
         source = { id: prefix + '-' + asset.id, type: 'taskNode', position: { x: target.position.x - NEW_ASSET_NODE_OFFSET_X, y: target.position.y + index * NEW_ASSET_NODE_GAP_Y },
           data: { label: asset.name, kind: 'image', source: 'lens_projection', sourceProjectId: dramaId, entityId: asset.id,

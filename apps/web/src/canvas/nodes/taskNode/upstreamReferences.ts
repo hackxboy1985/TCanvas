@@ -22,6 +22,8 @@ export type OrderedUpstreamReferenceItem = {
   sourceKind: 'image' | 'imageEdit' | 'video'
   label: string
   previewUrl: string
+  /** 是否为站位参考图（assetCategory=4 / 视频抽帧 / 锚点类型 staging） */
+  isStagingReference: boolean
 }
 
 export type NodePrimaryAssetReference = {
@@ -43,6 +45,27 @@ const DEFAULT_UPSTREAM_IMAGE_SOURCE_LIMIT = 3
 
 function isVideoReferenceNodeKind(kind: string): boolean {
   return kind === 'video' || kind === 'composeVideo'
+}
+
+/**
+ * 判断来源节点是否为「站位参考图」。
+ *
+ * <p>判定依据（任一命中即可）：
+ * <ol>
+ *   <li>assetCategory=4：与 Lens 的 lens_asset_image type=3（站位参考）对齐；</li>
+ *   <li>source='video_frame'：视频抽帧图，表达空间站位/机位关系；</li>
+ *   <li>锚点绑定里存在 kind='staging' 的锚点。</li>
+ * </ol>
+ */
+function isStagingReferenceNode(node: Node): boolean {
+  const data = getNodeDataRecord(node)
+  if (Number(data.assetCategory) === 4) return true
+  if (getTrimmedString(data.source) === 'video_frame') return true
+  const anchors = Array.isArray(data.anchorBindings) ? data.anchorBindings : []
+  return anchors.some((anchor) => {
+    if (!anchor || typeof anchor !== 'object') return false
+    return getTrimmedString((anchor as UnknownRecord).kind) === 'staging'
+  })
 }
 
 function getReferenceOrderForTargetNode(nodes: Node[], targetId: string): string[] {
@@ -260,6 +283,7 @@ export function collectOrderedUpstreamReferenceItems(
       sourceKind: 'video',
       label: getNodeLabel(videoTailSource.node),
       previewUrl: videoTailSource.previewUrl,
+      isStagingReference: isStagingReferenceNode(videoTailSource.node),
     })
   }
 
@@ -273,6 +297,7 @@ export function collectOrderedUpstreamReferenceItems(
       sourceKind: kind === 'imageEdit' ? 'imageEdit' : 'image',
       label: getNodeLabel(node),
       previewUrl,
+      isStagingReference: isStagingReferenceNode(node),
     })
   })
 
