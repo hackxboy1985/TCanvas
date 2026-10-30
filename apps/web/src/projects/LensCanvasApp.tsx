@@ -54,6 +54,25 @@ function readQueryParams(): { dramaId: string; episode: number } {
 }
 
 /**
+ * 把当前集数同步回浏览器地址栏的 episode 参数（replaceState，不产生历史记录）。
+ *
+ * <p>为什么必须同步：页面内的集数只是 React state，而「刷新后初始化」与「任务提交/轮询」
+ * （{@code runner/remoteRunner.ts}、{@code canvas/nodes/TaskNode.tsx} 均从 URL 读 episode）
+ * 都以 URL 为准。不同步会出现两个问题：
+ * 1. 切到第2集后刷新，URL 还是 episode=1，画面退回第1集；
+ * 2. 切集后提交的任务仍按第1集落 task_queue，任务归属到错误的集。
+ *
+ * @param episode 当前集数（正整数）
+ */
+function syncEpisodeToUrl(episode: number): void {
+  const url = new URL(window.location.href)
+  const next = String(episode)
+  if (url.searchParams.get('episode') === next) return
+  url.searchParams.set('episode', next)
+  window.history.replaceState(null, '', url.toString())
+}
+
+/**
  * 默认投影布局版本：布局规则变化时 +1。
  * 恢复 flow 时若版本不一致，节点位置改用最新投影布局（用户手动拖过的位置随布局版本重置）。
  *
@@ -747,7 +766,14 @@ export default function LensCanvasApp(): JSX.Element {
   // 资产库弹窗状态
   const [assetLibraryOpened, setAssetLibraryOpened] = useState(false)
   const [assetLibraryMode, setAssetLibraryMode] = useState<'manage' | 'select'>('manage')
-  
+
+  // 集数变化后把 URL 的 episode 参数同步为当前集：刷新不退回旧集，
+  // 任务提交/轮询链路（从 URL 读 episode）也不会把任务记到旧集上。
+  useEffect(() => {
+    if (!dramaId) return
+    syncEpisodeToUrl(episodeNum)
+  }, [dramaId, episodeNum])
+
   // 加载剧配置到全局 store，供画布节点读取默认模型/画幅/分辨率。
   // 缓存策略收敛在 getStyleConfig 内部：本处传 forceRequest=true，
   // 保证每次打开页面（含刷新）都拿一次最新配置，其余场景读缓存不重复请求。
