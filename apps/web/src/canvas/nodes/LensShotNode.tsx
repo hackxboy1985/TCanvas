@@ -63,6 +63,14 @@ const REF_NAME_MAX_CHARS = 5
 /** 上游参考卡片（缩略图 / 添加按钮）的边长，单位 px */
 const REF_CARD_SIZE = 64
 
+/**
+ * 「智能提示词」是否开放。
+ *
+ * <p>该功能依赖 TapCanvas 原生接口（runPublicTask → API_BASE/public/tasks），
+ * lens 部署下没有对应后端，点击必然失败；先关闭入口，点击只提示「待开放」。</p>
+ */
+const SMART_PROMPT_AVAILABLE: boolean = false
+
 /** 分镜引用（底部引用行）：场景/道具/角色/站位 */
 export interface LensShotRef {
   /** 1=角色 2=场景 3=道具 4=站位 */
@@ -1487,8 +1495,8 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                   />
                 </Group>
                 <Group className="lens-shot-prompt-header-actions" gap={8} align="center" justify="flex-end" wrap="nowrap">
-                  {/* 智能提示词：迁移自视频节点底部的智能提示词，按画布上下文生成分镜生视频提示词 */}
-                  <Tooltip label="智能提示词（依据上游文本/分镜剧本生成）" position="top" withArrow>
+                  {/* 智能提示词：迁移自视频节点底部的智能提示词；当前依赖 TapCanvas 原生接口，暂不开放 */}
+                  <Tooltip label="智能提示词（待开放）" position="top" withArrow>
                     <ActionIcon
                       className="lens-shot-smart-prompt nodrag nopan"
                       variant="light"
@@ -1497,7 +1505,15 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       aria-label="智能提示词"
                       loading={smartPromptLoading}
                       onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => { event.stopPropagation(); void handleSmartGeneratePrompt() }}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        // 暂不开放：走 TapCanvas 原生接口（API_BASE），lens 部署下不可用
+                        if (!SMART_PROMPT_AVAILABLE) {
+                          toast('待开放', 'warning')
+                          return
+                        }
+                        void handleSmartGeneratePrompt()
+                      }}
                     >
                       <IconBrain size={16} />
                     </ActionIcon>
