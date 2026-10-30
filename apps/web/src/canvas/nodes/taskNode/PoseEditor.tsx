@@ -1,6 +1,6 @@
 import React from 'react'
 import { Button, Group, Modal, Stack, Text, Textarea, Badge, Tooltip, SegmentedControl, Select, NumberInput } from '@mantine/core'
-import { IconAdjustments } from '@tabler/icons-react'
+import { IconAdjustments, IconEraser } from '@tabler/icons-react'
 
 import { runPublicTask, uploadServerAssetFile } from '../../../api/server'
 import { getFrameToPrompts, understandImage } from '../../../api/lens'
@@ -38,9 +38,9 @@ const POSE_POINT_HIT_RADIUS = Math.round(12 * POSE_RENDER_SCALE)
 /**
  * 左侧圈选/预览区的高度。
  *
- * <p>宽度固定占满左半部（含笔触栏以外的全部空间），高度吃掉可用高度，
- * 让原图显示区域尽可能大、便于圈选。图片本身用 object-fit: contain，
- * 因此不是正方形时也不会变形。</p>
+ * <p>宽度固定占满左半部（笔触与「清除圈选」已移到面板顶部标题行，不再占用画布宽度），
+ * 高度吃掉可用高度，让原图显示区域尽可能大、便于圈选；与「姿势调整」下原图预览的
+ * 占位一致，图片本身用 object-fit: contain，因此不是正方形时也不会变形。</p>
  *
  * <p>预留 300px 构成：弹窗上下内边距 32 + 标题栏 64 + 内容区内边距 32 +
  * 顶部使用说明 40 + 底部效果提示 40 + 面板标题行与间距 92。</p>
@@ -961,34 +961,70 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         </Text>
         <Group className="pose-editor__panels" align="stretch" gap="md" grow style={{ flex: 1, minHeight: 0 }}>
           <Stack className="pose-editor__panel" gap={8}>
-            <Group className="pose-editor__panel-header" gap={8} align="center">
-              <Text className="pose-editor__panel-title" size="sm" fw={600}>
-                {maskEnabled ? '原图圈选（可选）' : '原图预览'}
-              </Text>
-              {editMode === 'size' ? (
-                <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
-                  仅用于观察原图
-                </Badge>
-              ) : editMode === 'pose' ? (
-                <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
-                  姿势模式不支持圈选
-                </Badge>
-              ) : isStyleConvertMode(editMode) ? (
-                <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
-                  仅作为转换参考
-                </Badge>
-              ) : (
-                <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="orange">
-                  仅修改圈选区域
-                </Badge>
-              )}
+            <Group className="pose-editor__panel-header" gap={8} align="center" justify="space-between">
+              <Group className="pose-editor__panel-heading" gap={8} align="center" wrap="nowrap">
+                <Text className="pose-editor__panel-title" size="sm" fw={600}>
+                  {maskEnabled ? '原图圈选（可选）' : '原图预览'}
+                </Text>
+                {editMode === 'size' ? (
+                  <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
+                    仅用于观察原图
+                  </Badge>
+                ) : editMode === 'pose' ? (
+                  <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
+                    姿势模式不支持圈选
+                  </Badge>
+                ) : isStyleConvertMode(editMode) ? (
+                  <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
+                    仅作为转换参考
+                  </Badge>
+                ) : (
+                  <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="orange">
+                    仅修改圈选区域
+                  </Badge>
+                )}
+              </Group>
+              {/* 笔触与「清除圈选」放在面板顶部：不再占用画布宽度，
+                  原图圈选区和「姿势调整」下的原图预览一样占满左半部 */}
+              {maskEnabled ? (
+                <Group className="pose-editor__mask-tools" gap={8} align="center" wrap="nowrap">
+                  <Group className="pose-editor__brush" gap={6} align="center" wrap="nowrap">
+                    <Text className="pose-editor__brush-label" size="xs" c="dimmed">
+                      笔触
+                    </Text>
+                    <SegmentedControl
+                      className="pose-editor__brush-size-control"
+                      size="xs"
+                      aria-label="笔触粗细"
+                      value={String(maskBrushSize)}
+                      onChange={(value) => setMaskBrushSize(Number(value))}
+                      data={[
+                        { value: String(MASK_BRUSH_THIN), label: '细' },
+                        { value: String(MASK_BRUSH_MEDIUM), label: '中' },
+                        { value: String(MASK_BRUSH_THICK), label: '粗' },
+                      ]}
+                    />
+                  </Group>
+                  {/* 清除圈选用默认按钮样式（边框 + 图标），避免看起来像一行普通文字 */}
+                  <Button
+                    className="pose-editor__clear-mask"
+                    variant="default"
+                    size="xs"
+                    leftSection={<IconEraser size={14} />}
+                    onClick={clearMask}
+                    disabled={!maskDirty && (!options.poseMaskUrl || maskCleared)}
+                  >
+                    清除圈选
+                  </Button>
+                </Group>
+              ) : null}
             </Group>
             <Group className="pose-editor__mask-body" gap={10} align="flex-start" wrap="nowrap" style={{ width: '100%' }}>
               <div
                 className="pose-editor__mask-canvas"
                 style={{
                   position: 'relative',
-                  // 宽度占满左半部剩余空间（扣掉笔触栏），高度吃满可用高度：
+                  // 宽度占满整个左半部（画布右侧不再有笔触栏），高度吃满可用高度：
                   // 原图按 contain 居中显示，圈选区域因此尽可能大
                   flex: '1 1 auto',
                   minWidth: 0,
@@ -1042,39 +1078,6 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 />
               ) : null}
               </div>
-              {/* 笔触档位：竖排常驻在画布右侧。放在右侧而不是左侧，
-                  是为了让画布左边缘在「姿势调整 / 局部修改 / 尺寸调整」三个 tab 下位置一致，
-                  避免切换时产生横向位移的错觉 */}
-              {maskEnabled ? (
-                <Stack className="pose-editor__brush-rail" gap={6} align="center" style={{ flex: '0 0 auto', paddingTop: 2 }}>
-                  <Text size="xs" c="dimmed">笔触</Text>
-                  <SegmentedControl
-                    className="pose-editor__brush-size-control"
-                    orientation="vertical"
-                    size="xs"
-                    value={String(maskBrushSize)}
-                    onChange={(value) => setMaskBrushSize(Number(value))}
-                    data={[
-                      { value: String(MASK_BRUSH_THIN), label: '细' },
-                      { value: String(MASK_BRUSH_MEDIUM), label: '中' },
-                      { value: String(MASK_BRUSH_THICK), label: '粗' },
-                    ]}
-                  />
-                  {/* 清除圈选紧跟笔触之后，避免单独占一行挤压画布高度 */}
-                  <Button
-                    className="pose-editor__clear-mask"
-                    variant="subtle"
-                    size="compact-xs"
-                    fz={10}
-                    px={4}
-                    style={{ width: '100%' }}
-                    onClick={clearMask}
-                    disabled={!maskDirty && (!options.poseMaskUrl || maskCleared)}
-                  >
-                    清除圈选
-                  </Button>
-                </Stack>
-              ) : null}
             </Group>
             {maskEnabled ? (
               <>
