@@ -1237,7 +1237,9 @@ export default function LensCanvasApp(): JSX.Element {
       })
       // 仅在保存成功后记录签名，失败时下次仍可重试
       lastSavedSignatureRef.current = signature
-      flowVersionRef.current = (res?.version ?? 0) + 1
+      // 后端返回的是「本次保存后库中的真实版本号」，直接采用，不能自行 +1：
+      // 新增编排时后端版本号从 1 开始，这里再 +1 会让同一会话里第二次保存被判成「已被他人修改」
+      flowVersionRef.current = res?.version ?? flowVersionRef.current
       setFlowVersion(flowVersionRef.current)
       // 同一集再次保存时 id 不变，但首次保存会新建 flow，必须同步给提交链路
       // （自由节点的任务归属要用它写 task_queue.scene_id）
