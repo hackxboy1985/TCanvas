@@ -133,8 +133,11 @@ button {
   border-radius: 999px !important;
 }
 
+/* 通用 Tabs.List 在暗色下统一成「分段控件」外观（圆角 + 半透明底）。
+   资产库弹窗（AssetLibraryModal / LensReferencePicker）的 Tab 是下划线形态，
+   套这层底色会出现「Tab 栏下面压着一块面板」的错觉，圆角还会让列表底线两端翘起，故显式排除。 */
 :root[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-root,
-:root[data-mantine-color-scheme="dark"] .mantine-Tabs-list {
+:root[data-mantine-color-scheme="dark"] .mantine-Tabs-list:not(.lens-reference-picker__tab-list) {
   border-radius: 10px !important;
   background: rgba(255, 255, 255, 0.035) !important;
 }

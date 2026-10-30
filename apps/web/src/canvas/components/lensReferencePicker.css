@@ -66,7 +66,20 @@
 .lens-reference-picker__footer { padding-top: 14px; }
 .lens-reference-picker__error { padding-bottom: 8px; }
 /* Tab 选中状态样式 */
-.lens-reference-picker__tab-list { border-bottom: 1px solid var(--mantine-color-gray-3); }
+/* 资产库弹窗的 Tab 是「一条底线 + 激活项下划线」的形态：
+   1) 先把 Mantine default 变体自绘的 2px 底线关掉（--tabs-list-border-size 置 0）：
+      它是绝对定位的 ::before，和下面的 border-bottom 会叠成「2px 深线 + 1px 亮线」的双色带，
+      看起来就像底部多压了一个东西；
+   2) 底线改用语义色 --mantine-color-default-border（暗色 #424242 / 亮色 gray-4），
+      不再用暗色下过亮的 gray-3；颜色和 1px 粗细与主题一致。 */
+.lens-reference-picker__tab-list {
+  --tabs-list-border-size: 0;
+  /* Tab 自带的 2px 底线也关掉：Mantine 核心样式在构建产物里晚于本文件加载，
+     同优先级下它的 border-width: 0 0 2px 0 会覆盖上面的 border: none，
+     激活项就会多出一条与 ::after 下划线重叠的 2px 色条。用变量在列表层统一置 0 最稳。 */
+  --tab-border-width: 0;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
 .lens-reference-picker__tab { position: relative; padding: 10px 16px; font-weight: 500; color: var(--mantine-color-text-secondary); transition: all 200ms ease; border: none; background: transparent; }
 .lens-reference-picker__tab:hover { color: var(--mantine-color-text); }
 .lens-reference-picker__tab[data-active] { color: var(--mantine-primary-color-filled); font-weight: 600; }
