@@ -819,8 +819,15 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             // 角色资产：使用 type: 'role' 并带上 id
             return { type: 'role', id: Number(ref.id), url: ref.imgUrl, name: ref.name || '角色' }
           } else {
-            // 场景/道具/站位：使用 type: 'url'，needsSync 根据 hasHuman 决定
-            return { type: 'url', url: ref.imgUrl, name: ref.name || '参考图', needsSync: !!ref.hasHuman }
+            // 场景/道具/站位：使用 type: 'url'，needsSync 根据 hasHuman 决定；
+            // 站位参考显式标记，后端据此把没有业务关系的画布站位图注入位置参考图
+            return {
+              type: 'url',
+              url: ref.imgUrl,
+              name: ref.name || '参考图',
+              needsSync: !!ref.hasHuman,
+              ...(ref.category === 4 ? { assetType: 'staging_reference' } : null),
+            }
           }
         }).filter(Boolean),
         // 上游连线进来的参考图：已按业务引用去重（同一张图不会既算业务引用又算连线）
@@ -829,9 +836,13 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
           url: item.previewUrl,
           name: item.label || '参考图',
           needsSync: false,
-          // 站位参考图显式标记，后端 resolveUrlRef 会读取 assetType 并保留在 ImageRef 中
+          // 站位参考图显式标记：后端据此把画布连线图注入位置参考图。
+          // assetRefId 在后端是数字资产ID，画布节点ID是 uuid，只在纯数字时传，避免后端解析失败
           ...(item.isStagingReference
-            ? { assetType: 'staging_reference', assetRefId: item.sourceNodeId }
+            ? {
+                assetType: 'staging_reference',
+                ...(Number.isFinite(Number(item.sourceNodeId)) ? { assetRefId: item.sourceNodeId } : null),
+              }
             : null)
         }))
       ]
