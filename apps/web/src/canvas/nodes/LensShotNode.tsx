@@ -454,12 +454,14 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         durationSeconds: clampDuration(durationValue, minDuration, maxDuration),
       })
     : null, [selectedModel, resolutionValue, durationValue, minDuration, maxDuration])
-  // 时长优先级：剧配置 maxVideoDuration > 节点已存值 > 模型区间边界收敛
+  // 时长优先级：分镜已存秒数（lens_storyboard.time）> 剧配置 maxVideoDuration（最大视频时长，仅作默认值）> 模型区间收敛
+  // 剧配置是「最大时长」上限，不能覆盖用户给单个分镜单独设置的秒数，否则保存成功、重新打开又被重置
   useEffect(() => {
+    const savedDuration = typeof data.time === 'number' && data.time > 0 ? Math.trunc(data.time) : null
     const configDuration = lensProjectConfig?.maxVideoDuration
-    const next = typeof configDuration === 'number' && configDuration > 0 ? configDuration : null
-    setDurationValue((prev) => clampDuration(next ?? prev, minDuration, maxDuration))
-  }, [minDuration, maxDuration, lensProjectConfig])
+    const configNext = typeof configDuration === 'number' && configDuration > 0 ? configDuration : null
+    setDurationValue((prev) => clampDuration(savedDuration ?? prev ?? configNext, minDuration, maxDuration))
+  }, [minDuration, maxDuration, lensProjectConfig, data.time])
 
   // 换模型后若当前画幅/分辨率不在该模型支持范围内，收敛到该模型允许的值
   // （避免下发模型不支持的画幅/分辨率，被渠道直接拒绝或按默认值静默改写）
@@ -615,21 +617,38 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     const promptText = String(promptDraft || '').trim()
     if (promptText) return promptText
     return String(scriptDraft || '').trim()
-  }, [promptDraft, scriptDraft])  /** 保存到分镜板：写回节点数据 + /api/storyboard/edit */
+  }, [promptDraft, scriptDraft])
+
+  /**
+   * 保存分镜：把画布上的分镜提示词、分镜剧本、时长、时间段写回节点数据与 lens 业务表。
+   *
+   * <p>lens_storyboard 是分镜数据的唯一真源，画布节点只是投影，
+   * 因此必须调用 /api/storyboard/edit，不能只改节点数据（否则重新打开画布就丢了）。</p>
+   */
   const handleSave = useCallback(async () => {
-    useRFStore.getState().updateNodeData(id, { scriptContent: scriptDraft, timeOfDay: timeDraft })
+    // 时长与提交生成同一口径收敛，避免「保存的秒数」和「实际下发的秒数」不一致
+    const duration = clampDuration(durationValue, minDuration, maxDuration)
+    const patch = {
+      prompt: promptDraft,
+      scriptContent: scriptDraft,
+      timeOfDay: timeDraft,
+      ...(duration === null ? null : { time: duration }),
+    }
+    useRFStore.getState().updateNodeData(id, patch)
     const storyboardId = String(data.entityId ?? '')
     const dramaId = String(data.sourceProjectId ?? '')
-    if (storyboardId && dramaId) {
-      try {
-        await editStoryboard({ id: storyboardId, dramaId, scriptContent: scriptDraft, timeOfDay: timeDraft })
-        setSaveState('已同步到分镜板')
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : '未知错误'
-        setSaveState('同步失败：' + msg)
-      }
+    if (!storyboardId || !dramaId) {
+      setSaveState('缺少分镜身份，无法保存')
+      return
     }
-  }, [id, data.entityId, data.sourceProjectId, scriptDraft, timeDraft, modelValue])
+    try {
+      await editStoryboard({ id: storyboardId, dramaId, ...patch })
+      setSaveState('分镜已保存')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '未知错误'
+      setSaveState('保存失败：' + msg)
+    }
+  }, [id, data.entityId, data.sourceProjectId, promptDraft, scriptDraft, timeDraft, durationValue, minDuration, maxDuration])
 
   /**
    * 智能提示词：生成当前分镜的生视频提示词。
@@ -1483,7 +1502,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       <IconBrain size={16} />
                     </ActionIcon>
                   </Tooltip>
-                  <Button className="lens-shot-save-storyboard" size="xs" variant="outline" onClick={() => void handleSave()}>保存到分镜板</Button>
+                  <Button className="lens-shot-save-storyboard" size="xs" variant="outline" onClick={() => void handleSave()}>保存分镜</Button>
                   <Switch
                     className="lens-shot-prompt-mode-switch"
                     size="xs"
