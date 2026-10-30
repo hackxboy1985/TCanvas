@@ -30,7 +30,7 @@ import { getNodeAbsRect } from '../utils/nodeBounds'
 import { focusNodeInViewport } from '../utils/nodeFocus'
 import { useMantineColorScheme } from '@mantine/core'
 import { LensReferencePicker } from '../components/LensReferencePicker'
-import { connectShotReferences, disconnectShotReference, referenceFromNode, referenceKey } from './lensShotReferences'
+import { connectShotReferences, disconnectShotReference, referenceFromNode, referenceKey, ReferenceCategory } from './lensShotReferences'
 import { useUIStore } from '../../ui/uiStore'
 import { collectOrderedUpstreamReferenceItems } from './taskNode/upstreamReferences'
 import { VideoFramePreview } from './taskNode/components/VideoFramePreview'
@@ -348,6 +348,44 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   const { colorScheme } = useMantineColorScheme()
   const isDark = colorScheme === 'dark'
   const rf = useReactFlow()
+  // 订阅 edges：连线增减时重新收集上游站位参考图；nodes 用 getState 读取，避免拖动节点时全量重渲染
+  const storeEdges = useRFStore((state) => state.edges)
+  /**
+   * 画布连线进来的参考图（已按业务引用去重）。
+   *
+   * <p>从资产库/画布添加参考会同时写业务关系（data.refs）和画布连线，两边指向同一张图，
+   * 直接合并会把同一张图提交两次。这里按图片 URL 与「分类+资产ID」去重，只保留业务关系里没有的连线图。</p>
+   *
+   * <p>提交生成任务复用这份列表：保证「上游参考区显示几张，实际提交就是几张」。</p>
+   */
+  const upstreamExtraRefs = useMemo(() => {
+    if (!storeEdges.length) return []
+    const { nodes, edges } = useRFStore.getState()
+    const businessRefs = (Array.isArray(data.refs) ? data.refs : []) as LensShotRef[]
+    const businessRefUrls = new Set(businessRefs.map((ref) => String(ref.imgUrl || '').trim()).filter(Boolean))
+    const businessRefKeys = new Set(businessRefs.map((ref) => ref.category + ':' + String(ref.id || '').trim()))
+    const nodeById = new Map(nodes.map((node) => [node.id, node] as const))
+    const seenUrls = new Set<string>()
+    return collectOrderedUpstreamReferenceItems(nodes, edges, id).filter((item) => {
+      const url = String(item.previewUrl || '').trim()
+      if (!url || seenUrls.has(url)) return false
+      // 同一张图既有业务关系又有连线：以业务关系为准
+      if (businessRefUrls.has(url)) return false
+      const sourceNode = nodeById.get(item.sourceNodeId)
+      const category = Number(sourceNode?.data?.assetCategory)
+      const entityId = String(sourceNode?.data?.entityId || '').trim()
+      // 连线源节点就是业务引用指向的资产：同样视为重复
+      if (category > 0 && entityId && businessRefKeys.has(category + ':' + entityId)) return false
+      seenUrls.add(url)
+      return true
+    })
+  }, [id, storeEdges, data.refs])
+
+  /** 上游参考区展示的连线来源：只展示站位参考图（业务引用里没有的那部分） */
+  const upstreamStagingRefs = useMemo(
+    () => upstreamExtraRefs.filter((item) => item.isStagingReference),
+    [upstreamExtraRefs],
+  )
   const [assetPickerOpened, setAssetPickerOpened] = useState(false)
   const openCanvasPicker = useCallback(() => {
     const store = useRFStore.getState()
@@ -552,6 +590,25 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   const refs = (Array.isArray(data.refs) ? [...data.refs] : []).sort(
     (a, b) => (REF_ORDER[a.category] ?? 9) - (REF_ORDER[b.category] ?? 9),
   )
+
+  /**
+   * 「上游参考」实际展示的引用列表。
+   *
+   * <p>= 业务引用（data.refs）+ 画布连线的站位参考图。后者用 id 前缀 upstream: 标记，
+   * 删除时删的是画布连线而不是业务关系；其余渲染逻辑与业务引用完全一致。</p>
+   *
+   * <p>必须定义在 refs 之后：refs 是 const，提前引用会触发 TDZ（Cannot access before initialization）。</p>
+   */
+  const displayRefs = useMemo<LensShotRef[]>(() => {
+    const upstreamAsRefs: LensShotRef[] = upstreamStagingRefs.map((item) => ({
+      category: ReferenceCategory.Staging,
+      // 带 edgeId，删除时可直接定位连线
+      id: 'upstream:' + item.edgeId,
+      name: item.label || '站位参考图',
+      imgUrl: item.previewUrl,
+    }))
+    return [...refs, ...upstreamAsRefs]
+  }, [refs, upstreamStagingRefs])
 
   /** 提交生成用的提示词：优先分镜提示词草稿，为空回退分镜剧本 */
   const effectivePrompt = useCallback((): string => {
@@ -766,8 +823,8 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             return { type: 'url', url: ref.imgUrl, name: ref.name || '参考图', needsSync: !!ref.hasHuman }
           }
         }).filter(Boolean),
-        // 上游连线的参考图（通用图片节点等）
-        ...collectOrderedUpstreamReferenceItems(useRFStore.getState().nodes, useRFStore.getState().edges, id).map((item) => ({
+        // 上游连线进来的参考图：已按业务引用去重（同一张图不会既算业务引用又算连线）
+        ...upstreamExtraRefs.map((item) => ({
           type: 'url',
           url: item.previewUrl,
           name: item.label || '参考图',
@@ -797,7 +854,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       const msg = err instanceof Error ? err.message : '未知错误'
       setSaveState('提交失败：' + msg)
     }
-  }, [data.entityId, data.sourceProjectId, data.episodeNum, effectivePrompt, modelValue, selectedModel, refs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
+  }, [data.entityId, data.sourceProjectId, data.episodeNum, effectivePrompt, modelValue, selectedModel, refs, upstreamExtraRefs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
 
   /**
    * 剪辑：复用画布视频节点的 WebCut 剪辑入口。
@@ -1175,7 +1232,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
 
               {/* 上游参考：缩略图 + 添加按钮（卡片化缩略图，底部显示名称，顶部显示分身名） */}
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
-                {refs.length > 0 ? refs.map((ref) => {
+                {displayRefs.length > 0 ? displayRefs.map((ref) => {
                   const fullName = ref.name || ''
                   // 子角色/子场景：底部主名取 refs 里存的主名（后端 parentId 口径），顶部显示子造型名
                   const { baseName, variantName } = ref.parentId
@@ -1319,6 +1376,12 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
+                            // 连线来源的站位参考：删画布连线；业务引用：删资产关联关系
+                            if (String(ref.id).startsWith('upstream:')) {
+                              const edgeId = String(ref.id).slice('upstream:'.length)
+                              if (edgeId) useRFStore.getState().deleteEdge(edgeId)
+                              return
+                            }
                             void disconnectShotReference(id, ref).catch((error: unknown) => {
                               const msg = error instanceof Error ? error.message : String(error)
                               setSaveState('删除参考失败：' + msg)
