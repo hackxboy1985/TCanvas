@@ -1362,6 +1362,27 @@ async function runLensCanvasImageTask(
 }
 
 /**
+ * 本系统 OSS 域名特征（{@code https://static.horse-world.mints-id.com/}）。
+ *
+ * <p>为什么必须判断：后端是「先置 SUCCESS、再异步把产物下载并转存到本系统 OSS」，
+ * 因此 SUCCESS 瞬间 {@code file_url} 可能还是上游临时直链（如 new-api 的 oss.luluai.cc），
+ * 这类地址有效期很短，一旦写进节点并随 flow 落库，过期后节点图片就打不开。
+ */
+const OSS_URL_HOST_HINT = 'mints-id'
+
+/**
+ * 判断任务产出 URL 是否已转存到本系统 OSS。
+ *
+ * <p>用域名特征判断（而不是写死完整域名），兼容 http/https 与不同环境的 OSS 域名配置。
+ *
+ * @param url 任务产出地址
+ * @returns 已落到本系统 OSS 返回 true
+ */
+function isOssTransferredUrl(url: string): boolean {
+  return url.toLowerCase().includes(OSS_URL_HOST_HINT)
+}
+
+/**
  * lens 模式轮询画布任务：按 taskId 查 lens task_queue 状态。
  *
  * @returns 归一化后的任务结果；状态未知或返回缺字段时显式抛错
@@ -1396,16 +1417,29 @@ async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Pr
   }
   // 产出媒体类型必须按任务类型归一：视频任务若标成 image，视频节点的成功回写会拿不到视频资产
   const assetType = taskKind === 'text_to_video' ? 'video' : 'image'
+  // fileUrl 可能是逗号分隔的多文件，逐个拆成资产，保持与 /public/tasks 的结果形态一致
+  const assets = fileUrl
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((url) => ({ type: assetType as 'image' | 'video', url }))
+  // 图片任务：SUCCESS 时后端可能还在把产物转存到本系统 OSS，此时 url 是短期有效的上游直链，
+  // 不能当成功回填（写进节点并随 flow 落库后，链接过期图片就打不开）。
+  // 保持「进行中」让外层继续轮询，等 URL 落到本系统 OSS 再回填。
+  if (assetType === 'image' && !assets.every((asset) => isOssTransferredUrl(asset.url))) {
+    return {
+      id: taskId,
+      kind: taskKind,
+      status: 'running',
+      assets: [],
+      raw: { ...status, transferPending: true },
+    }
+  }
   return {
     id: taskId,
     kind: taskKind,
     status: 'succeeded',
-    // fileUrl 可能是逗号分隔的多文件，逐个拆成资产，保持与 /public/tasks 的结果形态一致
-    assets: fileUrl
-      .split(',')
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .map((url) => ({ type: assetType as 'image' | 'video', url })),
+    assets,
     raw: { ...status },
   }
 }
@@ -3479,6 +3513,8 @@ async function runVideoTask(ctx: RunnerContext) {
 const imageSyncRetryStates = new Map<string, { failures: number; nextAt: number }>()
 /** 接续查询异常时的退避上限：最慢每 30 秒重试一次，不放弃 */
 const SYNC_RETRY_MAX_DELAY_MS = 30_000
+/** 已提示过「等待产物转存到本系统存储」的节点任务（接续查询每 4s 一次，避免刷爆节点日志） */
+const imageTransferWaitNotified = new Set<string>()
 
 /**
  * 单次同步图片节点任务状态（页面加载后恢复轮询用）。
@@ -3569,6 +3605,16 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
   if (!primaryUrl) {
     setNodeStatus(id, 'error', { progress: 0, lastError: '图片任务已完成但未返回图片地址' })
     appendLog(id, `[${nowLabel()}] error: 任务已完成但未返回图片地址`)
+    return
+  }
+  // 产物已出但还没转存到本系统 OSS：上游临时直链有效期很短，落库后过期就打不开。
+  // 保持非终态，等下一次接续查询（4s 后）拿到本系统 OSS 地址再回填。
+  if (!fileUrls.every((url) => isOssTransferredUrl(url))) {
+    setNodeStatus(id, 'running', { progress: 90, imageTaskId: taskId })
+    if (!imageTransferWaitNotified.has(retryKey)) {
+      imageTransferWaitNotified.add(retryKey)
+      appendLog(id, `[${nowLabel()}] 任务已完成，等待产物转存到本系统存储…`)
+    }
     return
   }
 
@@ -5588,6 +5634,8 @@ async function runGenericTask(ctx: RunnerContext) {
         const pollTimeoutMs = DEFAULT_TASK_POLL_TIMEOUT_MS
         const startedAt = Date.now()
         let lastProgress = Math.max(10, progressBase, requestProgress)
+        // 任务已产出、正在转存本系统 OSS 的提示只记一次（转存期间会持续轮询）
+        let transferWaitLogged = false
 
         while (Date.now() - startedAt < pollTimeoutMs) {
           if (isCanceled(id)) {
@@ -5611,6 +5659,11 @@ async function runGenericTask(ctx: RunnerContext) {
 
           if (snapshot.status === 'queued' || snapshot.status === 'running') {
             const raw = snapshot.raw as any
+            // 任务已产出、后端正在转存本系统 OSS：只提示一次，继续轮询等可对外使用的地址
+            if (raw?.transferPending && !transferWaitLogged) {
+              transferWaitLogged = true
+              appendLog(id, `[${nowLabel()}] 任务已完成，等待产物转存到本系统存储…`)
+            }
             const rawProgress =
               (typeof raw?.progress === 'number' ? raw.progress : null) ??
               (typeof raw?.response?.progress === 'number' ? raw.response.progress : null) ??
@@ -5642,7 +5695,11 @@ async function runGenericTask(ctx: RunnerContext) {
         }
 
         if (res.status === 'queued' || res.status === 'running') {
-          throw new Error('图像任务轮询超时，服务端任务可能仍在继续，请稍后在历史或资产中确认结果')
+          throw new Error(
+            transferWaitLogged
+              ? '图像任务已产出，但产物迟迟未转存到本系统存储（转存可能失败），请稍后重试'
+              : '图像任务轮询超时，服务端任务可能仍在继续，请稍后在历史或资产中确认结果',
+          )
         }
       }
 
