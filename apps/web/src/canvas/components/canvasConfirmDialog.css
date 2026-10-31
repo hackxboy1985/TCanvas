@@ -1,0 +1,13 @@
+/* 画布内确认弹窗：替代 window.confirm，样式与画布暗色 Mantine 主题一致 */
+.canvas-confirm .mantine-Modal-content {
+  background: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+.canvas-confirm .mantine-Modal-body { padding: 18px 20px 16px; }
+.canvas-confirm__body { display: flex; flex-direction: column; }
+/* 标题与正文用语义色：暗色下正文不能过弱，保证可读 */
+.canvas-confirm__title { color: var(--mantine-color-text); margin-bottom: 10px; letter-spacing: 0.2px; }
+.canvas-confirm__message { color: var(--mantine-color-text); opacity: 0.88; line-height: 1.7; white-space: pre-wrap; }
+.canvas-confirm__actions { margin-top: 18px; }

@@ -37,10 +37,12 @@ import {
   type LensScriptContent,
 } from '../api/lens'
 import { preloadLensModelOptions } from '../config/useModelOptions'
+import { useLensScriptGeneration } from './useLensScriptGeneration'
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
 import { CANVAS_ADOPT_TARGET_ID, TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
 import { AssetLibraryModal } from './AssetLibraryModal'
+import { CanvasConfirmDialogHost } from '../canvas/components/CanvasConfirmDialog'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
 
@@ -1223,6 +1225,77 @@ export default function LensCanvasApp(): JSX.Element {
   }, [shotGroupOn, applyShotGroup, applyParentChildGroups])
 
   /**
+   * 重新投影当前集：生台本/拆分镜完成后刷新画布。
+   *
+   * <p>与「重新打开画布」同口径：重拉 listStoryboards + getEpisodeAssets + getScriptContent
+   * 后重建投影节点。台本内容更新在 text 节点的 prompt 上，分镜更新则是整体替换
+   * lensShot 节点（重新拆分后分镜 id 会变，旧节点必须移除，否则会作为幽灵节点残留）。</p>
+   *
+   * <p>自由节点（用户的生成结果载体）无法由投影重建，必须原样保留；
+   * 同 id 的投影节点沿用用户拖拽调整过的尺寸，避免刷新后节点尺寸跳变。</p>
+   */
+  const refreshLensProjection = useCallback(async (): Promise<void> => {
+    if (!dramaId) return
+    const targetEpisode = episodeNum
+    // 1. 重拉 lens 业务数据并重建投影（复用打开画布时的同一投影函数）
+    const [storyboards, assets, script] = await Promise.all([
+      listStoryboards(dramaId, targetEpisode),
+      getEpisodeAssets(dramaId, targetEpisode),
+      getScriptContent(dramaId, targetEpisode),
+    ])
+    const shotAspects = await loadShotAspects(storyboards)
+    const projected = buildCanvasNodes({ storyboards, assets, script, dramaId, shotAspects, showRefs })
+    lastProjectionRef.current = projected
+
+    // 2. 先解除现有分组：分镜组/父子组都基于旧投影，组内旧分镜节点即将被替换。
+    //    直接丢弃组框节点会留下悬空 parentId，因此逐个解除（子节点位置转为绝对坐标）。
+    //    嵌套组可能一层套一层，循环处理直到没有组框为止（加保护上限防脏数据死循环）。
+    for (let guard = 0; guard < 5; guard += 1) {
+      const groupIds = useRFStore.getState().nodes.filter((n) => n.type === 'groupNode').map((n) => n.id)
+      if (groupIds.length === 0) break
+      groupIds.forEach((groupId) => useRFStore.getState().ungroupGroupNode(groupId, { keepSelection: false }))
+    }
+
+    // 3. 组装节点：自由节点保留，投影节点以最新投影为准
+    const store = useRFStore.getState()
+    const freeNodes = store.nodes.filter((n) => !isLensProjectionNode(n))
+    const freeIds = new Set(freeNodes.map((n) => n.id))
+    // 两侧端点都在自由节点上的连线才保留；涉及投影节点的连线由投影重新生成
+    const freeEdges = store.edges.filter((e) => freeIds.has(e.source) && freeIds.has(e.target))
+    const previousById = new Map(store.nodes.filter(isLensProjectionNode).map((n) => [n.id, n] as const))
+    const mergedProjectionNodes = projected.nodes.map((node) => {
+      const previous = previousById.get(node.id)
+      if (!previous) return node
+      const previousData = (previous.data || {}) as Record<string, unknown>
+      return {
+        ...previous,
+        data: {
+          ...previousData,
+          ...(node.data as Record<string, unknown>),
+          // 用户手动调整过的尺寸/尺寸标记以画布为准；其余业务字段一律以最新投影覆盖
+          ...(typeof previousData.nodeWidth === 'number' ? { nodeWidth: previousData.nodeWidth } : null),
+          ...(typeof previousData.nodeHeight === 'number' ? { nodeHeight: previousData.nodeHeight } : null),
+          ...(previousData.nodeSizeManual === true ? { nodeSizeManual: true } : null),
+        },
+      }
+    })
+    load({ nodes: [...mergedProjectionNodes, ...freeNodes], edges: [...projected.edges, ...freeEdges] })
+    // 4. 按当前排列方向重排并重建分镜组/父子分组：新分镜落位、组框按实际测量尺寸适配
+    window.setTimeout(() => {
+      arrangeByDirection(shotArrange)
+    }, 120)
+  }, [dramaId, episodeNum, showRefs, load, arrangeByDirection, shotArrange])
+
+  /** 剧本节点「生台本 / 拆分镜」能力：接口调用、轮询与完成后刷新都在宿主完成，节点只渲染按钮 */
+  const lensScriptGeneration = useLensScriptGeneration({
+    dramaId,
+    episodeNum,
+    onRefresh: refreshLensProjection,
+    // 投影加载完成后才恢复未完成任务监控：加载中画布节点还没建立，既无法判断也不需要刷新
+    ready: !loading && Boolean(dramaId) && loadedForRef.current === `${dramaId}:${episodeNum}`,
+  })
+
+  /**
    * 计算保存内容的签名（用于跳过无实质变更的保存）。
    *
    * 只对「会被持久化且影响结果」的字段取签名：节点编排、连线、视口、布局元信息。
@@ -1985,6 +2058,7 @@ export default function LensCanvasApp(): JSX.Element {
           shotArrange={shotArrange}
           onOpenTaskResult={handleOpenTaskResult}
           onOpenAssetLibrary={openAssetLibraryForSelect}
+          lensScriptGeneration={lensScriptGeneration}
           onShotArrangeChange={(direction) => {
             setShotArrange(direction)
             window.localStorage.setItem('lens_shot_arrange', direction)
@@ -2007,6 +2081,8 @@ export default function LensCanvasApp(): JSX.Element {
       />
       {/* 大图预览弹窗：lens 画布路由提前 return，需在此挂载（否则双击图片无预览） */}
       <PreviewModal />
+      {/* 画布内确认弹窗（替代 window.confirm，样式与画布暗色主题一致） */}
+      <CanvasConfirmDialogHost />
       {/* 资产库弹窗 */}
       <AssetLibraryModal
         opened={assetLibraryOpened}

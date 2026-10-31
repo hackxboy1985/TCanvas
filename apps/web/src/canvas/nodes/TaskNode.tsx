@@ -149,6 +149,7 @@ import { StructuredPromptSection } from './taskNode/components/StructuredPromptS
 import { UpstreamReferenceStrip } from './taskNode/components/UpstreamReferenceStrip'
 import { VideoContent } from './taskNode/components/VideoContent'
 import { TextContent } from './taskNode/components/TextContent'
+import { extractEditorPlainText } from './taskNode/textEditorPlainText'
 import { resolveTextNodePlainText, type TextNodeDisplaySource } from './taskNode/textNodeContent'
 import { VeoImageModal } from './taskNode/components/VeoImageModal'
 import { VideoResultModal } from './taskNode/VideoResultModal'
@@ -208,6 +209,7 @@ import { ChapterGroundedBadge } from './taskNode/components/ChapterGroundedBadge
 import { resolveCompiledImagePrompt, resolveImagePromptExecution } from './taskNode/imagePromptSpec'
 import { refineStructuredImagePrompt } from './taskNode/structuredPromptRefine'
 import { PromptEditorActions } from './taskNode/components/PromptEditorActions'
+import { LensScriptToolbarActions } from './taskNode/components/LensScriptToolbarActions'
 import { PromptPolishPreview } from './taskNode/components/PromptPolishPreview'
 import { usePromptEditorAdmin } from '../../auth/usePromptEditorAdmin'
 import {
@@ -2560,8 +2562,19 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     data,
     isAudioNode,
   ])
-  const { selectedNodeCount, onOpenTaskResult } = useCanvasRenderContext()
+  const { selectedNodeCount, onOpenTaskResult, lensScriptGeneration } = useCanvasRenderContext()
   const isSingleSelectionActive = Boolean(selected && !dragging && selectedNodeCount <= 1)
+  /**
+   * lens 画布投影出的剧本类文本节点标签：『剧本』（原文）或『台本』。
+   *
+   * <p>两种节点都挂「拆分镜」；『生台本』只挂在『剧本』节点（在台本节点上再点生台本语义重复）。
+   * 自由文本节点没有 lens 实体身份，标签为空，不挂这些入口。</p>
+   */
+  const lensScriptNodeLabel = isPlainTextNode
+    && (data as { source?: string })?.source === 'lens_projection'
+    ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || '')
+    : ''
+  const isLensScriptProjectionNode = lensScriptNodeLabel === '剧本' || lensScriptNodeLabel === '台本'
   const wantsCharacterRefs = isSingleSelectionActive
   const characterRefs = useRFStore(
     React.useCallback((s): CharacterRef[] => {
@@ -8104,6 +8117,8 @@ const rewritePromptWithCharacters = React.useCallback(
   const textEditorRef = React.useRef<HTMLDivElement | null>(null)
   const textComposingRef = React.useRef(false)
   const [textEditorFocused, setTextEditorFocused] = React.useState(false)
+  /** 双击进入的编辑态：受控给 TextContent，工具栏富文本命令也用它强制进入编辑态 */
+  const [textEditRequested, setTextEditRequested] = React.useState(false)
   const [textHtml, setTextHtml] = React.useState<string>(() => {
     const rawHtml = String((data as any)?.textHtml || '').trim()
     if (rawHtml) return rawHtml
@@ -8288,7 +8303,9 @@ const rewritePromptWithCharacters = React.useCallback(
     const el = textEditorRef.current
     if (!el) return
     const html = el.innerHTML
-    const plain = (el.innerText || '').replace(/\u00A0/g, ' ')
+    // 用块级感知的提取函数而不是 innerText：innerText 会给每个 p/h1 加空行，
+    // 既会把原文的单换行写成双换行，也会让 H1-H4 的展示切换影响业务文本
+    const plain = extractEditorPlainText(el)
     setTextHtml(html)
     setPrompt(plain)
     if (opts?.persist === false) return
@@ -8297,10 +8314,27 @@ const rewritePromptWithCharacters = React.useCallback(
   const runRichCommand = React.useCallback((command: string, value?: string) => {
     const el = textEditorRef.current
     if (!el) return
+    // 只读态（contentEditable=false）下 execCommand 直接失效：工具栏按钮点击时先强制进入编辑态。
+    // state 负责后续渲染，DOM 立即放开避免等下一帧导致选区丢失。
+    if (!textEditRequested && !textEditorFocused) {
+      setTextEditRequested(true)
+      el.contentEditable = 'true'
+    }
     el.focus()
+    // 点工具栏按钮会让编辑器失焦，浏览器选区落在按钮上；execCommand 必须有编辑器内的选区才生效。
+    // 选区不在编辑器里时兜底：块级命令（H1-H4）选中全部内容，行内命令（加粗/颜色等）把光标放到末尾。
+    const selection = window.getSelection()
+    const selectionInEditor = Boolean(selection && selection.rangeCount > 0 && el.contains(selection.anchorNode))
+    if (!selectionInEditor && selection) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      if (command !== 'formatBlock') range.collapse(false)
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
     document.execCommand(command, false, value)
     syncTextNodeContent()
-  }, [syncTextNodeContent])
+  }, [syncTextNodeContent, textEditRequested, textEditorFocused])
   const applyHeading = React.useCallback((level: 1 | 2 | 3 | 4) => {
     runRichCommand('formatBlock', `H${level}`)
   }, [runRichCommand])
@@ -8843,6 +8877,15 @@ const rewritePromptWithCharacters = React.useCallback(
               whiteSpace: 'nowrap',
             }}
           >
+            {/* lens 剧本/台本节点：拆分镜（剧本节点另有生台本）；结果由 lens 后端写库，完成后画布自动重投影刷新 */}
+            {isLensScriptProjectionNode && lensScriptGeneration && (
+              <LensScriptToolbarActions
+                generation={lensScriptGeneration}
+                dividerColor={inlineDividerColor}
+                scriptNodeType={lensScriptNodeLabel === '台本' ? '台本' : '剧本'}
+                scriptText={textNodePlainText}
+              />
+            )}
             {[1, 2, 3, 4].map((level) => (
               <Tooltip key={`h-${level}`} label={`H${level}`} position="bottom" withArrow>
                 <ActionIcon
@@ -9003,7 +9046,8 @@ const rewritePromptWithCharacters = React.useCallback(
       {isPlainTextNode && (
         <TextContent
           selected={isSingleSelectionActive}
-          textEditorFocused={textEditorFocused}
+          editing={textEditRequested || textEditorFocused}
+          onRequestEdit={() => setTextEditRequested(true)}
           textBackgroundTint={textBackgroundTint}
           textColor={textColor}
           textFontSize={textFontSize}
@@ -9025,6 +9069,7 @@ const rewritePromptWithCharacters = React.useCallback(
           }}
           onBlur={() => {
             setTextEditorFocused(false)
+            setTextEditRequested(false)
             syncTextNodeContent()
           }}
         />

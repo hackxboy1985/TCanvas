@@ -69,7 +69,7 @@ import { buildStoryboardEditorPatch, normalizeStoryboardNodeData } from './nodes
 import { resourceManager } from '../domain/resource-runtime'
 import { useUploadRuntimeStore } from '../domain/upload-runtime/store/uploadRuntimeStore'
 import { dedupeLocalFiles } from '../utils/localUploadDedup'
-import { CanvasRenderContext } from './CanvasRenderContext'
+import { CanvasRenderContext, type LensScriptGenerationActions } from './CanvasRenderContext'
 import { PanelCard } from '../ui/PanelCard'
 // 限制不同节点类型之间的连接关系；未匹配的类型默认放行，避免阻塞用户操作
 const isValidEdgeByType = buildEdgeValidator()
@@ -293,6 +293,13 @@ type CanvasInnerProps = {
    * 外部包的那层会被覆盖，节点侧将永远拿到 undefined。
    */
   onOpenTaskResult?: (nodeId: string) => void
+  /**
+   * 剧本节点「生台本 / 拆分镜」能力（lens 画布）。
+   *
+   * <p>同样必须作为 Canvas 的 prop 传入：Canvas 内部自渲染 CanvasRenderContext.Provider，
+   * 外部再包一层 Provider 会被覆盖，节点侧永远拿不到。</p>
+   */
+  lensScriptGeneration?: LensScriptGenerationActions
 }
 
 type CanvasStyle = React.CSSProperties & Record<'--tc-spotlight-grid-color' | '--tc-spotlight-radius', string>
@@ -371,7 +378,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp, onOpenAssetLibrary }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp, onOpenAssetLibrary, lensScriptGeneration }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -2186,8 +2193,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       // 宿主注入的「任务结果」入口（lens 画布）；未传时节点不显示该按钮。
       // 注意：本 Provider 在嵌套时覆盖外层，因此必须在此透传，否则节点侧永远拿不到。
       onOpenTaskResult: onOpenTaskResultProp,
+      // 宿主注入的「生台本 / 拆分镜」能力（lens 画布剧本节点顶部工具栏），同样必须在此透传
+      lensScriptGeneration,
     }),
-    [heavySelectionActive, heavySelectionDragging, selectedNodeCount, onOpenTaskResultProp],
+    [heavySelectionActive, heavySelectionDragging, selectedNodeCount, onOpenTaskResultProp, lensScriptGeneration],
   )
   const canCreateScriptBundleFromSelection = useMemo(() => {
     if (dragging) return false
@@ -4208,8 +4217,8 @@ const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
 /** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
-const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void; onOpenAssetLibrary?: () => void }>(
-  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult, onOpenAssetLibrary }, ref): JSX.Element {
+const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void; onOpenAssetLibrary?: () => void; lensScriptGeneration?: LensScriptGenerationActions }>(
+  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult, onOpenAssetLibrary, lensScriptGeneration }, ref): JSX.Element {
     const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
     return (
@@ -4222,6 +4231,7 @@ const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: (
           onShotArrangeChange={onShotArrangeChange}
           onOpenTaskResult={onOpenTaskResult}
           onOpenAssetLibrary={onOpenAssetLibrary}
+          lensScriptGeneration={lensScriptGeneration}
         />
       </ReactFlowProviderWithClass>
     )

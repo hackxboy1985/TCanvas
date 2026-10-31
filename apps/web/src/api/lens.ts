@@ -346,6 +346,55 @@ export interface LensScriptContent {
   scriptContent?: string
 }
 
+/** 本集台本状态（/api/episode/scriptStatus，与分镜板口径一致） */
+export interface LensScriptStatus {
+  /** 剧配置是否开启台本功能（关闭时画布不展示「生台本」） */
+  enableScriptGen: boolean
+  /** 本集是否已有台本 */
+  hasScript: boolean
+  /** 本集是否有执行中的台本任务 */
+  hasRunningTask: boolean
+  /** 已生成台本的完整内容（仅 hasScript 时有值） */
+  scriptContent?: string
+}
+
+/**
+ * 拆分镜任务提交入参。
+ *
+ * <p>刻意不传正文：与分镜板不同，画布只传身份与拆分参数，后端按「台本优先、否则剧本原文」
+ * 从 lens 业务表取数（见 LensStoryboardController#splitShotTask + selectSplitShotContent），
+ * 避免前端把大段文本重复传一遍、也避免画布上的临时编辑与业务表内容不一致。</p>
+ */
+export interface LensSplitShotSubmitParams {
+  dramaId: string
+  episodeNum: number
+  /** BY_DURATION=按时长拆分，BY_COUNT=按数量拆分 */
+  splitType: 'BY_DURATION' | 'BY_COUNT'
+  /** 每段时长（秒）或总分镜数 */
+  splitValue: number
+  /** auto=后端拆分后直接写库；manual=返回 shots 待前端确认 */
+  saveMode: 'auto' | 'manual'
+  /** 是否关联子场景（不传时后端默认 true，与分镜板一致） */
+  linkSubScene?: boolean
+}
+
+/** 该集最新任务状态（/api/storyboard/getEpisodeTaskStatus，台本/拆分镜共用） */
+export interface LensEpisodeTaskStatus {
+  taskQueueId?: number | string
+  /** 任务状态：QUEUED / RUNNING / SUCCESS / FAILED */
+  status?: string
+  /** 确认状态：PENDING / COMMITTED / DISCARDED */
+  confirmStatus?: string
+  /** 任务分类：scriptGen=台本生成，splitShot=拆分镜 */
+  taskCategory?: string
+  taskType?: string
+  /** 重试次数/进度计数 */
+  processCount?: number
+  message?: string
+  /** manual 模式下未入库的分镜数据；auto 模式后端已写库，不返回该字段 */
+  shots?: unknown[]
+}
+
 /** 画布编排（flow 读写） */
 export interface LensCanvasFlow {
   id?: string
@@ -576,6 +625,123 @@ export async function getScriptContent(dramaId: string, episodeNum: number): Pro
     content: typeof content === 'string' ? content : '',
     scriptContent: typeof script?.scriptContent === 'string' ? script.scriptContent : '',
   }
+}
+
+/**
+ * 本集台本状态（画布「生台本」按钮的判定依据）。
+ *
+ * <p>与分镜板 EpisodeContent.vue 完全同源：hasScript 决定拆分镜用台本还是剧本原文；
+ * hasRunningTask 用于禁止重复提交；enableScriptGen 是剧配置（style_config）里的台本功能开关。</p>
+ */
+export async function getScriptStatus(dramaId: string, episodeNum: number): Promise<LensScriptStatus> {
+  const data = await lensFetch<Partial<LensScriptStatus> | null>(
+    `/api/episode/scriptStatus?dramaId=${encodeURIComponent(dramaId)}&episodeNum=${episodeNum}`,
+  )
+  return {
+    // 后端返回 boolean，未返回时按 false 处理：这是「是否已生成/是否开启」的事实字段，不做乐观假设
+    enableScriptGen: data?.enableScriptGen === true,
+    hasScript: data?.hasScript === true,
+    hasRunningTask: data?.hasRunningTask === true,
+    scriptContent: typeof data?.scriptContent === 'string' ? data.scriptContent : undefined,
+  }
+}
+
+/**
+ * 提交台本生成任务。
+ *
+ * <p>刻意不传 splitType/splitValue：后端只在 splitType 存在时才构造
+ * postHandleParam 触发「台本完成后自动拆分镜」（见 LensEpisodeController#submitScriptGen），
+ * 因此画布「生台本」只生成台本，拆分镜由独立按钮提交，二者语义清晰不互相副作用。</p>
+ */
+export async function submitScriptGen(params: {
+  dramaId: string
+  episodeNum: number
+  content: string
+}): Promise<{ taskQueueId?: number | string }> {
+  return lensFetch<{ taskQueueId?: number | string }>('/api/episode/submitScriptGen', {
+    method: 'POST',
+    body: JSON.stringify({
+      dramaId: params.dramaId,
+      episodeNum: params.episodeNum,
+      content: params.content,
+    }),
+  })
+}
+
+/**
+ * 提交拆分镜任务（与分镜板 ShotAgentPanel#doSubmitSplitShot 同接口，但不传正文）。
+ *
+ * <p>saveMode=auto 时后端拆分完成会自动 commitShot，把分镜写入 lens 分镜业务表
+ * （SplitShotAIChannelHandler），画布只需轮询任务状态，成功后重新投影即可。</p>
+ */
+export async function submitSplitShotTask(
+  params: LensSplitShotSubmitParams,
+): Promise<{ taskQueueId?: number | string; saveMode?: string }> {
+  return lensFetch<{ taskQueueId?: number | string; saveMode?: string }>('/api/storyboard/splitShotTask', {
+    method: 'POST',
+    body: JSON.stringify({
+      dramaId: params.dramaId,
+      episodeNum: params.episodeNum,
+      // 不传 content：后端从业务表取台本/原文
+      splitType: params.splitType,
+      splitValue: params.splitValue,
+      saveMode: params.saveMode,
+      linkSubScene: params.linkSubScene,
+    }),
+  })
+}
+
+/**
+ * 保存剧本原文到 lens 业务表（novel_episode.content）。
+ *
+ * <p>画布 flow 不保存正文，剧本节点编辑后必须回写业务表，后续生台本/拆分镜与重新投影
+ * 才以这里保存的内容为准。</p>
+ */
+export async function saveNovelContent(params: {
+  dramaId: string
+  episodeNum: number
+  content: string
+}): Promise<void> {
+  await lensFetch<unknown>('/api/episode/saveNovelContent', {
+    method: 'POST',
+    body: JSON.stringify({
+      dramaId: params.dramaId,
+      episodeNum: params.episodeNum,
+      content: params.content,
+    }),
+  })
+}
+
+/** 保存台本内容到 lens 业务表（novel_episode.script_content） */
+export async function saveScriptContent(params: {
+  dramaId: string
+  episodeNum: number
+  scriptContent: string
+}): Promise<void> {
+  await lensFetch<unknown>('/api/episode/saveScriptContent', {
+    method: 'POST',
+    body: JSON.stringify({
+      dramaId: params.dramaId,
+      episodeNum: params.episodeNum,
+      scriptContent: params.scriptContent,
+    }),
+  })
+}
+
+/**
+ * 查询该集最新任务状态（台本生成与拆分镜共用）。
+ *
+ * <p>后端按 Redis 里记录的「该集最新 taskQueueId」查询，并返回 taskCategory 区分任务类型：
+ * scriptGen（台本）与 splitShot（拆分镜）。该集没有任务时后端返回业务错误，
+ * 由调用方按「无任务」处理（见 useLensScriptGeneration）。</p>
+ */
+export async function getEpisodeTaskStatus(
+  dramaId: string,
+  episodeNum: number,
+): Promise<LensEpisodeTaskStatus> {
+  return lensFetch<LensEpisodeTaskStatus>(
+    `/api/storyboard/getEpisodeTaskStatus?dramaId=${encodeURIComponent(dramaId)}&episodeNum=${episodeNum}`,
+  )
 }
 
 /** 全剧角色（主动加资产） */

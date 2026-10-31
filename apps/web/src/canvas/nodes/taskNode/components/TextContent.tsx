@@ -3,7 +3,15 @@ import { PanelCard } from '../../../../ui/PanelCard'
 
 type TextContentProps = {
   selected: boolean
-  textEditorFocused: boolean
+  /**
+   * 是否处于「可编辑」态（双击进入编辑，或编辑器已聚焦）。
+   *
+   * <p>由 TaskNode 受控：工具栏的富文本命令（H1-H4/加粗等）需要在点击时强制进入编辑态，
+   * 否则只读的 contentEditable=false 上 execCommand 直接失效。</p>
+   */
+  editing: boolean
+  /** 双击请求进入编辑态（由 TaskNode 统一维护状态） */
+  onRequestEdit: () => void
   textBackgroundTint: string
   textColor: string
   textFontSize: number
@@ -28,7 +36,8 @@ const canScrollVertically = (element: HTMLDivElement, deltaY: number): boolean =
 
 export function TextContent({
   selected,
-  textEditorFocused,
+  editing,
+  onRequestEdit,
   textBackgroundTint,
   textColor,
   textFontSize,
@@ -40,10 +49,6 @@ export function TextContent({
   onCompositionEnd,
   onBlur,
 }: TextContentProps) {
-  // 双击进入编辑态：默认展示态只可拖拽/选中，双击后才允许编辑
-  const [editRequested, setEditRequested] = React.useState(false)
-  const editing = editRequested || textEditorFocused
-
   const handleWheelCapture: React.WheelEventHandler<HTMLDivElement> = (event) => {
     const editor = editorRef.current
     if (!editor) return
@@ -53,13 +58,13 @@ export function TextContent({
   }
 
   const handleDoubleClick = () => {
-    setEditRequested(true)
+    onRequestEdit()
     const editor = editorRef.current
     if (editor) editor.focus()
   }
 
   const handleBlur: React.FocusEventHandler<HTMLDivElement> = (event) => {
-    setEditRequested(false)
+    // 编辑态结束由 TaskNode 在 onBlur 里统一处理（同时清掉双击标记与聚焦标记）
     onBlur(event)
   }
 
