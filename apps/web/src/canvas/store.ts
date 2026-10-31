@@ -70,7 +70,8 @@ type RFState = {
   removeGroupById: (id: string) => void
   findGroupMatchingSelection: () => { id: string; name: string; nodeIds: string[] } | null
   renameGroup: (id: string, name: string) => void
-  ungroupGroupNode: (id: string) => void
+  /** 解除分组：keepSelection 默认 true（手动取消组合后子节点保持选中可直接拖动）；程序化整理布局时传 false，避免节点工具栏闪现 */
+  ungroupGroupNode: (id: string, options?: { keepSelection?: boolean }) => void
   arrangeGroupChildren: (groupId: string, direction: GroupArrangeDirection, nodeIds?: string[]) => void
   arrangeGroupChildrenByLastDirection: (groupId: string, nodeIds?: string[]) => void
   formatTree: () => void
@@ -3000,9 +3001,13 @@ export const useRFStore = create<RFState>((set, get) => ({
       historyFuture: [],
     }
   }),
-  ungroupGroupNode: (id) => set((s) => {
+  ungroupGroupNode: (id, options) => set((s) => {
     const group = s.nodes.find((n) => n.id === id && n.type === 'groupNode')
     if (!group) return {}
+    // 默认保留「解除后子节点选中」的行为（手动取消组合可直接整体拖动）；
+    // 程序化整理布局（排列/重建分组）传 keepSelection:false：
+    // 期间子节点从未被选中，避免 TaskNode/LensShotNode 的选中工具栏闪现。
+    const keepSelection = options?.keepSelection !== false
 
     const nodesById = new Map(s.nodes.map((n) => [n.id, n] as const))
     const nextNodes: Node[] = []
@@ -3018,7 +3023,7 @@ export const useRFStore = create<RFState>((set, get) => ({
         ...normalized,
         parentId: undefined,
         extent: undefined,
-        selected: true,
+        selected: keepSelection,
         position: { x: absPos.x, y: absPos.y },
       } as Node))
     }

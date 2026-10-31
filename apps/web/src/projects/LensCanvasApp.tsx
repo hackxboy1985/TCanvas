@@ -815,6 +815,14 @@ export default function LensCanvasApp(): JSX.Element {
   const lastProjectionRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
   // 画布实例 API（视口读写经 Canvas ref 暴露，绕开 ReactFlowProvider 层级）
   const canvasApiRef = useRef<CanvasHandle>(null)
+  /**
+   * 「排列」按钮触发的方向切换标记。
+   *
+   * <p>点「排列」时 onShotArrangeChange 已立即按新方向整理一次画布；shotArrange 变化
+   * 又会触发下方「加载/恢复 flow」用的 effect，不跳过就会再整理一轮，导致节点被反复
+   * 解除/重建分组、选中工具栏连续闪现。该标记只消费一次，effect 读到即跳过。
+   */
+  const arrangeFromButtonRef = useRef(false)
 
   // 读画布 store 状态与操作
   const nodes = useRFStore((s) => s.nodes)
@@ -840,9 +848,9 @@ export default function LensCanvasApp(): JSX.Element {
     const store = useRFStore.getState()
     const shots = store.nodes.filter((n) => n.type === 'lensShot')
     if (shots.length === 0) return
-    // 已有组先解除，避免重复编组
+    // 已有组先解除，避免重复编组；这是程序化重建分组，解除出来的节点不应短暂选中
     const existing = shots.find((n) => n.parentId)?.parentId
-    if (existing) store.ungroupGroupNode(existing)
+    if (existing) store.ungroupGroupNode(existing, { keepSelection: false })
     // 目标区域：与「分镜组关闭」时的分镜位置一致（垂直→图片右侧；水平→剧本列右侧、图片下方）
     const origin = computeShotAreaOrigin(useRFStore.getState().nodes, direction)
     const baseX = origin.x
@@ -922,7 +930,8 @@ export default function LensCanvasApp(): JSX.Element {
       for (const n of useRFStore.getState().nodes) {
         if (n.parentId === gid) releasedChildIds.add(n.id)
       }
-      useRFStore.getState().ungroupGroupNode(gid)
+      // 程序化重建分组：解除出来的子节点不置选中，避免选中工具栏（任务结果/提示词区）闪现
+      useRFStore.getState().ungroupGroupNode(gid, { keepSelection: false })
     }
     if (releasedChildIds.size > 0) {
       useRFStore.setState({
@@ -1025,8 +1034,9 @@ export default function LensCanvasApp(): JSX.Element {
       for (const n of all) {
         if (n.parentId && groupIdSet.has(n.parentId)) releasedIds.add(n.id)
       }
+      // 整理布局是程序化行为：解除出来的节点不置选中，否则会闪现节点的选中工具栏
       for (const gid of groupIds) {
-        useRFStore.getState().ungroupGroupNode(gid)
+        useRFStore.getState().ungroupGroupNode(gid, { keepSelection: false })
       }
       if (releasedIds.size > 0) {
         useRFStore.setState({
@@ -1452,7 +1462,12 @@ export default function LensCanvasApp(): JSX.Element {
   // 若保存的 flow 就是当前方向与分组状态，则沿用保存的位置（记住用户调整），不重新排列；
   // 但父子分组（分身/子场景）是数据固有结构，仍需确保成组，否则从 flow 恢复时不会出现分组框。
   useEffect(() => {
+    // 点「排列」按钮时 onShotArrangeChange 已立即整理过，这里消费标记并跳过：
+    // 否则同一份 shotArrange 会触发两轮 ungroup/regroup，节点选中工具栏会连续闪多次。
+    const arrangeFromButton = arrangeFromButtonRef.current
+    arrangeFromButtonRef.current = false
     if (loading) return
+    if (arrangeFromButton) return
     const meta = loadedLayoutMetaRef.current
     if (meta && meta.direction === shotArrange && meta.groupOn === shotGroupOn) {
       const timer = window.setTimeout(() => { applyParentChildGroups() }, 200)
@@ -1973,7 +1988,9 @@ export default function LensCanvasApp(): JSX.Element {
           onShotArrangeChange={(direction) => {
             setShotArrange(direction)
             window.localStorage.setItem('lens_shot_arrange', direction)
-            // 点击「排列」即按新方向整理整个画布（图片/分镜/剧本位置 + 分镜组）
+            // 点击「排列」即按新方向整理整个画布（图片/分镜/剧本位置 + 分镜组）；
+            // 打标记让 shotArrange 变化的 effect 跳过，避免同一动作整理两轮导致工具栏多次闪现。
+            arrangeFromButtonRef.current = true
             arrangeByDirection(direction)
           }}
         />
