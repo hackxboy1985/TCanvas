@@ -1176,7 +1176,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             />
           )
         ) : (
-          <div className="lens-shot-script" style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', height: '100%', overflow: 'auto' }}>
+          <div className="lens-shot-script" style={{ fontSize: 24, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', height: '100%', overflow: 'auto' }}>
             {data.scriptContent || '（暂无脚本）'}
           </div>
         )}

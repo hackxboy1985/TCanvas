@@ -335,7 +335,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
       withinPortal
       /* 宽度走 Mantine 的 size（映射为 --modal-size / width: var(--modal-size)），
          直接写 styles.content.width 会被 Mantine 的 content 宽度规则覆盖。 */
-      size="min(1720px, 97vw)"
+      size="70vw"
       styles={{
         content: {
           maxWidth: 'none',
