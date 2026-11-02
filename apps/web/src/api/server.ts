@@ -13,6 +13,7 @@ import {
   type LensNodePresetDto,
   type LensNodePresetType,
 } from './lens'
+import { isLensCanvasMode, lensAgentsChat, lensAgentsChatStream } from './lensAgentChat'
 import { createSseEventParser } from './sse'
 // self-import guard: only used for type re-export in the same module
 
@@ -741,6 +742,8 @@ export type AgentsChatResponseDto = {
 export type AgentsChatToolStreamPayload = {
   toolCallId: string
   toolName: string
+  /** 面向用户的中文展示名（Java 桥按工具类型注入；缺失时前端按映射兜底） */
+  displayName?: string
   phase: 'started' | 'completed'
   status?: 'succeeded' | 'failed' | 'denied' | 'blocked'
   input?: unknown
@@ -754,8 +757,8 @@ export type AgentsChatToolStreamPayload = {
 export type AgentsChatLifecycleStreamPayload = Record<string, unknown>
 
 export type AgentsChatStreamEvent =
-  | { event: 'initial'; data: { requestId: string; messageId: string } }
-  | { event: 'session'; data: { sessionId: string } }
+  | { event: 'initial'; data: { requestId: string; messageId: string; isAdmin?: boolean } }
+  | { event: 'session'; data: { sessionId: string; isAdmin?: boolean } }
   | { event: 'thinking'; data: { text: string } }
   | { event: 'tool'; data: AgentsChatToolStreamPayload }
   | {
@@ -775,6 +778,7 @@ export type AgentsChatStreamEvent =
     }
   }
   | { event: 'content'; data: { delta: string } }
+  | { event: 'reasoning'; data: { delta: string } }
   | { event: 'result'; data: { response: AgentsChatResponseDto } }
   | { event: 'error'; data: { message: string; code?: string; details?: unknown } }
   | { event: 'done'; data: { reason: 'finished' | 'error' } }
@@ -811,6 +815,11 @@ export async function agentsChatStream(
     onError?: (error: Error) => void
   },
 ): Promise<() => void> {
+  // lens 画布没有 tapcanvas 的 /public/agents/chat（agents 运行时是独立 Node 服务，不随 lens 部署），
+  // 对话改走 lens 现有 agent 接口 /api/frontend/chat/stream，见 lensAgentChat.ts
+  if (isLensCanvasMode()) {
+    return lensAgentsChatStream(payload, handlers)
+  }
   const controller = new AbortController()
   const response = await apiFetch(resolveAgentsChatEndpoint(payload), withAuth({
     method: 'POST',
@@ -902,6 +911,10 @@ export async function agentsChatStream(
 }
 
 export async function agentsChat(payload: AgentsChatRequestDto): Promise<AgentsChatResponseDto> {
+  // lens 画布模式：非流式对话同样改走 lens 后端（同源接口，不会有 /public/agents/chat）
+  if (isLensCanvasMode()) {
+    return lensAgentsChat(payload)
+  }
   const r = await apiFetch(resolveAgentsChatEndpoint(payload), withAuth({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getClientPageTraceHeaders() },
@@ -1332,19 +1345,9 @@ function invalidateLlmNodePresetCache(): void {
   llmNodePresetErrorNotice.clear()
 }
 
-/**
- * 是否 lens 画布模式（URL 带 dramaId）。
- *
- * <p>刻意不复用 `../config/useModelOptions` 的 `isLensMode()`：该模块第 2 行
- * `import { ... } from '../api/server'`，而本文件会 import 它，构成
- * server.ts ↔ useModelOptions.ts 循环依赖（server.ts 被 useModelOptions 依赖，
- * 反向 import 后模块初始化顺序不确定，可能拿到 undefined 导出）。
- * 此处使用等价实现，判定逻辑与 `isLensMode()` 完全一致。
- */
-function isLensCanvasMode(): boolean {
-  if (typeof window === 'undefined') return false
-  return Boolean(new URLSearchParams(window.location.search).get('dramaId'))
-}
+// lens 画布模式判定（isLensCanvasMode）已抽到 ./lensAgentChat：
+// 该模块不 import 本文件（只 import type，编译后擦除），不会形成 server.ts ↔ lensAgentChat.ts 循环依赖，
+// 对话适配层与画布判定共用同一实现。
 
 /**
  * 把 lens 节点预设投影成画布统一 DTO。

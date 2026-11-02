@@ -12,6 +12,12 @@ export type RuntimeTextDeltaEvent = {
   delta: string;
 };
 
+/** 思考链增量事件：与 text.delta 分离，上层按权限决定是否透传/展示 */
+export type RuntimeReasoningDeltaEvent = {
+  type: "reasoning.delta";
+  delta: string;
+};
+
 export type RuntimeToolStartedEvent = {
   type: "tool.started";
   toolCallId: string;
@@ -48,6 +54,7 @@ export type RuntimeRunFailedEvent = {
 export type RuntimeRunEvent =
   | RuntimeRunStartedEvent
   | RuntimeTextDeltaEvent
+  | RuntimeReasoningDeltaEvent
   | RuntimeToolStartedEvent
   | RuntimeTodoUpdatedEvent
   | RuntimeTurnCompletedEvent

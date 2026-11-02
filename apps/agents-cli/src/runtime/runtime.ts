@@ -106,6 +106,8 @@ export type AssistantRuntimeRunOptions = {
     startedAt: string;
   }) => void;
   onTextDelta?: (delta: string) => void;
+  /** 思考链增量回调（与正文分离） */
+  onReasoningDelta?: (delta: string) => void;
   onTurn?: (turn: LlmTurnTrace) => void;
   onToolCall?: (toolCall: ToolCallTrace) => void;
 };
@@ -319,6 +321,10 @@ export function createAssistantRuntime(input: CreateAssistantRuntimeInput): Assi
         onTextDelta: (delta) => {
           options?.onTextDelta?.(delta);
           void options?.eventSink?.({ type: "text.delta", delta });
+        },
+        onReasoningDelta: (delta) => {
+          options?.onReasoningDelta?.(delta);
+          void options?.eventSink?.({ type: "reasoning.delta", delta });
         },
         onTurn: (turn) => {
           options?.onTurn?.(turn);

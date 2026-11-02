@@ -376,6 +376,11 @@ export interface LensSplitShotSubmitParams {
   saveMode: 'auto' | 'manual'
   /** 是否关联子场景（不传时后端默认 true，与分镜板一致） */
   linkSubScene?: boolean
+  /**
+   * 内容来源：auto=台本优先、台本为空时用剧本原文（默认）；script=必须用台本；novel=必须用剧本原文。
+   * 画布按钮在台本与剧本原文都有内容时会先让用户选择。
+   */
+  source?: 'auto' | 'script' | 'novel'
 }
 
 /** 该集最新任务状态（/api/storyboard/getEpisodeTaskStatus，台本/拆分镜共用） */
@@ -676,13 +681,14 @@ export async function submitScriptGen(params: {
  */
 export async function submitSplitShotTask(
   params: LensSplitShotSubmitParams,
-): Promise<{ taskQueueId?: number | string; saveMode?: string }> {
-  return lensFetch<{ taskQueueId?: number | string; saveMode?: string }>('/api/storyboard/splitShotTask', {
+): Promise<{ taskQueueId?: number | string; saveMode?: string; contentSource?: string }> {
+  return lensFetch<{ taskQueueId?: number | string; saveMode?: string; contentSource?: string }>('/api/storyboard/splitShotTask', {
     method: 'POST',
     body: JSON.stringify({
       dramaId: params.dramaId,
       episodeNum: params.episodeNum,
-      // 不传 content：后端从业务表取台本/原文
+      // 不传 content：后端按 source 从业务表取台本/原文
+      source: params.source,
       splitType: params.splitType,
       splitValue: params.splitValue,
       saveMode: params.saveMode,
@@ -998,6 +1004,272 @@ async function requestFrameToPrompts(): Promise<LensFrameToPrompts | null> {
     // 缓存写入失败不影响本次返回
   }
   return prompts
+}
+
+/** 画布入口显隐配置（提示词设置-画布配置；读取失败由调用方按默认显示处理） */
+export interface LensCanvasEntryConfig {
+  /** 项目列表卡片是否显示「进入画布」按钮 */
+  projectEntryVisible: boolean
+  /** 分镜板顶部是否显示「画布」按钮 */
+  storyboardEntryVisible: boolean
+  /** 画布右下角是否显示「展开AI对话」气泡入口 */
+  agentChatEntryVisible: boolean
+}
+
+/**
+ * 查询画布入口显隐配置。
+ *
+ * <p>缺字段/类型异常时按默认显示（true）处理：入口不能因为配置读取失败而消失，
+ * 也不能因为配置接口异常而阻塞画布加载。</p>
+ *
+ * @returns 画布入口配置；接口无数据时返回 null
+ */
+export async function getCanvasEntryConfig(): Promise<LensCanvasEntryConfig | null> {
+  const data = await lensFetch<Partial<LensCanvasEntryConfig> | null>('/api/common/config/canvasEntries')
+  if (!data || typeof data !== 'object') return null
+  return {
+    projectEntryVisible: data.projectEntryVisible !== false,
+    storyboardEntryVisible: data.storyboardEntryVisible !== false,
+    agentChatEntryVisible: data.agentChatEntryVisible !== false,
+  }
+}
+
+// ==================== 画布「配置」弹窗（与 lens 配置页同源） ====================
+//
+// 数据读写与 RuoYi-Vue3/src/views/lens/creation/config.vue 保持一致：
+// - 基本设置：localStorage key = lens_config_<dramaId>，服务端 /api/sysApi/baseConfig/list|saveList（type=style_config）
+// - 提示词组合：/api/sysApi/baseConfig/list（type=prompt_combo / image_prompt_combo，includeSystem=true）
+// - 风格导演：/api/styleDirector/list；模型复用 getImageModels/getImage2ImageModels/getShotVideoModels
+// - 取消排队：/api/taskQueue/cancelAllQueued
+// 禁止自建平行接口。
+
+/** 画布配置「基本设置」（字段与 lens 配置页 saveBasicSettings 的 settings 对齐） */
+export interface LensCanvasStyleConfig {
+  /** 视觉风格（内置或自定义） */
+  selectedStyle?: string
+  /** 屏幕比例（9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 21:9） */
+  screenRatio?: string
+  /** 生图前置提示词组合 id（空串/undefined 表示不加） */
+  selectedImagePrompt?: string | number
+  /** 视频前置提示词组合 id */
+  selectedVideoPrompt?: string | number
+  lockStyle?: boolean
+  lockPrompt?: boolean
+  /** 最大视频时长（秒） */
+  maxVideoDuration?: number
+  /** 视频执行模型 appId */
+  autoGenerateModel?: string
+  /** 自动生成使用分镜剧本(shot)还是提示词(prompt) */
+  autoGenerateUseShot?: string
+  /** 生视频模式：reference=参考图 / referenceUltra=参考图高级模式 */
+  autoGenerateVideoMode?: string
+  /** 参考图模式时角色图类型：threeImg=三视图 / frontImg=全身图 */
+  referenceImgType?: string
+  /** 视频分辨率（720p/480p/1080p，跟随视频模型） */
+  resolution?: string
+  /** 风格导演 id */
+  selectedDirectorId?: number | null
+  /** 生图默认模型（文生图） */
+  autoImageModel?: string
+  /** 图生图默认模型 */
+  autoImage2ImageModel?: string
+  /** 生图分辨率（2k/1k/4k，跟随生图模型） */
+  imageResolution?: string
+  /** 角色全身图前置提示词 */
+  frontImgPromptPrefix?: string
+  /** 三视图提示词 */
+  threeViewPrompt?: string
+  /** 文生三视图提示词 */
+  threeViewDirectPrompt?: string
+  /** 台本功能开关 */
+  enableScriptGen?: boolean
+  /** Seedance 资产同步渠道（空数组=使用全局配置） */
+  syncChannels?: string[]
+  /** 备用通道开关 */
+  enableBackupChannel?: boolean
+  /** 备用通道最大重试次数 */
+  backupRetryMax?: number
+  /** 允许其余配置字段透传保存，避免丢用户已有配置 */
+  [key: string]: unknown
+}
+
+/** 提示词组合（prompt_combo / image_prompt_combo） */
+export interface LensPromptCombo {
+  /** 组合 id：优先 DB 主键（正数），内置组合为负数 */
+  id: number
+  /** 组合名称 */
+  name: string
+  /** 是否系统级（pkg='0' 运营配置，用户侧只读） */
+  isSystem?: boolean
+  /** 是否前端内置组合（负数 id） */
+  isDefault?: boolean
+  /** 组合前置提示词内容（只读展示用） */
+  prePrompt?: string
+  /** 组合选项提示词（只读展示用） */
+  optionPrompt?: string
+  /** 其余组合字段（颜色/光影等，只读展示时保留） */
+  [key: string]: unknown
+}
+
+/** 风格导演（/api/styleDirector/list 条目） */
+export interface LensStyleDirector {
+  id: number
+  directorName: string
+  [key: string]: unknown
+}
+
+/** 画布配置 localStorage 缓存 key（与 lens 配置页一致） */
+function buildCanvasConfigStorageKey(dramaId: string): string {
+  return `lens_config_${dramaId}`
+}
+
+/** 保存后写的时间戳 key（与 lens 配置页 CONFIG_SAVED_KEY 一致，供分镜板感知配置变更） */
+const CANVAS_CONFIG_SAVED_KEY = 'lens_config_saved_at'
+
+/** 画布「基本设置」读取结果（settings + 是否成功从服务端读取） */
+export interface LensCanvasBasicSettingsResult {
+  /** 合并后的配置（服务端优先；服务端失败时为本地缓存） */
+  settings: LensCanvasStyleConfig | null
+  /** 是否成功从服务端读到配置（false 表示服务端读取失败、回退本地缓存，调用方应禁止保存以免覆盖服务端字段） */
+  fromServer: boolean
+}
+
+/**
+ * 读取画布「基本设置」：以服务端 style_config 为准（与本地缓存合并，服务端字段覆盖本地），
+ * 避免陈旧 localStorage 覆盖服务端新配置；服务端失败时回退本地缓存并标记 fromServer=false。
+ *
+ * @param dramaId 剧 ID
+ * @returns 配置 + 是否来自服务端；都无数据时 settings 为 null
+ */
+export async function getCanvasBasicSettings(dramaId: string): Promise<LensCanvasBasicSettingsResult> {
+  let cached: LensCanvasStyleConfig | null = null
+  try {
+    const raw = window.localStorage.getItem(buildCanvasConfigStorageKey(dramaId))
+    if (raw) cached = JSON.parse(raw) as LensCanvasStyleConfig
+  } catch {
+    // 本地缓存损坏按未命中处理，继续读服务端
+  }
+  // 以服务端为准：先强制读服务端最新配置，成功时直接使用服务端配置（不合并本地缓存，
+  // 避免把服务端已删除的旧字段带回并被保存）；只有服务端失败时才用本地缓存兜底并标记 fromServer=false。
+  try {
+    const remote = await getStyleConfig(dramaId, true)
+    if (remote) return { settings: remote as LensCanvasStyleConfig, fromServer: true }
+    return { settings: null, fromServer: true }
+  } catch (error) {
+    console.warn('[canvas-config] 读取服务端剧配置失败，回退本地缓存', error)
+  }
+  return { settings: cached, fromServer: false }
+}
+
+/**
+ * 保存画布「基本设置」：同时写 localStorage 与服务端 style_config（与 lens 配置页一致）。
+ *
+ * @param dramaId  剧 ID
+ * @param settings 基本设置对象
+ */
+export async function saveCanvasBasicSettings(dramaId: string, settings: LensCanvasStyleConfig): Promise<void> {
+  const payload = [{
+    type: 'style_config',
+    keyStr: `style_config_${dramaId}`,
+    valueStr: JSON.stringify(settings),
+    pkg: String(dramaId),
+  }]
+  // 注意：saveList 返回 Result{code:0}（不是 AjaxResult 的 code:200），不能走 lensFetch；
+  // 这里显式接受 code 0/200，其它业务码按失败处理（msg 透出）
+  const token = readCookie('Admin-Token')
+  const response = await fetch('/api/sysApi/baseConfig/saveList', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  })
+  const responseText = await response.text().catch(() => '')
+  let responseBody: { code?: number; msg?: string } = {}
+  try {
+    responseBody = responseText ? (JSON.parse(responseText) as { code?: number; msg?: string }) : {}
+  } catch {
+    throw new Error(`保存画布配置失败：响应非 JSON（HTTP ${response.status}）`)
+  }
+  if (!response.ok || (responseBody.code !== 0 && responseBody.code !== 200)) {
+    throw new Error('保存画布配置失败：' + (responseBody.msg || ('code=' + String(responseBody.code))))
+  }
+  try {
+    window.localStorage.setItem(buildCanvasConfigStorageKey(dramaId), JSON.stringify(settings))
+    window.localStorage.setItem(CANVAS_CONFIG_SAVED_KEY, String(Date.now()))
+  } catch {
+    // localStorage 写入失败（隐私模式/配额）不影响服务端已保存
+  }
+  // 失效 style_config 的 sessionStorage 缓存，避免读回旧值
+  try {
+    window.sessionStorage.removeItem(buildStyleConfigCacheKey(dramaId))
+  } catch {
+    // 忽略
+  }
+  // 广播配置保存事件，分镜板等监听者据此刷新（与 lens 配置页 saveConfigInfo 行为一致）
+  window.dispatchEvent(new CustomEvent('lens:configSaved'))
+}
+
+/**
+ * 加载提示词组合列表（剧内 + 系统级运营组合）。
+ *
+ * <p>后端返回值为 { [type]: { [keyStr]: { id, pkg, valueStr } } }，valueStr 为组合 JSON；
+ * id 优先取 DB 主键（正数），内置组合为负数。</p>
+ *
+ * @param dramaId 剧 ID
+ * @param type    prompt_combo（视频前置提示词）/ image_prompt_combo（生图前置提示词）
+ * @returns 组合列表（解析失败的条目跳过）
+ */
+export async function listCanvasPromptCombos(
+  dramaId: string,
+  type: 'prompt_combo' | 'image_prompt_combo',
+): Promise<LensPromptCombo[]> {
+  // 该接口返回裸业务体（无 AjaxResult code 包装），必须走 lensFetchBare
+  const data = await lensFetchBare('/api/sysApi/baseConfig/list', {
+    method: 'POST',
+    body: JSON.stringify({ pkg: String(dramaId), type, includeSystem: true }),
+  })
+  const rows = data && typeof data === 'object' ? (data as Record<string, unknown>)[type] : null
+  if (!rows || typeof rows !== 'object') return []
+  const combos: LensPromptCombo[] = []
+  Object.entries(rows as Record<string, unknown>).forEach(([keyStr, rawRow]) => {
+    if (!rawRow || typeof rawRow !== 'object') return
+    const row = rawRow as Record<string, unknown>
+    const valueStr = typeof row.valueStr === 'string' ? row.valueStr : ''
+    if (!valueStr) return
+    try {
+      const value = JSON.parse(valueStr) as Record<string, unknown>
+      const dbId = Number(row.id) || 0
+      const embeddedId = Number(value.id)
+      const id = dbId !== 0 ? dbId : (Number.isFinite(embeddedId) ? embeddedId : 0)
+      const name = typeof value.name === 'string' && value.name.trim() ? value.name : keyStr
+      combos.push({
+        ...value,
+        id,
+        name,
+        isSystem: String(row.pkg ?? '') === '0',
+        isDefault: dbId < 0,
+      })
+    } catch {
+      // 单条 valueStr 解析失败不影响其余组合
+    }
+  })
+  return combos
+}
+
+/** 风格导演列表（仅启用状态，与 lens 配置页 listStyleDirectors 同接口） */
+export async function listCanvasStyleDirectors(): Promise<LensStyleDirector[]> {
+  const data = await lensFetch<LensStyleDirector[] | null>('/api/styleDirector/list')
+  return Array.isArray(data) ? data : []
+}
+
+/** 取消当前剧所有排队中的任务（已在执行中的任务不受影响） */
+export async function cancelAllQueuedTasks(dramaId: string): Promise<void> {
+  await lensFetch<unknown>('/api/taskQueue/cancelAllQueued', {
+    method: 'POST',
+    body: JSON.stringify({ dramaId }),
+  })
 }
 
 /** lens 模型条目（/api/model/* 返回 data 数组元素） */

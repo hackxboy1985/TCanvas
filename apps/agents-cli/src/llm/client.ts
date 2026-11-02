@@ -275,7 +275,9 @@ export class LLMClient {
       });
     }
 
-    const json = asObject(await this.parseResponseBody(res, request.onTextDelta)) ?? {};
+    const json = asObject(
+      await this.parseResponseBody(res, request.onTextDelta, request.onReasoningDelta),
+    ) ?? {};
     const choices = Array.isArray(json.choices) ? json.choices : [];
     const firstChoice = asObject(choices[0]);
     const choiceMessage = asObject(firstChoice?.message);
@@ -295,7 +297,14 @@ export class LLMClient {
         })
         .filter(Boolean),
     });
-    const text = asString(choiceMessage?.content);
+    // 非流式或部分网关会把思考写进 content（<think>…</think>）：统一剥离到 reasoning，正文保持干净
+    const cleaned = extractThinkTags(asString(choiceMessage?.content));
+    const inlineReasoning = asString(choiceMessage?.reasoning_content) || asString(choiceMessage?.reasoning);
+    const reasoning = inlineReasoning + cleaned.reasoning;
+    if (cleaned.reasoning && !inlineReasoning) {
+      request.onReasoningDelta?.(cleaned.reasoning);
+    }
+    const text = cleaned.content;
     const toolCalls = this.parseChatToolCalls(rawToolCalls);
     this.debugLog("chat.response.tool_calls.normalized", {
       normalizedCount: toolCalls.length,
@@ -303,7 +312,7 @@ export class LLMClient {
       normalizedNames: toolCalls.map((call) => call.name),
     });
 
-    return { text, toolCalls };
+    return { text, toolCalls, ...(reasoning ? { reasoning } : {}) };
   }
 
   private async callResponses(request: LLMRequest, retry = 0): Promise<LLMResponse> {
@@ -396,7 +405,11 @@ export class LLMClient {
       });
     }
 
-    const initialJson = (await this.parseResponseBody(res, request.onTextDelta)) as Record<string, unknown>;
+    const initialJson = (await this.parseResponseBody(
+      res,
+      request.onTextDelta,
+      request.onReasoningDelta,
+    )) as Record<string, unknown>;
     const json = await this.resolveResponsesLifecycle(initialJson, {
       ...(request.abortSignal ? { abortSignal: request.abortSignal } : {}),
     });
@@ -425,7 +438,12 @@ export class LLMClient {
     const toolCalls = this.parseResponsesToolCalls(output);
     const extractedText = this.extractResponsesText(output);
     const outputText = typeof json.output_text === "string" ? json.output_text : "";
-    const text = extractedText || outputText || "";
+    // 与 chat 路径一致：剥离 <think> 思考段，不让思考混入正文
+    const cleaned = extractThinkTags(extractedText || outputText || "");
+    if (cleaned.reasoning) {
+      request.onReasoningDelta?.(cleaned.reasoning);
+    }
+    const text = cleaned.content;
 
     if (!text && toolCalls.length === 0) {
       const status = String((json as Record<string, unknown>)?.status || "").trim().toLowerCase();
@@ -608,7 +626,11 @@ export class LLMClient {
       .filter((call): call is ToolCall => Boolean(call.name));
   }
 
-  private async parseResponseBody(res: Response, onTextDelta?: (delta: string) => void) {
+  private async parseResponseBody(
+    res: Response,
+    onTextDelta?: (delta: string) => void,
+    onReasoningDelta?: (delta: string) => void,
+  ) {
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("text/event-stream")) {
       const raw = await res.text();
@@ -636,7 +658,7 @@ export class LLMClient {
     }
     const decoder = new TextDecoder();
     const reader = res.body.getReader();
-    const parser = createEventStreamParser(onTextDelta);
+    const parser = createEventStreamParser(onTextDelta, onReasoningDelta);
     let chunkChars = 0;
     let pending = "";
     while (true) {
@@ -690,16 +712,121 @@ export class LLMClient {
   }
 }
 
+type ThinkTagFilter = {
+  push: (chunk: string) => void;
+  finish: () => void;
+};
+
+/**
+ * 增量过滤 <think>…</think> 思考段：
+ * - 标签内文本交给 onReasoning，标签外文本交给 onContent，二者互不混入；
+ * - 支持标签被拆到多个流式 chunk；大小写不敏感；
+ * - 流结束时若仍有未闭合标签，剩余文本按当前所在区域收口（不丢字，也不把思考混进正文）。
+ *
+ * @param onContent   正文回调
+ * @param onReasoning 思考回调
+ * @returns 过滤器（push 输入 chunk，finish 收口）
+ */
+function createThinkTagFilter(
+  onContent: (delta: string) => void,
+  onReasoning?: (delta: string) => void,
+): ThinkTagFilter {
+  const OPEN_TAG = "<think>";
+  const CLOSE_TAG = "</think>";
+  let buffer = "";
+  let inThink = false;
+  const emit = (text: string) => {
+    if (!text) return;
+    if (inThink) onReasoning?.(text);
+    else onContent(text);
+  };
+  const drain = (final: boolean) => {
+    while (buffer) {
+      const tag = inThink ? CLOSE_TAG : OPEN_TAG;
+      const index = buffer.toLowerCase().indexOf(tag);
+      if (index >= 0) {
+        emit(buffer.slice(0, index));
+        buffer = buffer.slice(index + tag.length);
+        inThink = !inThink;
+        continue;
+      }
+      // 没有完整标签：保留可能是标签前缀的尾部，等待下一个 chunk
+      let keep = 0;
+      const lower = buffer.toLowerCase();
+      for (let n = Math.min(tag.length - 1, buffer.length); n > 0; n -= 1) {
+        if (lower.endsWith(tag.slice(0, n))) {
+          keep = n;
+          break;
+        }
+      }
+      const out = buffer.slice(0, buffer.length - keep);
+      if (out) emit(out);
+      buffer = buffer.slice(buffer.length - keep);
+      break;
+    }
+    if (final) {
+      if (buffer) emit(buffer);
+      buffer = "";
+    }
+  };
+  return {
+    push(chunk: string) {
+      if (!chunk) return;
+      buffer += chunk;
+      drain(false);
+    },
+    finish() {
+      drain(true);
+    },
+  };
+}
+
+/**
+ * 一次性剥离 <think>…</think> 思考段（非流式 / 非增量场景）。
+ *
+ * @param text 原始文本
+ * @returns content=去掉思考段的正文，reasoning=思考段文本
+ */
+function extractThinkTags(text: string): { content: string; reasoning: string } {
+  const reasoning: string[] = [];
+  const content = String(text || "").replace(/<think\b[^>]*>([\s\S]*?)<\/think>/gi, (_match, inner: string) => {
+    reasoning.push(String(inner || ""));
+    return "";
+  });
+  return { content, reasoning: reasoning.join("\n").trim() };
+}
+
 function isRetryableHttpStatus(status: number): boolean {
   return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
-function createEventStreamParser(onTextDelta?: (delta: string) => void) {
+function createEventStreamParser(
+  onTextDelta?: (delta: string) => void,
+  onReasoningDelta?: (delta: string) => void,
+) {
   let lastJson: EventStreamState = {};
   let outputText = "";
   const outputItems: Array<ResponsesOutputItem | undefined> = [];
   const outputIndexById = new Map<string, number>();
   let buffer: string[] = [];
+  // chat.completions 流式响应（choices[].delta）与 Responses 事件互斥，按首帧识别
+  let chatChunkSeen = false;
+  let chatText = "";
+  let chatReasoning = "";
+  let chatFinishReason: string | null = null;
+  const chatToolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+  // 思考链过滤：delta.reasoning_content 直接归入 reasoning；content 里的 <think>…</think> 也归入 reasoning，
+  // 两者都不进入正文 chatText / onTextDelta，避免思考过程展示在回复正文。
+  const chatContentFilter = createThinkTagFilter(
+    (text) => {
+      chatText += text;
+      onTextDelta?.(text);
+    },
+    (text) => {
+      chatReasoning += text;
+      onReasoningDelta?.(text);
+    },
+  );
 
   const toIndex = (value: unknown, itemId?: unknown) => {
     if (typeof value === "number") return value;
@@ -754,7 +881,50 @@ function createEventStreamParser(onTextDelta?: (delta: string) => void) {
     return item;
   };
 
+  const handleChatCompletionChunk = (choices: unknown[]) => {
+    chatChunkSeen = true;
+    const first = asObject(choices[0]);
+    if (!first) return;
+    const delta = asObject(first.delta);
+    if (delta) {
+      // 优先读取独立的 reasoning 字段（MiniMax reasoning_split / DeepSeek reasoner 等）
+      const reasoningDelta = asString(delta.reasoning_content) || asString(delta.reasoning);
+      if (reasoningDelta) {
+        chatReasoning += reasoningDelta;
+        onReasoningDelta?.(reasoningDelta);
+      }
+      const content = asString(delta.content);
+      if (content) {
+        chatContentFilter.push(content);
+      }
+      const toolCalls = Array.isArray(delta.tool_calls) ? delta.tool_calls : [];
+      for (let i = 0; i < toolCalls.length; i += 1) {
+        const raw = asObject(toolCalls[i]);
+        if (!raw) continue;
+        const indexRaw = raw.index;
+        const index = typeof indexRaw === "number" ? indexRaw : i;
+        const fn = asObject(raw.function);
+        const id = asString(raw.id);
+        const name = asString(fn?.name);
+        const argsDelta = asString(fn?.arguments);
+        const existing = chatToolCalls.get(index) ?? { id: "", name: "", arguments: "" };
+        if (id) existing.id = id;
+        if (name) existing.name = name;
+        existing.arguments += argsDelta;
+        chatToolCalls.set(index, existing);
+      }
+    }
+    const finishReason = asString(first.finish_reason);
+    if (finishReason) chatFinishReason = finishReason;
+  };
+
   const handleEvent = (parsed: JsonObject) => {
+    // chat.completions 流：{choices:[{delta,finish_reason}]}（OpenAI 兼容端点常见格式）
+    const choices = Array.isArray(parsed.choices) ? (parsed.choices as unknown[]) : null;
+    if (choices) {
+      handleChatCompletionChunk(choices);
+      return;
+    }
     const response = asObject(parsed.response);
     if (response) {
       lastJson = response as EventStreamState;
@@ -885,6 +1055,33 @@ function createEventStreamParser(onTextDelta?: (delta: string) => void) {
 
   const finalize = () => {
     tryParseBuffer(true);
+    // 收口未闭合的 <think> 缓冲，保证不丢字也不把思考混进正文
+    chatContentFilter.finish();
+    if (chatChunkSeen) {
+      // chat.completions 流：还原成 callChat 期望的 {choices:[{message:{content,tool_calls}}]} 结构
+      const message: JsonObject = {
+        role: "assistant",
+        content: chatText,
+      };
+      if (chatReasoning) {
+        message.reasoning_content = chatReasoning;
+      }
+      const toolCalls = Array.from(chatToolCalls.entries())
+        .sort((left, right) => left[0] - right[0])
+        .filter(([, call]) => Boolean(call.name))
+        .map(([index, call]) => ({
+          index,
+          id: call.id || "call_" + index,
+          type: "function",
+          function: { name: call.name, arguments: call.arguments || "{}" },
+        }));
+      if (toolCalls.length > 0) {
+        message.tool_calls = toolCalls;
+      }
+      return {
+        choices: [{ index: 0, message, finish_reason: chatFinishReason }],
+      } as EventStreamState;
+    }
     const mergedOutput = outputItems.filter((item): item is ResponsesOutputItem => Boolean(item));
     if (mergedOutput.length > 0) {
       if (!Array.isArray(lastJson.output) || lastJson.output.length === 0) {
@@ -929,8 +1126,12 @@ function createEventStreamParser(onTextDelta?: (delta: string) => void) {
   };
 }
 
-function parseEventStream(body: string, onTextDelta?: (delta: string) => void) {
-  const parser = createEventStreamParser(onTextDelta);
+function parseEventStream(
+  body: string,
+  onTextDelta?: (delta: string) => void,
+  onReasoningDelta?: (delta: string) => void,
+) {
+  const parser = createEventStreamParser(onTextDelta, onReasoningDelta);
   for (const line of body.replace(/\r\n/g, "\n").split("\n")) {
     parser.pushLine(line);
   }

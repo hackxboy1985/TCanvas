@@ -1,0 +1,37 @@
+/* ===== 画布「配置」弹窗（CanvasConfigModal） ===== */
+
+/* 弹窗尺寸（宽/高/滚动）由组件内的 Modal styles 内联控制：Mantine 核心样式的
+   加载顺序晚于本文件，同优先级的尺寸规则会被覆盖；内联样式优先级最高最稳。
+   这里只保留 Tabs 的视觉样式。 */
+/* Tabs 选中态：对齐「资产库」LensReferencePicker 的交互（激活项主题色 + 下划线），
+   关闭 Mantine 默认的 bottom-border 变体，统一用自绘的 2px 下划线。 */
+.lens-canvas-config-tabs .lens-canvas-config__tab-list {
+  --tabs-list-border-size: 0;
+  --tab-border-width: 0;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.lens-canvas-config-tabs .lens-canvas-config__tab {
+  position: relative;
+  padding: 10px 16px;
+  font-weight: 500;
+  color: var(--mantine-color-text-secondary);
+  transition: all 200ms ease;
+  border: none;
+  background: transparent;
+}
+.lens-canvas-config-tabs .lens-canvas-config__tab:hover {
+  color: var(--mantine-color-text);
+}
+.lens-canvas-config-tabs .lens-canvas-config__tab[data-active] {
+  color: var(--mantine-primary-color-filled);
+  font-weight: 600;
+}
+.lens-canvas-config-tabs .lens-canvas-config__tab[data-active]::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--mantine-primary-color-filled);
+}

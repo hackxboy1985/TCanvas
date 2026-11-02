@@ -11,7 +11,7 @@ import type {
   Message,
   ToolPolicySummary,
 } from "../types/index.js";
-import { loadSessionMessages, saveSessionMessages } from "../core/memory/session.js";
+import { listSessionSummaries, loadSessionMessages, saveSessionMessages } from "../core/memory/session.js";
 import path from "node:path";
 import { createClient } from "redis";
 import type { CollabAgentManager } from "../core/tools/collab.js";
@@ -359,6 +359,7 @@ type AgentsChatStreamEvent =
       };
     }
   | { event: "content"; data: { delta: string } }
+  | { event: "reasoning"; data: { delta: string } }
   | {
       event: "todo_list";
       data: {
@@ -711,6 +712,12 @@ function projectRuntimeEventToStream(
       },
     });
     context.ensureAssistantItemStarted();
+    return;
+  }
+  if (event.type === "reasoning.delta") {
+    // 思考链单独事件：不写 item.updated/正文，避免和正文渲染混在一起
+    if (typeof event.delta !== "string" || !event.delta) return;
+    context.emitStreamEvent({ event: "reasoning", data: { delta: event.delta } });
     return;
   }
   if (event.type === "text.delta") {
@@ -1921,6 +1928,61 @@ export function startAgentsHttpServer(
         });
       }
 
+      if (method === "GET" && pathname === "/sessions") {
+        // 历史会话列表：按用户隔离，返回该用户会话摘要（sessionId 含「剧:集」命名空间，由上游解析过滤）
+        const sessionUserId = String(url.searchParams.get("userId") || "").trim() || String(
+          typeof req.headers["x-agents-user-id"] === "string" ? req.headers["x-agents-user-id"] : ""
+        ).trim();
+        if (!sessionUserId) return badRequest(res, "userId 不能为空。");
+        const rawLimit = Number(url.searchParams.get("limit") || "20");
+        const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, Math.trunc(rawLimit))) : 20;
+        try {
+          const summaries = listSessionSummaries(resolveSessionStoreDir(sessionUserId), limit);
+          return json(res, 200, {
+            userId: sessionUserId,
+            sessions: summaries.map((summary) => ({
+              sessionId: summary.key,
+              preview: summary.preview,
+              updatedAt: summary.updatedAt,
+              messageCount: summary.messageCount,
+            })),
+          });
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`[agents] /sessions failed user=${sessionUserId} reason=${message}`);
+          return json(res, 500, { error: `读取会话列表失败：${message}` });
+        }
+      }
+
+      const sessionMessagesMatch = pathname.match(/^\/sessions\/([^/]+)\/messages$/u);
+      if (method === "GET" && sessionMessagesMatch) {
+        // 历史会话消息：优先 Redis 缓存（未过期会话），否则读该用户 JSONL，二者都按 userId 隔离
+        const sessionUserId = String(url.searchParams.get("userId") || "").trim() || String(
+          typeof req.headers["x-agents-user-id"] === "string" ? req.headers["x-agents-user-id"] : ""
+        ).trim();
+        if (!sessionUserId) return badRequest(res, "userId 不能为空。");
+        let sessionId = "";
+        try {
+          sessionId = decodeURIComponent(sessionMessagesMatch[1] || "").trim();
+        } catch {
+          return badRequest(res, "sessionId 非法。");
+        }
+        if (!sessionId) return badRequest(res, "sessionId 不能为空。");
+        try {
+          const history = (await loadSessionFromRedis(sessionUserId, sessionId))
+            ?? loadSessionMessages({ dir: resolveSessionStoreDir(sessionUserId), key: sessionId });
+          const messages = history
+            .filter((message) => message.ephemeral !== true)
+            .filter((message) => message.role === "user" || message.role === "assistant")
+            .map((message) => ({ role: message.role, content: message.content }));
+          return json(res, 200, { sessionId, messages });
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`[agents] /sessions/messages failed user=${sessionUserId} session=${sessionId} reason=${message}`);
+          return json(res, 500, { error: `读取会话消息失败：${message}` });
+        }
+      }
+
       if (method === "POST" && pathname === "/chat") {
         const startedAt = Date.now();
         const body = (await readJsonBody(req)) as AgentsChatRequest;
@@ -2303,6 +2365,9 @@ export function startAgentsHttpServer(
               },
               onTextDelta: (delta) => {
                 emitRuntimeEvent({ type: "text.delta", delta });
+              },
+              onReasoningDelta: (delta) => {
+                emitRuntimeEvent({ type: "reasoning.delta", delta });
               },
               onToolCall: (toolCall) => {
                 const toolStartedAt = Date.parse(toolCall.startedAt);

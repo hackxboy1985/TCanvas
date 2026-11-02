@@ -75,6 +75,8 @@ type RunOptions = {
   onToolCall?: (toolCall: ToolCallTrace) => void;
   onTurn?: (turn: LlmTurnTrace) => void;
   onTextDelta?: (delta: string) => void;
+  /** 思考链增量回调（与正文分离；由上层决定是否展示/过滤） */
+  onReasoningDelta?: (delta: string) => void;
   abortSignal?: AbortSignal;
   history?: Message[];
   toolContextMeta?: Record<string, unknown>;
@@ -317,6 +319,7 @@ export class AgentRunner {
           tools,
           ...(options.modelOverride ? { modelOverride: options.modelOverride } : {}),
           ...(options.onTextDelta ? { onTextDelta: options.onTextDelta } : {}),
+          ...(options.onReasoningDelta ? { onReasoningDelta: options.onReasoningDelta } : {}),
           ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
         });
         throwIfAborted(options.abortSignal);

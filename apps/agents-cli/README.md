@@ -182,11 +182,11 @@ agent 完成后会在私有工作区写出 `artifacts.json` 与 `handoff.json`�
 
 - `src/runtime/runtime.ts`：`AssistantRuntime` 门面。负责装配 runner、tool registry、memory/tasks/team/background services，并向 CLI / TUI / HTTP 暴露统一的 `toolContextMeta`、session store 与 shutdown 能力。
 - `src/runtime/channel.ts`：渠道描述层。统一声明当前 run 来自 `tui` / `http` / `shell` 等哪种 channel、交互传输方式（interactive / request_response / stream）、以及关联的 session/user/surface 元信息；同时会导出共享的 channel policy（如 `compact` vs `balanced` 响应风格、sessionMode、eventMode），并把这些事实注入 runner 的 `toolContextMeta.runtimeChannel/runtimeChannelPolicy`，避免不同 surface 再各自私藏渠道语义或各自补 prompt。
-- `src/runtime/events.ts`：共享 runtime event schema；surface 不应再各自发明一套 run/text/tool/turn 生命周期事件。当前已包含 `run.started`、`tool.started`、`text.delta`、`todo.updated`、`tool.completed`、`turn.completed`、`run.completed`、`run.failed`。
+- `src/runtime/events.ts`：共享 runtime event schema；surface 不应再各自发明一套 run/text/tool/turn 生命周期事件。当前已包含 `run.started`、`tool.started`、`text.delta`、`reasoning.delta`、`todo.updated`、`tool.completed`、`turn.completed`、`run.completed`、`run.failed`。`reasoning.delta` 承载与正文分离的思考链增量（来自 `delta.reasoning_content` 或 `content` 内 `<think>…</think>` 段），不参与正文拼接。
 - `src/runtime/profile.ts` / `src/runtime/session.ts` / `src/runtime/skills.ts`：把 profile 决策、session 定位、skills 发现从命令入口剥离出来，避免 `index.ts` 再次膨胀成系统总控。
 - `src/surfaces/cli/*`：CLI surface，只负责 stdin / stdout 与工具输出预览。
 - `src/surfaces/tui/*`：TUI / REPL surface，只负责交互输入、转录展示、斜杠命令和 run 可视化，不再直接承担 runtime 装配。
-- `src/server/http-server.ts`：HTTP surface，继续使用同一套 `AssistantRuntime` 产出的 runner、system override 与 tool context。流式 SSE 事件不再直接绑定原始 runner 回调，而是先接收 runtime event，再投影为 `thread/item/content/tool/todo/result/done` 等 HTTP 事件。
+- `src/server/http-server.ts`：HTTP surface，继续使用同一套 `AssistantRuntime` 产出的 runner、system override 与 tool context。流式 SSE 事件不再直接绑定原始 runner 回调，而是先接收 runtime event，再投影为 `thread/item/content/reasoning/tool/todo/result/done` 等 HTTP 事件；`reasoning` 与 `content` 分离发送，由上游 bridge 决定是否透传（如 lens 桥只对管理员用户转发）。
 - `src/core/agent-loop.ts`：主执行内核，负责 LLM turn、tool batching、planning gate 与 team runtime 协调。
 - `src/core/session/session-engine.ts`：托管 message stack、runtime meta、tool runtime state，以及运行中的 system/message 更新。
 - `src/core/context-pipeline.ts`：组装 persona、workspace rules、memory、runtime diagnostics、generation contract、canvas capability、request scope，并输出 `contextDiagnostics`。
@@ -245,6 +245,8 @@ pnpm --filter agents dev -- serve --port 8799
 - `GET /health`：健康检查
 - `GET /collab/status`：读取当前 team agents/submissions 运行态
 - `GET /collab/status?ids=<agentId1>,<agentId2>`：只读取指定 agents 的运行态
+- `GET /sessions?userId=<userId>&limit=20`：读取指定用户的历史会话摘要（按 userId 目录隔离；sessionId 含上游命名空间，返回 preview/updatedAt/messageCount）
+- `GET /sessions/{sessionId}/messages?userId=<userId>`：读取指定用户某个会话的历史消息（优先 Redis 会话缓存，未命中读 JSONL；只返回 user/assistant，不含 ephemeral）
 
 `POST /chat` 现在还支持上游按请求注入远程业务工具：
 
@@ -255,8 +257,11 @@ pnpm --filter agents dev -- serve --port 8799
 
 `agents-cli` 只负责把这些远程工具暴露给模型并在调用时回调执行；业务工具定义与真实执行逻辑应收口在上游服务，而不是内置到 `agents-cli` 本体。
 
+会话持久化（`/chat` 的 `sessionId`）：同一 `(userId, sessionId)` 的对话历史会写入 `memoryDir/users/<userId>/sessions/<safeKey>.jsonl` 与 Redis（`AGENTS_SESSION_CACHE_PREFIX`，默认 TTL 600s），下次同 key 请求自动加载并在本轮作为历史消息使用；`/sessions` 从该用户目录的 `_index.json` + JSONL 读取摘要，供上游恢复历史对话。
+
 Checklist/todo 对齐能力（与 codex-main thread item 语义保持一致方向）：
 - 当本轮调用 `TodoWrite` 成功时，`/chat` 流式事件会额外发送 `event: todo_list`，包含结构化 `items[]`、`totalCount`、`completedCount`、`inProgressCount`。
+- 思考链与正文分离：chat.completions 流里的 `delta.reasoning_content`、以及 `content` 中的 `<think>…</think>` 段会通过 `event: reasoning`（`{delta}`）单独发送，不混入 `event: content`/最终正文；最终正文与 `result.trace` 均不含思考链。
 - 若 `/chat` 在流式过程中失败，`event: error` 现在除了 `message` 之外，还会在可用时携带 `code/details`；bridge 或上游可以直接消费 `details.requestSummary` 查看最后一次真实 LLM 请求摘要，而不必再只靠服务端控制台日志排查。
 - 非流式与流式最终 `result.trace` 中会附带 `todoList` 快照，便于上游 bridge/UI 做门禁与可视化。
 

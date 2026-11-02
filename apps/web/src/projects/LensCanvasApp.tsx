@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert } from '@mantine/core'
-import { IconBoxMultiple } from '@tabler/icons-react'
+import { IconBoxMultiple, IconSettings } from '@tabler/icons-react'
 import Canvas from '../canvas/Canvas'
 import PreviewModal from '../ui/PreviewModal'
 import type { CanvasHandle } from '../canvas/Canvas'
@@ -26,6 +26,7 @@ import {
   getFlow,
   saveFlow,
   getStyleConfig,
+  getCanvasEntryConfig,
   listReferenceAssets,
   type LensEpisodeBrief,
   type LensStoryboard,
@@ -37,11 +38,20 @@ import {
   type LensScriptContent,
 } from '../api/lens'
 import { preloadLensModelOptions } from '../config/useModelOptions'
+import {
+  collectLensProjectionNodeIds,
+  dedupeLensEdges,
+  isLensProjectionEdge,
+  isLensProjectionNode,
+  mergeLensFlowIntoStore,
+} from './lensFlowMerge'
 import { useLensScriptGeneration } from './useLensScriptGeneration'
+import AiChatDialog from '../ui/chat/AiChatDialog'
 import { getLensCanvasFlowId, readCanvasNodeAssetId, setLensCanvasFlowId } from '../canvas/utils/canvasNodeAssetId'
 import { CANVAS_ADOPT_TARGET_ID, TaskResultDrawer, type TaskResultAdoptedPayload, type TaskResultTarget } from '../canvas/components/TaskResultDrawer'
 import { toast } from '../ui/toast'
 import { AssetLibraryModal } from './AssetLibraryModal'
+import { CanvasConfigModal } from './CanvasConfigModal'
 import { CanvasConfirmDialogHost } from '../canvas/components/CanvasConfirmDialog'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
@@ -230,19 +240,7 @@ function isLensAssetNode(n: Node): boolean {
   return category === 1 || category === 2 || category === 3
 }
 
-/**
- * 是否为 lens 投影节点（业务字段权威在 lens 业务表，flow 只存编排）。
- *
- * 判定依据（双条件，缺一不可）：
- * - lensShot 分镜节点：类型本身即身份，历史数据不带 source 标记
- * - 其余投影节点（角色/场景/道具/剧本/台本）：带 source='lens_projection'
- *
- * 自由节点（用户手动创建的任务节点）没有 lens 实体身份，返回 false，其任务参数需完整保留。
- */
-function isLensProjectionNode(n: Node): boolean {
-  if (n.type === 'lensShot') return true
-  return (n.data as { source?: string })?.source === 'lens_projection'
-}
+// isLensProjectionNode 已抽到 ./lensFlowMerge（与 reload 合并纯函数共用同一判定，避免前后端口径漂移）。
 
 /**
  * 投影节点存入 flow 时保留的编排字段白名单。
@@ -768,6 +766,10 @@ export default function LensCanvasApp(): JSX.Element {
   // 资产库弹窗状态
   const [assetLibraryOpened, setAssetLibraryOpened] = useState(false)
   const [assetLibraryMode, setAssetLibraryMode] = useState<'manage' | 'select'>('manage')
+  // 画布右下角「展开AI对话」气泡入口显隐：默认显示；读取配置失败也保持显示（入口不能因配置接口异常消失）
+  const [aiChatEntryVisible, setAiChatEntryVisible] = useState<boolean>(true)
+  // 画布「配置」弹窗（顶部工具栏入口；数据与 lens 配置页同源）
+  const [configModalOpened, setConfigModalOpened] = useState<boolean>(false)
 
   // 集数变化后把 URL 的 episode 参数同步为当前集：刷新不退回旧集，
   // 任务提交/轮询链路（从 URL 读 episode）也不会把任务记到旧集上。
@@ -797,6 +799,23 @@ export default function LensCanvasApp(): JSX.Element {
       preloadLensModelOptions('video'),
       preloadLensModelOptions('image'),
     ]).catch(() => undefined)
+  }, [dramaId, setLensProjectConfig])
+
+  // 「配置」弹窗保存后（saveCanvasBasicSettings 广播 lens:configSaved）重新拉取剧配置，
+  // 让画布节点的默认模型/画幅/分辨率等即时生效，无需刷新页面。
+  useEffect(() => {
+    if (!dramaId) return
+    const handleConfigSaved = () => {
+      getStyleConfig(dramaId, true)
+        .then((config) => {
+          if (config) setLensProjectConfig(config)
+        })
+        .catch((err) => {
+          console.warn('[lens] 配置保存后刷新剧配置失败:', err)
+        })
+    }
+    window.addEventListener('lens:configSaved', handleConfigSaved)
+    return () => window.removeEventListener('lens:configSaved', handleConfigSaved)
   }, [dramaId, setLensProjectConfig])
   
   // 已保存 flow 里的布局设置（排列方向 + 分组开关）：与当前一致时沿用保存的位置，不重新排列
@@ -1311,9 +1330,13 @@ export default function LensCanvasApp(): JSX.Element {
     arrangeDirection: 'column' | 'flow'
     shotGroupOn: boolean
   }): { signature: string; data: Record<string, unknown> } => {
+    // flow 只持久化自由边：投影引用边由 buildCanvasNodes 按最新业务数据重建，不能写进 flow
+    // （否则业务数据变化后 flow 里的旧投影边会变成幽灵边；历史版本曾因 reload 丢边把 flow 写坏）。
+    const projectionNodeIds = collectLensProjectionNodeIds(payload.nodes)
+    const freeEdges = dedupeLensEdges(payload.edges.filter((edge) => !isLensProjectionEdge(edge, projectionNodeIds)))
     const data: Record<string, unknown> = {
       nodes: serializeNodesForFlow(payload.nodes),
-      edges: payload.edges,
+      edges: freeEdges,
       viewport: payload.viewport,
       layoutVersion: LAYOUT_VERSION,
       arrangeDirection: payload.arrangeDirection,
@@ -1376,6 +1399,98 @@ export default function LensCanvasApp(): JSX.Element {
     await saveNow(episodeNum, snapshot) // 切集前自动保存当前集（不等 debounce）
     setEpisodeNum(next)
   }, [episodeNum, saveNow])
+
+  /**
+   * 画布 Agent 写完 flow 后的轻量 reload。
+   *
+   * <p>为什么不直接调 loadEpisode：它有幂等守卫（同一 dramaId:episode 直接 return），
+   * 同一集再调不会真正重新读取 flow。</p>
+   *
+   * <p>合并语义见 {@link mergeLensFlowIntoStore}：自由节点的 data 以 flow 为准（保证 flow_patch 修改生效），
+   * 投影节点的 data 以当前 store 业务快照为准（避免用 flow 旧快照覆盖最新投影）；位置/类型始终以 flow 为准。</p>
+   *
+   * @returns reload 结果与新增节点 id（供 autoRun）
+   */
+  const reloadFlowForAgent = useCallback(async (): Promise<{ reloaded: boolean; newNodeIds: string[] }> => {
+    if (!dramaId) return { reloaded: false, newNodeIds: [] }
+    const store = useRFStore.getState()
+    const currentNodes = store.nodes
+    const currentNodeIds = new Set(currentNodes.map((node) => String(node.id || '').trim()).filter(Boolean))
+    const flow = await getFlow(dramaId, episodeNum)
+    // 关键：必须同步版本号，否则 debounce 自动保存会用旧 version 触发「已被他人修改」
+    flowVersionRef.current = flow?.version ?? flowVersionRef.current
+    setFlowVersion(flowVersionRef.current)
+    setLensCanvasFlowId(flow?.id ?? null)
+    if (!flow?.data) return { reloaded: false, newNodeIds: [] }
+    let parsed: { nodes?: Node[]; edges?: Edge[] }
+    try {
+      parsed = JSON.parse(flow.data) as { nodes?: Node[]; edges?: Edge[] }
+    } catch {
+      return { reloaded: false, newNodeIds: [] }
+    }
+    const flowNodes = Array.isArray(parsed.nodes) ? parsed.nodes : []
+    const flowEdges = Array.isArray(parsed.edges) ? parsed.edges : []
+    const merged = mergeLensFlowIntoStore({ flowNodes, flowEdges, currentNodes, currentEdges: store.edges })
+    // 先归一化再落 store：保存签名必须基于实际加载进 store 的节点（尺寸/接口错误节点修复后），
+    // 否则签名与 store 不一致，debounce 自动保存会误判为"有变更"而重复写库。
+    const normalizedNodes = normalizeImageNodeSize(reviveInterfaceErrorNodes(merged.nodes))
+    store.load({ nodes: normalizedNodes, edges: merged.edges })
+    // reload 加载的就是服务端刚写库的内容：同步保存签名，避免 debounce 自动保存把同一份数据再写一次
+    const viewport = canvasApiRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
+    lastSavedSignatureRef.current = buildFlowSignature({
+      nodes: normalizedNodes,
+      edges: merged.edges,
+      viewport,
+      arrangeDirection: shotArrange,
+      shotGroupOn,
+    }).signature
+    useUIStore.getState().setDirty(false)
+    return { reloaded: true, newNodeIds: merged.newNodeIds }
+  }, [dramaId, episodeNum, buildFlowSignature, shotArrange, shotGroupOn])
+
+  /**
+   * 把画布 Agent 的 reload 句柄注册到 window：
+   * - __lensCanvasAgentReloadFlow：flow_patch 写库后由 AiChatDialog 触发 reload（同步 flowVersion）。
+   *
+   * <p>silentSaveProject 不在这里注册：本文件已有同名钩子（任务提交后立即保存编排），
+   * 复用它即可，避免两个 effect 互相覆盖导致其中一个失效。</p>
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const holder = window as unknown as {
+      __lensCanvasAgentReloadFlow?: () => Promise<{ reloaded: boolean; newNodeIds: string[] }>
+    }
+    const previous = holder.__lensCanvasAgentReloadFlow
+    holder.__lensCanvasAgentReloadFlow = reloadFlowForAgent
+    return () => {
+      // 恢复注册前状态，避免卸载/依赖变化时误删其它实例的句柄
+      if (holder.__lensCanvasAgentReloadFlow === reloadFlowForAgent) {
+        if (previous) holder.__lensCanvasAgentReloadFlow = previous
+        else delete holder.__lensCanvasAgentReloadFlow
+      }
+    }
+  }, [reloadFlowForAgent])
+
+  // 同步画布作用域到 uiStore.currentFlow：AiChatDialog 的 canvas plan / reload / 会话 key 依赖它；
+  // lens 画布没有 tapcanvas 项目概念，currentProject 保持空。
+  useEffect(() => {
+    if (!dramaId) return
+    const flowKey = `${dramaId}:${episodeNum}`
+    useUIStore.getState().setCurrentFlow({
+      id: flowKey,
+      name: `第${episodeNum}集`,
+      source: 'server',
+      ownerType: null,
+      ownerId: null,
+    })
+    return () => {
+      // 卸载时清理画布作用域，避免 AiChatDialog 等组件残留指向已关闭画布
+      const uiState = useUIStore.getState()
+      if (String(uiState.currentFlow?.id || '') === flowKey) {
+        uiState.setCurrentFlow({ id: null, name: '未命名', source: 'local', ownerType: null, ownerId: null })
+      }
+    }
+  }, [dramaId, episodeNum])
 
   /** 整理画布：恢复默认打开时的投影布局（左下工具条「整理画布」按钮 / ⌥⌘F） */
   const arrangeLayout = useCallback(() => {
@@ -1467,9 +1582,19 @@ export default function LensCanvasApp(): JSX.Element {
             if (restoredShot) {
               setShowRefs(Boolean((restoredShot.data as Record<string, unknown>)?.showRefs))
             }
-            // 连线：布局版本一致时尊重 flow 里的连线（用户手动改过）；不一致时用最新投影引用连线
+            // 连线恢复口径：
+            // - flow 只持久化自由边（投影引用边由业务投影重建），因此布局版本一致时
+            //   restoredEdges = flow 自由边 + 最新投影引用边（按 source/target/handle 去重）；
+            // - 布局版本不一致时直接用最新投影布局的连线。
+            // 历史 flow 里可能残留投影旧边（或曾因 reload 丢边被写坏），这里都统一以最新投影为准。
+            const projectionNodeIds = collectLensProjectionNodeIds([
+              ...projected.nodes,
+              ...(Array.isArray(parsed.nodes) ? parsed.nodes : []),
+            ])
+            const flowEdges = Array.isArray(parsed.edges) ? parsed.edges : []
+            const flowFreeEdges = flowEdges.filter((edge) => !isLensProjectionEdge(edge, projectionNodeIds))
             const restoredEdges = useFlowLayout
-              ? (Array.isArray(parsed.edges) ? parsed.edges : [])
+              ? dedupeLensEdges([...flowFreeEdges, ...projected.edges])
               : projected.edges
             load({ nodes: normalizeImageNodeSize(reviveInterfaceErrorNodes(restored)), edges: restoredEdges })
             if (parsed.viewport) {
@@ -1526,6 +1651,21 @@ export default function LensCanvasApp(): JSX.Element {
     canViewTaskParams()
       .then((ok) => { if (alive) setCanViewParams(ok) })
       .catch(() => { if (alive) setCanViewParams(false) })
+    return () => { alive = false }
+  }, [])
+
+  // 画布入口配置（提示词设置-画布配置）：控制右下角「展开AI对话」气泡显隐
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      try {
+        const config = await getCanvasEntryConfig()
+        if (alive && config) setAiChatEntryVisible(config.agentChatEntryVisible)
+      } catch (error) {
+        // 读取失败保持默认显示，避免配置接口异常导致对话入口意外消失
+        console.warn('[lens-canvas] 读取画布入口配置失败，AI 对话入口按默认显示', error)
+      }
+    })()
     return () => { alive = false }
   }, [])
 
@@ -1591,11 +1731,13 @@ export default function LensCanvasApp(): JSX.Element {
    */
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const win = window as unknown as { silentSaveProject?: () => void }
-    const saver = () => {
+    const win = window as unknown as { silentSaveProject?: () => Promise<boolean> | void }
+    // 必须把 saveNow 的 Promise return 出去：canvas plan 路径要 await 落库后再 autoRun，
+    // 否则首次无 flow 时任务归属（flowId / canvasNodeAssetId）会缺失。
+    const saver = (): Promise<boolean> | void => {
       if (loading) return
       if (loadedForRef.current !== `${dramaId}:${episodeNum}`) return
-      void saveNow(episodeNum, {
+      return saveNow(episodeNum, {
         nodes: useRFStore.getState().nodes,
         edges: useRFStore.getState().edges,
       })
@@ -2036,6 +2178,14 @@ export default function LensCanvasApp(): JSX.Element {
           <Button
             size="xs"
             variant="light"
+            leftSection={<IconSettings size={14} />}
+            onClick={() => setConfigModalOpened(true)}
+          >
+            配置
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
             onClick={() => {
               const target = window.location.pathname.includes('/project/detail/') ? '/project/detail' : '/'
               window.location.href = '/'
@@ -2083,6 +2233,12 @@ export default function LensCanvasApp(): JSX.Element {
       <PreviewModal />
       {/* 画布内确认弹窗（替代 window.confirm，样式与画布暗色主题一致） */}
       <CanvasConfirmDialogHost />
+      {/* 画布「配置」弹窗（顶部工具栏入口；与 lens 配置页同源） */}
+      <CanvasConfigModal
+        opened={configModalOpened}
+        dramaId={dramaId}
+        onClose={() => setConfigModalOpened(false)}
+      />
       {/* 资产库弹窗 */}
       <AssetLibraryModal
         opened={assetLibraryOpened}
@@ -2090,6 +2246,10 @@ export default function LensCanvasApp(): JSX.Element {
         dramaId={dramaId}
         onSelectAsset={assetLibraryMode === 'select' ? handleSelectAsset : undefined}
       />
+      {/* 右下角 AI 对话：复用 tapcanvas 的 AiChatDialog 组件，对话后端在 lens 画布模式下
+          由 api/lensAgentChat.ts 改道到 lens 的 /api/canvas/agent/chat。
+          入口显隐由「提示词设置-画布配置 → 画布 Agent 对话入口」控制（默认显示）。 */}
+      {aiChatEntryVisible ? <AiChatDialog className="lens-canvas-ai-chat" /> : null}
     </div>
   )
 }

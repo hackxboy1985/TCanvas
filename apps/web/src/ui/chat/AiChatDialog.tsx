@@ -1,6 +1,6 @@
 import React from 'react'
 import { ActionIcon, Badge, Button, Group, Menu, Modal, Paper, ScrollArea, Stack, Text, Textarea, Tooltip } from '@mantine/core'
-import { IconArrowsMaximize, IconArrowsMinimize, IconBook2, IconChevronDown, IconChevronUp, IconMessageCircle, IconMessagePlus, IconPaperclip, IconPhoto, IconSend2, IconSparkles, IconTrash, IconUpload, IconX } from '@tabler/icons-react'
+import { IconArrowsMaximize, IconArrowsMinimize, IconBook2, IconChevronDown, IconChevronUp, IconHistory, IconMessageCircle, IconMessagePlus, IconPaperclip, IconPhoto, IconSend2, IconSparkles, IconTrash, IconUpload, IconX } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import {
   normalizeStoryboardSelectionContext,
@@ -21,6 +21,17 @@ import {
   type MemoryConversationItemDto,
   type AgentsChatResponseDto,
 } from '../../api/server'
+// lens 画布模式判定：对话走后端 /api/frontend/chat/stream（见 api/lensAgentChat.ts）
+import {
+  createLensChatSessionId,
+  fetchLensChatSessionMessages,
+  fetchLensChatSessions,
+  getLensChatSessionId,
+  isLensCanvasMode,
+  reloadLensCanvasFlow,
+  setLensChatSessionId,
+} from '../../api/lensAgentChat'
+import type { LensChatHistoryMessage, LensChatSessionSummary } from '../../api/lensAgentChat'
 import { toast } from '../toast'
 import { resolveNonOverlappingPosition, useRFStore } from '../../canvas/store'
 import { isImageKind } from '../../canvas/utils/edgeRules'
@@ -30,7 +41,13 @@ import { useLiveChatRunStore } from './liveChatRunStore'
 import { formatAgentsStreamErrorMessage } from './agentsStreamError'
 import { executeCanvasPlan, parseCanvasPlanFromReply } from './canvasPlan'
 import { autoRunAiChatCanvasNodes, autoRunAiChatPatchedCanvasNodes } from './autoRunCanvasNodes'
-import { resolveAiChatReloadAutoRunPlan } from './canvasMutation'
+import { dedupeNodeIds, resolveAiChatReloadAutoRunPlan } from './canvasMutation'
+import { FlowPatchReloadChain, filterLiveNodeIds } from './flowPatchReloadChain'
+import {
+  CANVAS_SHORTCUT_CHANGED_EVENT,
+  readCanvasShortcutConfig,
+  type CanvasShortcutConfig,
+} from './canvasShortcutConfig'
 import { resolveChatCanvasInsertionScope } from './canvasInsertion'
 import {
   buildEffectiveChatSessionKey,
@@ -75,6 +92,8 @@ type ChatMessage = {
   role: ChatRole
   content: string
   ts: string
+  /** 思考链文本（仅管理员可见；由 Java 桥按 scope 过滤后下发） */
+  reasoning?: string
   phase?: 'thinking' | 'final'
   kind?: 'progress' | 'result' | 'error'
   assets?: Array<{ title: string; url: string; thumbnailUrl?: string }>
@@ -90,6 +109,23 @@ type ChatMessage = {
     detail: string
   }>
   todoSnapshot?: ChatTodoItem[]
+}
+
+/**
+ * 把 lens 历史会话消息映射为对话气泡。
+ *
+ * @param history agents-cli 会话历史（role/content）
+ * @returns 对话消息列表
+ */
+function mapLensHistoryToChatMessages(history: LensChatHistoryMessage[]): ChatMessage[] {
+  const ts = new Date().toISOString()
+  return history.map((item, index) => ({
+    id: `lens-history-${index}-${item.role}`,
+    role: item.role,
+    content: item.content,
+    ts,
+    phase: 'final' as const,
+  }))
 }
 
 const CHAT_STREAM_ABORT_ERROR = '__tapcanvas_ai_chat_aborted__'
@@ -951,6 +987,24 @@ function patchChatMessageById(
   return changed ? next : messages
 }
 
+/**
+ * 剥离推理模型的思考过程标签（如 MiniMax 的 <think>…</think>）。
+ *
+ * <p>推理模型会把思考过程写进 content；展示层剥离，避免用户对话里看到大段思考文本。
+ * 未闭合的 <think>（流式截断）从标签起到末尾一并剥离。</p>
+ *
+ * @param text 原始文本
+ * @returns 展示用文本
+ */
+function stripThinkTags(text: string): string {
+  const raw = String(text || '')
+  if (!raw || !/think/i.test(raw)) return raw.trim()
+  return raw
+    .replace(/<think[^>]*>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think[^>]*>[\s\S]*$/gi, '')
+    .trim()
+}
+
 function isChatAbortError(error: unknown): boolean {
   if (!error) return false
   if (error instanceof DOMException) return error.name === 'AbortError'
@@ -973,7 +1027,8 @@ function normalizeChatTodoItems(
   for (const entry of value) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
     const record = entry as Record<string, unknown>
-    const content = String(record.text || '').trim()
+    // 兼容两种来源：tapcanvas 原生 todo 工具输出用 text；lens Java 桥注入的 trace.todoList 用 content
+    const content = String(record.text || record.content || '').trim()
     if (!content) continue
     const statusRaw = String(record.status || '').trim()
     const status: ChatTodoItem['status'] =
@@ -1065,6 +1120,13 @@ async function reloadCanvasFlowFromServer(input: {
     return { reloaded: false, newNodeIds: [] }
   }
 
+  // lens 画布：flow 数据在 lens 后端（/api/canvas/{dramaId}/episode/{num}/flow），
+  // tapcanvas 的 getServerFlow 不可用；交给 LensCanvasApp 注册的 reload 函数读取最新 flow、
+  // 同步 flowVersion（否则前端自动保存会用旧版本号触发 409）并合并节点。
+  if (isLensCanvasMode()) {
+    return reloadLensCanvasFlow()
+  }
+
   const uiState = useUIStore.getState()
   const liveProjectId = String(uiState.currentProject?.id || '').trim()
   const liveFlowId = String(uiState.currentFlow?.id || '').trim()
@@ -1113,17 +1175,59 @@ function dedupeProgressLines(lines: string[]): string[] {
   return out.slice(-4)
 }
 
+/** 工具中文展示名兜底映射（Java 桥已下发 displayName 时优先用下发的，后续新增工具无需改前端） */
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  // lens 画布 Agent 工具（2026-11-02 起前缀统一为 gycanvas_）
+  gycanvas_flow_get: '读取画布',
+  gycanvas_flow_patch: '修改画布',
+  gycanvas_project_context_get: '查看项目资料',
+  gycanvas_executions_list: '查询任务进度',
+  gycanvas_split_storyboard: '拆分镜',
+  gycanvas_run_canvas_nodes: '生成图片/视频',
+  // 旧前缀兜底（历史会话/tapcanvas 主站协议仍可能带旧名）
+  tapcanvas_flow_get: '读取画布',
+  tapcanvas_flow_patch: '修改画布',
+  tapcanvas_project_context_get: '查看项目资料',
+  tapcanvas_executions_list: '查询任务进度',
+  tapcanvas_split_storyboard: '拆分镜',
+  tapcanvas_run_canvas_nodes: '生成图片/视频',
+  TodoWrite: '规划任务',
+  Skill: '加载技能',
+}
+
+/** lens 画布 Agent 的 flow_patch 工具名（新前缀优先，旧前缀兜底：历史会话/主站协议） */
+function isFlowPatchToolName(toolName: unknown): boolean {
+  const name = String(toolName || '').trim()
+  return name === 'gycanvas_flow_patch' || name === 'tapcanvas_flow_patch'
+}
+
+/** 未知工具统一展示文案（不向用户暴露内部工具名/去前缀后的占位名） */
+const UNKNOWN_TOOL_DISPLAY_NAME = '其他操作'
+
+/**
+ * 解析工具的中文展示名：优先 Java 桥下发的 displayName，其次本地映射；
+ * 未知工具统一返回中性文案「其他操作」，禁止把内部工具名展示给用户。
+ */
+function resolveToolDisplayName(tool: AgentsChatToolStreamPayload): string {
+  const displayName = String(tool.displayName || '').trim()
+  if (displayName) return displayName
+  const toolName = String(tool.toolName || '').trim()
+  if (!toolName) return '工具'
+  return TOOL_DISPLAY_NAMES[toolName] || UNKNOWN_TOOL_DISPLAY_NAME
+}
+
 function formatToolProgressLine(tool: AgentsChatToolStreamPayload): string {
-  const toolName = String(tool.toolName || '').trim() || 'tool'
+  // 面向用户的摘要一律用中文展示名；内部 toolName 只保留在可展开的事件详情里
+  const toolLabel = resolveToolDisplayName(tool)
   if (tool.phase === 'started') {
-    return `工具启动：${toolName}`
+    return `工具启动：${toolLabel}`
   }
   const status = String(tool.status || '').trim().toLowerCase()
-  if (status === 'succeeded') return `工具完成：${toolName}`
-  if (status === 'failed') return `工具失败：${toolName}`
-  if (status === 'denied') return `工具拒绝：${toolName}`
-  if (status === 'blocked') return `工具阻塞：${toolName}`
-  return `工具更新：${toolName}`
+  if (status === 'succeeded') return `工具完成：${toolLabel}`
+  if (status === 'failed') return `工具失败：${toolLabel}`
+  if (status === 'denied') return `工具拒绝：${toolLabel}`
+  if (status === 'blocked') return `工具阻塞：${toolLabel}`
+  return `工具更新：${toolLabel}`
 }
 
 function countCompletedTodoItems(items: ChatTodoItem[]): number {
@@ -1550,11 +1654,29 @@ function ReferenceImagesStrip({
   )
 }
 
-function ChatBubble({ message }: { message: ChatMessage }): JSX.Element {
+function ChatBubble({
+  message,
+  onRetry,
+  isAdminViewer = false,
+}: {
+  message: ChatMessage
+  onRetry?: () => void
+  /** 仅管理员展示思考链折叠区（后端已按 scope 过滤，这里再做一次前端判断） */
+  isAdminViewer?: boolean
+}): JSX.Element {
   const isUser = message.role === 'user'
-  const { markdownText, todoItems } = React.useMemo(
+  const [reasoningOpened, setReasoningOpened] = React.useState(false)
+  const { markdownText, todoItems: contentTodoItems } = React.useMemo(
     () => extractLatestTodoBlock(message.content),
     [message.content],
+  )
+  // todo 展示优先用结构化 todoSnapshot（来自 result.trace.todoList / todo_list 事件），
+  // 其次回退到从正文解析的 Todo 块（tapcanvas 老格式），保证 lens 桥接链路 checklist 可见
+  const todoItems = React.useMemo(
+    () => (Array.isArray(message.todoSnapshot) && message.todoSnapshot.length > 0
+      ? message.todoSnapshot
+      : contentTodoItems),
+    [contentTodoItems, message.todoSnapshot],
   )
   const thinkingSummary = React.useMemo(() => summarizeThinkingText(message.content), [message.content])
   const progressLines = React.useMemo(
@@ -1569,7 +1691,9 @@ function ChatBubble({ message }: { message: ChatMessage }): JSX.Element {
     () => Array.isArray(message.diagnosticFlags) ? message.diagnosticFlags : [],
     [message.diagnosticFlags],
   )
-  const shouldRenderMarkdown = Boolean(String(markdownText || '').trim())
+  // 推理模型思考过程不展示给用户（仅剥离展示层，不改写消息内容/上下文）
+  const displayMarkdownText = React.useMemo(() => stripThinkTags(markdownText), [markdownText])
+  const shouldRenderMarkdown = Boolean(String(displayMarkdownText || '').trim())
   const wrapClassName = [
     'tc-ai-chat-bubble',
     isUser ? 'tc-ai-chat-bubble--user' : 'tc-ai-chat-bubble--assistant',
@@ -1603,6 +1727,25 @@ function ChatBubble({ message }: { message: ChatMessage }): JSX.Element {
             <Text className="tc-ai-chat-bubble__verdict-text" size="xs" c={message.turnVerdict?.status === 'failed' ? 'red' : 'yellow'}>
               {verdictSummary}
             </Text>
+          </div>
+        ) : null}
+        {!isUser && isAdminViewer && String(message.reasoning || '').trim() ? (
+          <div className="tc-ai-chat-reasoning" aria-label="ai-chat-reasoning">
+            <button
+              type="button"
+              className="tc-ai-chat-reasoning__toggle"
+              onClick={() => setReasoningOpened((prev) => !prev)}
+              title={reasoningOpened ? '收起思考过程' : '展开查看模型思考过程（仅管理员可见）'}
+            >
+              <span className="tc-ai-chat-reasoning__terminal" aria-hidden="true">&gt;_</span>
+              <span className="tc-ai-chat-reasoning__label">思考过程</span>
+              <span className="tc-ai-chat-reasoning__chevron" aria-hidden="true">
+                {reasoningOpened ? '▾' : '▸'}
+              </span>
+            </button>
+            {reasoningOpened ? (
+              <div className="tc-ai-chat-reasoning__body">{String(message.reasoning || '')}</div>
+            ) : null}
           </div>
         ) : null}
         {message.phase === 'thinking' && !isUser ? (
@@ -1662,7 +1805,7 @@ function ChatBubble({ message }: { message: ChatMessage }): JSX.Element {
                   td: ({ node: _node, ...props }) => <td className="tc-ai-chat-markdown__table-cell tc-ai-chat-markdown__table-cell--body" {...props} />,
                 }}
               >
-                {markdownText}
+                {displayMarkdownText}
               </ReactMarkdown>
             ) : null}
           </div>
@@ -1717,6 +1860,22 @@ function ChatBubble({ message }: { message: ChatMessage }): JSX.Element {
               ))}
             </Stack>
           </div>
+        ) : null}
+        {!isUser && (message.kind === 'error' || message.turnVerdict?.status === 'failed') && onRetry ? (
+          <Group className="tc-ai-chat-bubble__retry" gap={8} mt={8} align="center">
+            <Text className="tc-ai-chat-bubble__retry-hint" size="xs" c="dimmed">
+              {$('本轮对话失败，可重试')}
+            </Text>
+            <Button
+              className="tc-ai-chat-bubble__retry-button"
+              size="xs"
+              radius="sm"
+              variant="light"
+              onClick={onRetry}
+            >
+              {$('重试')}
+            </Button>
+          </Group>
         ) : null}
         {Array.isArray(message.assets) && message.assets.length > 0 ? (
           <Group className="tc-ai-chat-bubble__assets" gap={8} mt={8} align="flex-start" wrap="wrap">
@@ -1774,6 +1933,24 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   const [draft, setDraft] = React.useState('')
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => [])
   const [sending, setSending] = React.useState(false)
+  // lens 画布历史对话：会话摘要列表 + 当前会话 ID（Tab 级 sessionStorage，Java 桥按剧集命名空间隔离）
+  const [lensChatSessions, setLensChatSessions] = React.useState<LensChatSessionSummary[]>([])
+  const [lensChatSessionId, setLensChatSessionIdState] = React.useState<string>(() => (
+    isLensCanvasMode() ? getLensChatSessionId() : ''
+  ))
+  const [lensChatSessionsLoading, setLensChatSessionsLoading] = React.useState(false)
+  const lensChatSessionRestoredRef = React.useRef(false)
+  // 思考链仅管理员可见：默认 false（fail-closed），由后端 initial/session 事件的 isAdmin 置位
+  const [isAdminViewer, setIsAdminViewer] = React.useState(false)
+  // 画布对话快捷键（换行/提交互斥，来自「配置」弹窗；默认换行=ctrl+enter、提交=enter）
+  const [shortcutConfig, setShortcutConfig] = React.useState<CanvasShortcutConfig>(() => readCanvasShortcutConfig())
+
+  // 快捷键配置变更后立即生效（配置弹窗保存时广播事件，无需刷新页面）
+  React.useEffect(() => {
+    const handleShortcutChanged = () => setShortcutConfig(readCanvasShortcutConfig())
+    window.addEventListener(CANVAS_SHORTCUT_CHANGED_EVENT, handleShortcutChanged)
+    return () => window.removeEventListener(CANVAS_SHORTCUT_CHANGED_EVENT, handleShortcutChanged)
+  }, [])
 
   const [agentLoading, setAgentLoading] = React.useState(false)
   const [agentSkills, setAgentSkills] = React.useState<AgentSkillDto[]>([])
@@ -1781,6 +1958,26 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   const [chatSessionBaseKey, setChatSessionBaseKey] = React.useState<string>(() => readOrCreateChatSessionBaseKey())
   const [chatSessionLane, setChatSessionLane] = React.useState<ChatSessionLane>('general')
   const [tutorialOpened, setTutorialOpened] = React.useState(false)
+  // lens 画布模式：URL 带 dramaId 时对话走 lens 后端，tapcanvas 专属接口/菜单需要跳过
+  const lensCanvasMode = React.useMemo(() => isLensCanvasMode(), [])
+
+  // lens 画布：首次打开/刷新后恢复当前 Tab 会话的历史消息（点击历史列表切换时走 switchLensChatSession）
+  React.useEffect(() => {
+    if (!lensCanvasMode || lensChatSessionRestoredRef.current) return
+    lensChatSessionRestoredRef.current = true
+    const sessionId = getLensChatSessionId()
+    setLensChatSessionIdState(sessionId)
+    void (async () => {
+      try {
+        const history = await fetchLensChatSessionMessages(sessionId)
+        if (history.length > 0) {
+          setMessages(mapLensHistoryToChatMessages(history))
+        }
+      } catch (error) {
+        console.warn('[ai-chat] 恢复 lens 历史会话失败', error)
+      }
+    })()
+  }, [lensCanvasMode])
   const activePanel = useUIStore((s) => s.activePanel)
   const currentProjectId = useUIStore((s) => (s.currentProject?.id ? String(s.currentProject.id).trim() : ''))
   const currentProjectName = useUIStore((s) => (s.currentProject?.name ? String(s.currentProject.name).trim() : ''))
@@ -1798,6 +1995,11 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     error: '',
   })
   const refreshProjectTextMaterialState = React.useCallback(async (projectId: string) => {
+    // lens 画布没有 tapcanvas 的项目素材概念，直接置空，不请求 /public/projects/materials
+    if (isLensCanvasMode()) {
+      setProjectTextMaterialState({ status: 'ready', count: 0, error: '' })
+      return
+    }
     const normalizedProjectId = String(projectId || '').trim()
     if (!normalizedProjectId) {
       setProjectTextMaterialState({ status: 'ready', count: 0, error: '' })
@@ -1867,6 +2069,19 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   const compactInputRef = React.useRef<HTMLTextAreaElement | null>(null)
   const expandedInputRef = React.useRef<HTMLTextAreaElement | null>(null)
   const activeStreamInterruptRef = React.useRef<null | (() => void)>(null)
+  // 本轮是否成功调用过 flow_patch（lens 模式下据此判断后端已写画布，需要 reload；新前缀 gycanvas_，旧名前缀兜底）
+  const flowPatchSucceededRef = React.useRef(false)
+  // 本轮 flow_patch 的 reload 链：每次 patch 成功都排队一次串行 reload，result 阶段一次性 take 等待
+  const flowPatchReloadChainRef = React.useRef<FlowPatchReloadChain | null>(null)
+  // 本轮 flow_patch 的节点变更（从 tool started 事件的 input 累积）：
+  // Java 桥 result 不含 tapcanvas 的 canvasMutation，lens 模式据此决定 patch 后 autoRun 哪些节点
+  const flowPatchMutationRef = React.useRef<{ createdNodeIds: string[]; patchedNodeIds: string[]; deletedNodeIds: string[] }>({
+    createdNodeIds: [],
+    patchedNodeIds: [],
+    deletedNodeIds: [],
+  })
+  // 暂存 flow_patch 的 started 入参，等对应的 completed+succeeded 事件确认成功后再计入 mutation（失败 patch 不算写画布）
+  const pendingFlowPatchInputRef = React.useRef<Map<string, Record<string, unknown>>>(new Map())
   const typewriterRunIdRef = React.useRef(0)
   const shouldAutoScrollRef = React.useRef(true)
 
@@ -1928,6 +2143,8 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
       setMessages([])
       return
     }
+    // lens 画布：对话历史由 lensAgentChat 适配层维护，lens 后端没有 tapcanvas 的 /public/agents/memory 记忆接口
+    if (isLensCanvasMode()) return
 
     let cancelled = false
     void (async () => {
@@ -2071,6 +2288,8 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   }, [])
 
   React.useEffect(() => {
+    // lens 画布没有 tapcanvas 的 agent skills 列表（/agents/skills），跳过请求
+    if (isLensCanvasMode()) return
     void reloadAgentSkill()
   }, [reloadAgentSkill])
 
@@ -2079,10 +2298,13 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   }, [manualReferenceImages])
 
   const visibleAutoReferenceImages = React.useMemo(() => {
+    // lens 画布：lens 对话接口不接受 tapcanvas 的 referenceImages 协议，禁用参考图，
+    // 避免界面显示已附带、实际请求却丢弃
+    if (lensCanvasMode) return []
     if (!autoReferenceImages.length) return []
     const hidden = new Set(hiddenAutoReferenceUrls)
     return autoReferenceImages.filter((url) => !hidden.has(url))
-  }, [autoReferenceImages, hiddenAutoReferenceUrls])
+  }, [autoReferenceImages, hiddenAutoReferenceUrls, lensCanvasMode])
 
   const referenceImages = React.useMemo(() => {
     const merged: string[] = []
@@ -2112,6 +2334,12 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   }, [autoReferenceImages])
 
   React.useEffect(() => {
+    // lens 画布不自动收集选中图片作为参考图：lens 后端 chat 接口不接受参考图，
+    // 静默收集甚至上传（blob 图）都会造成"已附带"的错觉
+    if (lensCanvasMode) {
+      setAutoReferenceImages([])
+      return
+    }
     let cancelled = false
 
     const loadAutoReferenceImages = async () => {
@@ -2141,7 +2369,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     return () => {
       cancelled = true
     }
-  }, [selectedCanvasImageSignature])
+  }, [selectedCanvasImageSignature, lensCanvasMode])
 
   const addReferenceImagesSafe = React.useCallback((urls: string[], opts?: { source?: string }) => {
     const raw = Array.isArray(urls) ? urls : []
@@ -2407,13 +2635,16 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   }, [activeSkill?.key, activeSkill?.name])
   const implicitSendRequest = React.useMemo<ImplicitChatRequest | null>(() => {
     if (normalizedDraft) return null
+    // lens 画布：隐式发送的 prompt 是 tapcanvas 语义（参考图/能力/画布改动），
+    // 且这些上下文不会发给 lens 后端，直接禁用空输入发送
+    if (lensCanvasMode) return null
     return buildImplicitChatRequest({
       selectedCanvasNodeContext,
       referenceImageCount: referenceImages.length,
       hasTargetImage: hasExplicitTargetImage,
       activeSkillName: activeSkillContextName,
     })
-  }, [activeSkillContextName, hasExplicitTargetImage, normalizedDraft, referenceImages.length, selectedCanvasNodeContext])
+  }, [activeSkillContextName, hasExplicitTargetImage, lensCanvasMode, normalizedDraft, referenceImages.length, selectedCanvasNodeContext])
   const canSendMessage = Boolean(normalizedDraft || implicitSendRequest)
 
   const send = React.useCallback(async (options?: SendOptions) => {
@@ -2422,7 +2653,10 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     const requestText = explicitText || implicitSendRequest?.prompt || ''
     const displayText = explicitText || implicitSendRequest?.displayText || ''
     if (!requestText) return
-    if (currentProjectId) {
+    if (lensCanvasMode) {
+      // lens 画布没有 tapcanvas 项目素材概念，避免发送前误请求 /public/projects/materials
+      setProjectTextMaterialState({ status: 'ready', count: 0, error: '' })
+    } else if (currentProjectId) {
       void (async () => {
         try {
           const materials = await listProjectMaterials(currentProjectId)
@@ -2480,8 +2714,27 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
 
     let pendingId = ''
     setSending(true)
+    flowPatchSucceededRef.current = false
+    flowPatchReloadChainRef.current = null
+    flowPatchMutationRef.current = { createdNodeIds: [], patchedNodeIds: [], deletedNodeIds: [] }
+    pendingFlowPatchInputRef.current.clear()
     typewriterRunIdRef.current += 1
     historyLoadVersionRef.current += 1
+    // lens 画布：发送前把本地未落库的改动先落库（await 保存完成，避免与后续 flow_get 竞态），
+    // 否则 flow_patch 后 reload 时本地新建/编辑会被服务端旧快照覆盖
+    if (lensCanvasMode && typeof window !== 'undefined') {
+      const silentSave = (window as unknown as { silentSaveProject?: () => Promise<boolean> | void }).silentSaveProject
+      if (typeof silentSave === 'function') {
+        try {
+          const saved = await silentSave()
+          if (saved === false) {
+            console.warn('[ai-chat] 发送前保存画布失败，继续对话')
+          }
+        } catch (error) {
+          console.warn('[ai-chat] 发送前保存画布异常，继续对话', error)
+        }
+      }
+    }
     try {
       let streamedReply = ''
       const manualReferenceImagesPayload = Array.isArray(referenceImages)
@@ -2712,6 +2965,24 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
           onEvent: (event) => {
             if (settled) return
             recordLiveChatRunEvent(event)
+            if (event.event === 'initial' || event.event === 'session') {
+              const adminFlag = (event.data as { isAdmin?: unknown }).isAdmin
+              if (typeof adminFlag === 'boolean') setIsAdminViewer(adminFlag)
+              return
+            }
+            if (event.event === 'reasoning') {
+              // 思考链单独累积到消息，不拼进正文；仅管理员可见（后端已过滤，前端 fail-closed 再判一次）
+              if (!lensCanvasMode) return
+              const reasoningDelta = String((event.data as { delta?: unknown }).delta || '')
+              if (!reasoningDelta) return
+              setMessages((prev) =>
+                patchChatMessageById(prev, pendingId, (message) => ({
+                  ...message,
+                  reasoning: `${message.reasoning || ''}${reasoningDelta}`,
+                })),
+              )
+              return
+            }
             if (event.event === 'thinking') {
               const line = String(event.data.text || '').trim()
               if (!line) return
@@ -2720,6 +2991,60 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
               return
             }
             if (event.event === 'tool') {
+              // lens 模式：记录本轮是否真的写入了画布（flow_patch 成功），供 result 后触发 reload
+              const toolData = event.data as { toolName?: string; status?: string; phase?: string; input?: unknown; toolCallId?: string }
+              // started 阶段先暂存入参（按 toolCallId），等 completed+succeeded 确认成功后再计入 mutation，失败 patch 不算写画布
+              if (isFlowPatchToolName(toolData.toolName) && toolData.phase === 'started') {
+                const input = toolData.input && typeof toolData.input === 'object'
+                  ? toolData.input as Record<string, unknown>
+                  : null
+                if (input) {
+                  pendingFlowPatchInputRef.current.set(String(toolData.toolCallId || ''), input)
+                }
+                return
+              }
+              if (isFlowPatchToolName(toolData.toolName) && toolData.status === 'succeeded') {
+                // 从已成功 patch 的入参累积节点变更：Java 桥 result 不含 canvasMutation，patch 后 autoRun 需要它
+                const mutation = flowPatchMutationRef.current
+                const input = pendingFlowPatchInputRef.current.get(String(toolData.toolCallId || ''))
+                pendingFlowPatchInputRef.current.delete(String(toolData.toolCallId || ''))
+                if (input) {
+                  const pushNodeIds = (target: string[], value: unknown) => {
+                    if (!Array.isArray(value)) return
+                    for (const item of value) {
+                      if (!item || typeof item !== 'object') continue
+                      const nodeId = String((item as Record<string, unknown>).id || '').trim()
+                      if (nodeId) target.push(nodeId)
+                    }
+                  }
+                  pushNodeIds(mutation.createdNodeIds, input.createNodes)
+                  pushNodeIds(mutation.patchedNodeIds, input.patchNodeData)
+                  if (Array.isArray(input.deleteNodeIds)) {
+                    for (const item of input.deleteNodeIds) {
+                      const nodeId = String(item || '').trim()
+                      if (nodeId) mutation.deletedNodeIds.push(nodeId)
+                    }
+                  }
+                }
+                flowPatchSucceededRef.current = true
+                // 409 窗口：flow_patch 在 tool 阶段已写库，而 debounce 自动保存可能在 result 前触发；
+                // 每次成功 patch 都在链上排队一次 reload（同一轮可能连续 patch：先建节点再补提示词/删除），
+                // 只 reload 第一次会残留幽灵节点、autoRun 已删除节点、并用旧 version 保存
+                if (lensCanvasMode && requestFlowId) {
+                  if (!flowPatchReloadChainRef.current) {
+                    const flowIdSnapshot = requestFlowId
+                    const projectIdSnapshot = requestProjectId
+                    flowPatchReloadChainRef.current = new FlowPatchReloadChain(() =>
+                      reloadCanvasFlowFromServer({
+                        flowId: flowIdSnapshot,
+                        expectedProjectId: projectIdSnapshot,
+                        expectedFlowId: flowIdSnapshot,
+                      }),
+                    )
+                  }
+                  void flowPatchReloadChainRef.current.schedule()
+                }
+              }
               const line = formatToolProgressLine(event.data)
               updatePendingProgressLine(line)
               if (!streamedReply) {
@@ -2792,8 +3117,8 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
       const turnVerdict = readChatTurnVerdict(resp)
       const turnVerdictSummary = formatChatTurnVerdictSummary(resp)
       const failedTurn = isFailedChatTurn(resp)
-      const failedTurnMessage = turnVerdictSummary || '结构失败：本轮没有形成有效结果'
-      const missingCanvasPlan = shouldShowMissingCanvasPlanError({
+      // lens 后端不返回 tapcanvas 的 canvas plan（画布节点由 lens 业务接口投影），不做缺失校验
+      const missingCanvasPlan = lensCanvasMode ? false : shouldShowMissingCanvasPlanError({
         hasCanvasPlan: Boolean(canvasPlan),
         hasWrongCanvasPlanTag,
         response: resp,
@@ -2806,7 +3131,9 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
       let failedTurnHandled = false
       const backendWroteCanvas =
         resp.agentDecision?.canvasAction === 'write_canvas' ||
-        resp.trace?.toolEvidence?.wroteCanvas === true
+        resp.trace?.toolEvidence?.wroteCanvas === true ||
+        // lens 画布：Java 桥透传的 result 不含 tapcanvas trace，按本轮 flow_patch 工具成功判断
+        (lensCanvasMode && flowPatchSucceededRef.current)
       if (canvasPlan) {
         setMessages((prev) =>
           patchChatMessageById(prev, pendingId, (message) => ({
@@ -2814,17 +3141,37 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
             content: '正在应用节点方案',
           })),
         )
+        // 混合场景（同轮既有 flow_patch 又有 canvas plan）：先等链上 reload 完成并清理，
+        // 避免 plan 落库/建节点后链上旧快照 reload 覆盖 UI
+        const pendingReloadChain = flowPatchReloadChainRef.current as FlowPatchReloadChain | null
+        if (pendingReloadChain) {
+          try {
+            await pendingReloadChain.take()
+          } catch (error) {
+            console.warn('[ai-chat] 等待 flow_patch reload 链失败，继续应用节点方案', error)
+          }
+          flowPatchReloadChainRef.current = null
+        }
         try {
           const executed = await executeCanvasPlan(canvasPlan)
           canvasPlanExecuted = executed.createdNodeIds.length > 0
+          // 先立即落库编排（首次无 flow 时会创建 flow），再自动跑图：
+          // 任务上报的 flowId / canvasNodeAssetId 归属依赖 flow 已存在，顺序反了会丢归属。
+          if (typeof window !== 'undefined') {
+            const silentSave = (window as unknown as { silentSaveProject?: () => Promise<boolean> | void }).silentSaveProject
+            if (typeof silentSave === 'function') {
+              try {
+                const saved = await silentSave()
+                if (saved === false) {
+                  console.warn('[ai-chat] canvas plan 落库失败，继续尝试跑图')
+                }
+              } catch (error) {
+                console.warn('[ai-chat] canvas plan 落库异常，继续尝试跑图', error)
+              }
+            }
+          }
           if (!failedTurn && executed.createdNodeIds.length > 0) {
             autoRunAiChatCanvasNodes(executed.createdNodeIds)
-          }
-          const executedPrimaryNodeId = pickPrimaryCreationNodeId(
-            executed.createdNodeIds.length > 0 ? executed.createdNodeIds : executed.resolvedNodeIds,
-          )
-          if (typeof window !== 'undefined' && typeof (window as unknown as { silentSaveProject?: () => void }).silentSaveProject === 'function') {
-            ;(window as unknown as { silentSaveProject: () => void }).silentSaveProject()
           }
         } catch (error: unknown) {
           void error
@@ -2835,32 +3182,73 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
       if (failedTurn && !failedTurnHandled) failedTurnHandled = true
       if (!canvasPlanExecuted && backendWroteCanvas && requestFlowId) {
         try {
-          const reloaded = await reloadCanvasFlowFromServer({
-            flowId: requestFlowId,
-            expectedProjectId: requestProjectId,
-            expectedFlowId: requestFlowId,
-          })
+          // tool 阶段已按 patch 次数排队了 reload；这里等待整条链完成并拿到累积 newNodeIds。
+          // 链为空（reload 失败已清空 / tool 阶段未触发）时兜底 reload 一次，真正重试。
+          // 显式断言绕过 TS 对 ref.current 的流分析：onEvent 回调里的赋值不会被 TS 计入外层控制流，
+          // 否则这里会被误判为 null（真分支收窄成 never）
+          const reloadChain = flowPatchReloadChainRef.current as FlowPatchReloadChain | null
+          let reloaded: { reloaded: boolean; newNodeIds: string[]; failed?: boolean }
+          if (reloadChain) {
+            reloaded = await reloadChain.take()
+          } else {
+            reloaded = await reloadCanvasFlowFromServer({
+              flowId: requestFlowId,
+              expectedProjectId: requestProjectId,
+              expectedFlowId: requestFlowId,
+            })
+          }
+          // reload 链失败（reloaded=false，或链中曾失败 failed=true）时兜底单次重试，避免画布停留在旧快照/幽灵节点
+          if (!reloaded.reloaded || reloaded.failed) {
+            try {
+              reloaded = await reloadCanvasFlowFromServer({
+                flowId: requestFlowId,
+                expectedProjectId: requestProjectId,
+                expectedFlowId: requestFlowId,
+              })
+            } catch (error) {
+              console.warn('[ai-chat] reload 链失败后兜底重试仍失败', error)
+            }
+          }
+          flowPatchReloadChainRef.current = null
+          // lens 模式：Java 桥 result 不含 canvasMutation，用本轮 tool started 入参累积的节点变更
+          const lensMutation = lensCanvasMode
+            && (flowPatchMutationRef.current.createdNodeIds.length > 0
+              || flowPatchMutationRef.current.patchedNodeIds.length > 0)
+            ? {
+                createdNodeIds: dedupeNodeIds(flowPatchMutationRef.current.createdNodeIds),
+                patchedNodeIds: dedupeNodeIds(flowPatchMutationRef.current.patchedNodeIds),
+                executableNodeIds: dedupeNodeIds(flowPatchMutationRef.current.patchedNodeIds),
+              }
+            : null
           const reloadAutoRunPlan = resolveAiChatReloadAutoRunPlan({
             newNodeIds: reloaded.newNodeIds,
-            traceCanvasMutation: resp.trace?.canvasMutation,
+            traceCanvasMutation: resp.trace?.canvasMutation ?? lensMutation,
             failedTurn,
           })
+          // 过滤掉 reload 后已被删除的节点：否则会给幽灵节点提交 autoRun 任务
+          const liveNodeIds = new Set(useRFStore.getState().nodes.map((node) => String(node.id)))
+          const liveAutoRunNewNodeIds = filterLiveNodeIds(reloadAutoRunPlan.autoRunNewNodeIds, liveNodeIds)
+          const liveAutoRunPatchedNodeIds = filterLiveNodeIds(reloadAutoRunPlan.autoRunPatchedNodeIds, liveNodeIds)
+          // focus 也只定位仍存在的节点，避免聚焦已删除的幽灵节点
+          const liveFocusNodeIds = filterLiveNodeIds(reloadAutoRunPlan.focusNodeIds, liveNodeIds)
           if (reloaded.reloaded) {
-            if (reloadAutoRunPlan.focusNodeIds.length > 0) {
-              focusCanvasNodeAfterReload(reloadAutoRunPlan.focusNodeIds)
+            if (liveFocusNodeIds.length > 0) {
+              focusCanvasNodeAfterReload(liveFocusNodeIds)
             }
-            if (reloadAutoRunPlan.autoRunNewNodeIds.length > 0) {
-              autoRunAiChatCanvasNodes(reloadAutoRunPlan.autoRunNewNodeIds)
+            if (liveAutoRunNewNodeIds.length > 0) {
+              autoRunAiChatCanvasNodes(liveAutoRunNewNodeIds)
             }
-            if (reloadAutoRunPlan.autoRunPatchedNodeIds.length > 0) {
-              autoRunAiChatPatchedCanvasNodes(reloadAutoRunPlan.autoRunPatchedNodeIds)
+            if (liveAutoRunPatchedNodeIds.length > 0) {
+              autoRunAiChatPatchedCanvasNodes(liveAutoRunPatchedNodeIds)
             }
           }
         } catch (error: unknown) {
           console.warn('[ai-chat] reload flow after backend canvas write failed', error)
         }
       }
-      const shouldWatchAssets = shouldAutoAddAssistantAssetsToCanvas({
+      // lens 画布：AI 对话默认不自动把回复资产加进画布（产品待确认）。
+      // AI 建节点走 canvas plan / flow_patch 显式创建；这里关闭后避免重复/幽灵资产节点。
+      const shouldWatchAssets = !lensCanvasMode && shouldAutoAddAssistantAssetsToCanvas({
         canvasPlanExecuted,
         aiChatWatchAssetsEnabled,
         assistantAssetCount: assistantAssets.length,
@@ -2925,7 +3313,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
       activeStreamInterruptRef.current = null
       setSending(false)
     }
-  }, [activeSkill, aiChatWatchAssetsEnabled, animateAssistantReply, chatSessionBaseKey, chatSessionLane, completeLiveChatRun, currentFlowId, currentProjectId, currentProjectName, draft, failLiveChatRun, implicitSendRequest, messages, mode, recordLiveChatRunEvent, referenceImages, replicateTargetImage, selectedCanvasNodeContext, sending, startLiveChatRun])
+  }, [activeSkill, aiChatWatchAssetsEnabled, animateAssistantReply, chatSessionBaseKey, chatSessionLane, completeLiveChatRun, currentFlowId, currentProjectId, currentProjectName, draft, failLiveChatRun, implicitSendRequest, lensCanvasMode, messages, mode, recordLiveChatRunEvent, referenceImages, replicateTargetImage, selectedCanvasNodeContext, sending, startLiveChatRun])
 
   const resetConversationState = React.useCallback((nextSkill: AgentSkillDto | null) => {
     historyLoadVersionRef.current += 1
@@ -2957,7 +3345,56 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     resetConversationState(null)
   }, [resetConversationState])
 
+  /** 刷新 lens 历史会话列表（打开「历史对话」菜单时触发） */
+  const refreshLensChatSessions = React.useCallback(async (): Promise<void> => {
+    if (!lensCanvasMode) return
+    setLensChatSessionsLoading(true)
+    try {
+      setLensChatSessions(await fetchLensChatSessions())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast(`加载历史对话失败：${message}`, 'error')
+    } finally {
+      setLensChatSessionsLoading(false)
+    }
+  }, [lensCanvasMode])
+
+  /** 切换到指定历史会话并恢复其消息 */
+  const switchLensChatSession = React.useCallback(async (summary: LensChatSessionSummary): Promise<void> => {
+    setLensChatSessionId(summary.sessionId)
+    setLensChatSessionIdState(summary.sessionId)
+    historyLoadVersionRef.current += 1
+    activeStreamInterruptRef.current?.()
+    activeStreamInterruptRef.current = null
+    try {
+      const history = await fetchLensChatSessionMessages(summary.sessionId)
+      setMessages(mapLensHistoryToChatMessages(history))
+      toast(`已切换到历史对话（${history.length} 条消息）`, 'success')
+    } catch (error) {
+      setMessages([])
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast(`恢复历史对话失败：${message}`, 'error')
+    }
+  }, [])
+
+  /** 开启 lens 画布新对话：生成新 sessionId 并清空当前消息 */
+  const startNewLensConversation = React.useCallback((): void => {
+    const nextSessionId = createLensChatSessionId()
+    setLensChatSessionIdState(nextSessionId)
+    historyLoadVersionRef.current += 1
+    activeStreamInterruptRef.current?.()
+    activeStreamInterruptRef.current = null
+    setDraft('')
+    setMessages([])
+    toast('已开启新对话', 'success')
+  }, [])
+
   const startNewConversation = React.useCallback(() => {
+    // lens 画布：历史会话由 agents-cli 持久化，新对话必须换 sessionId，避免继续沿用旧会话历史
+    if (lensCanvasMode) {
+      startNewLensConversation()
+      return
+    }
     historyLoadVersionRef.current += 1
     clearCreationSession()
     setChatSessionLane('general')
@@ -2965,7 +3402,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     setMessages([])
     setChatSessionBaseKey(persistChatSessionBaseKey(createChatSessionBaseKey()))
     toast('已开启新对话', 'success')
-  }, [clearCreationSession])
+  }, [clearCreationSession, lensCanvasMode, startNewLensConversation])
 
   const applyTutorialPrompt = React.useCallback((prompt: string) => {
     setDraft(String(prompt || '').trim())
@@ -2977,6 +3414,46 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     const targetInput = mode === 'maximized' ? expandedInputRef.current : expandedInputRef.current || compactInputRef.current
     targetInput?.focus()
   }, [mode])
+
+  // 输入框快捷键：由「配置 → 通用」的换行/提交快捷键驱动（默认 Enter 发送、Ctrl+Enter 换行）；
+  // Shift/Alt+Enter 始终保留默认换行；输入法组合输入（isComposing）时不拦截，避免选词确认误发。
+  const handleComposerKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter') return
+    const nativeEvent = event.nativeEvent
+    if (nativeEvent.isComposing || nativeEvent.keyCode === 229) return
+    // Shift/Alt+Enter 始终保留默认换行，不参与快捷键配置
+    if (event.shiftKey || event.altKey) return
+    const isCtrlOrMeta = event.ctrlKey || event.metaKey
+    const isPlainEnter = !isCtrlOrMeta
+    /** 在光标处插入换行（部分浏览器/平台的 Ctrl+Enter 不会触发 textarea 默认换行，受控组件需手动插入） */
+    const insertLineBreakAtCursor = () => {
+      event.preventDefault()
+      const target = event.currentTarget
+      const start = target.selectionStart ?? target.value.length
+      const end = target.selectionEnd ?? start
+      const nextValue = target.value.slice(0, start) + '\n' + target.value.slice(end)
+      setDraft(nextValue)
+      // 受控组件更新后把光标移到换行之后，保持连续输入体验
+      requestAnimationFrame(() => {
+        target.setSelectionRange(start + 1, start + 1)
+      })
+    }
+    // 提交：命中配置的提交快捷键
+    const isSubmitKey = (shortcutConfig.submit === 'enter' && isPlainEnter)
+      || (shortcutConfig.submit === 'ctrl+enter' && isCtrlOrMeta)
+    if (isSubmitKey) {
+      event.preventDefault()
+      if (sending || !canSendMessage) return
+      void send()
+      return
+    }
+    // 换行：命中配置的换行快捷键
+    const isLineBreakKey = (shortcutConfig.lineBreak === 'enter' && isPlainEnter)
+      || (shortcutConfig.lineBreak === 'ctrl+enter' && isCtrlOrMeta)
+    if (isLineBreakKey) {
+      insertLineBreakAtCursor()
+    }
+  }, [canSendMessage, shortcutConfig, send, sending])
 
   const inspirationQuickActions = React.useMemo<InspirationQuickAction[]>(() => {
     return buildChatInspirationQuickActions({
@@ -3081,7 +3558,20 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     referenceImages.length > 0 ? 'tc-ai-chat__composer-shell--with-refs' : '',
   ].filter(Boolean).join(' ')
 
-  const attachMenu = (
+  // lens 画布不支持 tapcanvas 的服务器资产上传/参考图协议，隐藏附件菜单避免误调接口
+  /** 重试上一条失败的用户消息（错误气泡上的「重试」按钮） */
+  const handleRetryLastMessage = React.useCallback(() => {
+    if (sending) return
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')
+    const prompt = String(lastUserMessage?.content || '').trim()
+    if (!prompt) {
+      toast('没有可重试的消息', 'error')
+      return
+    }
+    void send({ text: prompt })
+  }, [messages, send, sending])
+
+  const attachMenu = lensCanvasMode ? null : (
     <Menu className="tc-ai-chat__attach-menu" position="top-start" zIndex={10050}>
       <Menu.Target>
         <AttachMenuTarget tooltip={$('添加参考图（从画布选择或上传）')} />
@@ -3117,7 +3607,71 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     </Menu>
   )
 
-  const taskEntryMenuButton = (
+  // lens 画布：历史对话菜单（agents-cli 持久化会话摘要，按当前剧集过滤；点击恢复消息）
+  const lensHistoryMenu = lensCanvasMode ? (
+    <Menu
+      className="tc-ai-chat__history-menu"
+      withinPortal
+      position="bottom-end"
+      width={320}
+      shadow="md"
+      zIndex={10050}
+      onChange={(opened) => {
+        if (opened) void refreshLensChatSessions()
+      }}
+    >
+      <Menu.Target>
+        <Tooltip className="tc-ai-chat__tooltip" label={$('历史对话')} withArrow>
+          <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="历史对话">
+            <IconHistory className="tc-ai-chat__icon-svg" size={16} />
+          </ActionIcon>
+        </Tooltip>
+      </Menu.Target>
+      <Menu.Dropdown className="tc-ai-chat__history-dropdown">
+        <Menu.Label className="tc-ai-chat__history-label">{$('历史对话（当前剧集）')}</Menu.Label>
+        {lensChatSessionsLoading ? (
+          <Menu.Item className="tc-ai-chat__history-empty" disabled>
+            {$('加载中…')}
+          </Menu.Item>
+        ) : null}
+        {!lensChatSessionsLoading && lensChatSessions.length === 0 ? (
+          <Menu.Item className="tc-ai-chat__history-empty" disabled>
+            {$('暂无历史对话')}
+          </Menu.Item>
+        ) : null}
+        {lensChatSessions.map((session) => (
+          <Menu.Item
+            className="tc-ai-chat__history-item"
+            key={session.sessionId}
+            onClick={() => { void switchLensChatSession(session) }}
+            rightSection={session.sessionId === lensChatSessionId ? (
+              <Badge className="tc-ai-chat__history-current" size="xs" radius="sm" variant="light">
+                {$('当前')}
+              </Badge>
+            ) : undefined}
+          >
+            <Text className="tc-ai-chat__history-preview" size="xs" lineClamp={2}>
+              {session.preview || $('（无摘要）')}
+            </Text>
+            <Text className="tc-ai-chat__history-meta" size="xs" c="dimmed">
+              {new Date(session.updatedAt).toLocaleString()} · {session.messageCount} 条
+            </Text>
+          </Menu.Item>
+        ))}
+        <Menu.Divider className="tc-ai-chat__history-divider" />
+        <Menu.Item
+          className="tc-ai-chat__history-new"
+          leftSection={<IconMessagePlus className="tc-ai-chat__history-new-icon" size={14} />}
+          onClick={startNewLensConversation}
+        >
+          {$('开启新对话')}
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  ) : null
+
+  // lens 画布没有 tapcanvas 的项目任务与 agent skills，隐藏快捷任务菜单
+  const taskEntryMenuButton = lensCanvasMode ? null : (
     <Menu className="tc-ai-chat__experience-menu" withinPortal position="top-start" shadow="md" zIndex={10050}>
       <Menu.Target>
         <Tooltip className="tc-ai-chat__tooltip" label={$('选择快捷任务或能力')} withArrow>
@@ -3483,6 +4037,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                             placeholder={$('请输入你的设计需求')}
                             value={draft}
                             onChange={(e) => setDraft(e.currentTarget.value)}
+                            onKeyDown={handleComposerKeyDown}
                             disabled={sending}
                             onFocus={() => {
                               if (mode !== 'compact') return
@@ -3510,16 +4065,19 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                   </div>
 
                   <Group className="tc-ai-chat__compact-right" gap={6} align="center" wrap="nowrap">
+                    {lensHistoryMenu}
                     <Tooltip className="tc-ai-chat__tooltip" label={$('开启新对话')} withArrow>
                       <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="开启新对话" onClick={startNewConversation}>
                         <IconMessagePlus className="tc-ai-chat__icon-svg" size={16} />
                       </ActionIcon>
                     </Tooltip>
-                    <Tooltip className="tc-ai-chat__tooltip" label={$('教程')} withArrow>
-                      <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="教程" onClick={() => setTutorialOpened(true)}>
-                        <IconBook2 className="tc-ai-chat__icon-svg" size={16} />
-                      </ActionIcon>
-                    </Tooltip>
+                    {!lensCanvasMode && (
+                      <Tooltip className="tc-ai-chat__tooltip" label={$('教程')} withArrow>
+                        <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="教程" onClick={() => setTutorialOpened(true)}>
+                          <IconBook2 className="tc-ai-chat__icon-svg" size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
                     <Tooltip className="tc-ai-chat__tooltip" label={$('展开')} withArrow>
                       <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="展开" onClick={expandChat}>
                         <IconChevronUp className="tc-ai-chat__icon-svg" size={16} />
@@ -3565,16 +4123,19 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
               </button>
 
               <Group className="tc-ai-chat__header-right" gap={6} align="center" wrap="nowrap">
+                {lensHistoryMenu}
                 <Tooltip className="tc-ai-chat__tooltip" label={$('开启新对话')} withArrow>
                   <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="开启新对话" onClick={startNewConversation}>
                     <IconMessagePlus className="tc-ai-chat__icon-svg" size={16} />
                   </ActionIcon>
                 </Tooltip>
-                <Tooltip className="tc-ai-chat__tooltip" label={$('教程')} withArrow>
-                  <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="教程" onClick={() => setTutorialOpened(true)}>
-                    <IconBook2 className="tc-ai-chat__icon-svg" size={16} />
-                  </ActionIcon>
-                </Tooltip>
+                {!lensCanvasMode && (
+                  <Tooltip className="tc-ai-chat__tooltip" label={$('教程')} withArrow>
+                    <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="教程" onClick={() => setTutorialOpened(true)}>
+                      <IconBook2 className="tc-ai-chat__icon-svg" size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
                 {!isMaximized && (
                   <Tooltip className="tc-ai-chat__tooltip" label={$('收起')} withArrow>
                     <ActionIcon className="tc-ai-chat__icon" variant="subtle" aria-label="收起" onClick={collapseChat}>
@@ -3624,14 +4185,14 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                   <ScrollArea className="tc-ai-chat__messages-scroll" viewportRef={viewportRef} type="auto" scrollbarSize={8}>
                     <Stack ref={messagesContentRef} className="tc-ai-chat__messages" gap={10}>
                       {messages.map((message) => (
-                        <ChatBubble key={message.id} message={message} />
+                        <ChatBubble key={message.id} message={message} onRetry={handleRetryLastMessage} isAdminViewer={isAdminViewer} />
                       ))}
                     </Stack>
                   </ScrollArea>
                 ) : (
                   <Stack ref={messagesContentRef} className="tc-ai-chat__messages tc-ai-chat__messages--expanded" gap={10}>
                     {messages.map((message) => (
-                      <ChatBubble key={message.id} message={message} />
+                      <ChatBubble key={message.id} message={message} isAdminViewer={isAdminViewer} />
                     ))}
                   </Stack>
                 )
@@ -3727,6 +4288,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                       placeholder={$('请输入你的设计需求')}
                       value={draft}
                       onChange={(e) => setDraft(e.currentTarget.value)}
+                      onKeyDown={handleComposerKeyDown}
                       disabled={sending}
                     />
                   </div>
@@ -3749,7 +4311,11 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
 
                 <Group className="tc-ai-chat__hint" justify="space-between" align="center" gap={10} mt={8} wrap="nowrap">
                   <Text className="tc-ai-chat__hint-text" size="xs" c="dimmed" lineClamp={1}>
-                    {sending ? $('对话中…点击右侧可中断') : $('仅支持点击发送，Enter 可换行')}
+                    {sending
+                      ? $('对话中…点击右侧可中断')
+                      : (shortcutConfig.submit === 'enter'
+                        ? $('Enter 发送，Ctrl+Enter 换行')
+                        : $('Enter 换行，Ctrl+Enter 发送'))}
                   </Text>
                   <Badge className="tc-ai-chat__hint-badge" size="xs" radius="sm" variant="outline" color="gray">
                     {activeSkill ? $('Agent') : $('Chat')}

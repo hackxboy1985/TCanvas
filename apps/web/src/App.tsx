@@ -10,6 +10,7 @@ import { exportCanvasAsJSON } from './canvas/utils/serialization'
 import './styles.css'
 import KeyboardShortcuts from './KeyboardShortcuts'
 import { applyTemplate, captureCurrentSelection, deleteTemplate, listTemplateNames, saveTemplate, renameTemplate } from './templates'
+import { isLensCanvasMode } from './api/lensAgentChat'
 import { ToastHost, toast } from './ui/toast'
 import {
   serializeCreationSessionForPersistence,
@@ -1224,11 +1225,9 @@ function isProjectsRoute(): boolean {
   return path === '/projects' || path.startsWith('/projects/')
 }
 
-/** Lens 画布入口：URL 带 dramaId query 参数（lens 前端跳转过来） */
+/** Lens 画布入口：URL 带 dramaId query 参数（与 api/lensAgentChat 共用同一判定，避免两处口径漂移） */
 function isLensCanvasRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  const params = new URLSearchParams(window.location.search)
-  return Boolean(params.get('dramaId'))
+  return isLensCanvasMode()
 }
 
 function matchProjectChapterWorkbenchRoute(): {

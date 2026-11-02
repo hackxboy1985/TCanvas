@@ -29,7 +29,7 @@ import {
   submitSplitShotTask,
   type LensEpisodeTaskStatus,
 } from '../api/lens'
-import { confirmCanvasAction } from '../canvas/components/CanvasConfirmDialog'
+import { confirmCanvasAction, confirmCanvasActionWithChoice } from '../canvas/components/CanvasConfirmDialog'
 import type { LensScriptGenerationActions, LensScriptTextKind } from '../canvas/CanvasRenderContext'
 import { useUIStore } from '../ui/uiStore'
 import { toast } from '../ui/toast'
@@ -235,24 +235,44 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         ])
         if (pollTokenRef.current !== token) return
         const scriptContent = String(script.scriptContent || '').trim()
-        const sourceContent = scriptContent || String(script.content || '').trim()
-        if (!sourceContent) {
+        const novelContent = String(script.content || '').trim()
+        if (!scriptContent && !novelContent) {
           toast('本集剧本原文与台本均为空，无法拆分镜', 'warning')
           return
         }
+        // 台本与剧本原文都有内容时，必须先让用户选择用哪一份拆分，不能固定台本优先
+        let source: 'script' | 'novel' = scriptContent ? 'script' : 'novel'
+        if (scriptContent && novelContent) {
+          const picked = await confirmCanvasActionWithChoice({
+            title: '选择拆分镜内容来源',
+            message: '本集同时有台本和剧本原文，请选择用哪一份拆分镜。',
+            confirmText: '下一步',
+            choices: {
+              label: '内容来源',
+              defaultValue: 'script',
+              options: [
+                { value: 'script', label: '台本（默认）' },
+                { value: 'novel', label: '剧本原文' },
+              ],
+            },
+          })
+          if (!picked.confirmed) return
+          source = picked.choice === 'novel' ? 'novel' : 'script'
+          if (pollTokenRef.current !== token) return
+        }
+        const sourceLabel = source === 'script' ? '台本' : '剧本原文'
         if (storyboards.length > 0) {
-          // 台本为空时会用剧本原文拆分：确认框里说明清楚，避免用户以为拆的是（空）台本
-          const sourceHint = scriptContent ? '' : '本集台本为空，本次将使用剧本原文拆分。'
+          // 覆盖确认里提示实际来源，避免用户误以为拆的是另一份内容
           const confirmed = await confirmCanvasAction({
             title: '覆盖分镜',
-            message: `本集已有 ${storyboards.length} 个分镜，拆分镜会重新生成并覆盖分镜表（同序号已选图会保留）。${sourceHint}是否继续？`,
+            message: `本集已有 ${storyboards.length} 个分镜，拆分镜会重新生成并覆盖分镜表（同序号已选图会保留）。本次使用${sourceLabel}拆分。是否继续？`,
             confirmText: '覆盖并拆分镜',
             danger: true,
           })
           if (!confirmed) return
           if (pollTokenRef.current !== token) return
         }
-        // 不再上传正文：后端按「台本优先、否则剧本原文」从业务表取数，前端只传身份与拆分参数
+        // 不再上传正文：后端按 source 从业务表取数，前端只传身份、来源与拆分参数
         // 每段时长取剧配置（与分镜板 maxVideoDuration 同源），未配置时用后端默认 15 秒
         const configuredDuration = Number(useUIStore.getState().lensProjectConfig?.maxVideoDuration)
         const splitValue = Number.isFinite(configuredDuration) && configuredDuration >= 1
@@ -266,9 +286,10 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
           splitValue,
           saveMode: 'auto',
           linkSubScene: true,
+          source,
         })
         if (!result?.taskQueueId) throw new Error('后端未返回 taskQueueId')
-        toast(`拆分镜任务已提交（每段 ${splitValue} 秒，自动保存），完成后会自动刷新画布`)
+        toast(`拆分镜任务已提交（${sourceLabel}，每段 ${splitValue} 秒，自动保存），完成后会自动刷新画布`)
         await pollSplitShots(token)
       } catch (error) {
         if (pollTokenRef.current !== token) return

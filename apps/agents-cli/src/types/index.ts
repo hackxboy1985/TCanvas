@@ -188,6 +188,8 @@ export type AgentConfig = {
 export type LLMResponse = {
   text: string;
   toolCalls: ToolCall[];
+  /** 思考链文本（reasoning_content / <think> 段），不混入正文 */
+  reasoning?: string;
 };
 
 export type LLMRequest = {
@@ -196,5 +198,7 @@ export type LLMRequest = {
   tools: ToolDefinition[];
   model?: string;
   onTextDelta?: (delta: string) => void;
+  /** 思考链增量回调（与正文分离，供上层单独展示/按权限过滤） */
+  onReasoningDelta?: (delta: string) => void;
   abortSignal?: AbortSignal;
 };
