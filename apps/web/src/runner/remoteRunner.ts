@@ -160,6 +160,19 @@ const LENS_CANVAS_MAX_REFERENCE_IMAGES = 9
 const SORA2_PRO_MAX_VIDEO_DURATION_SECONDS = 25
 const IMAGE_NODE_KINDS = new Set(['image', 'imageEdit', 'storyboard'])
 const VIDEO_RENDER_NODE_KINDS = new Set(['video', 'composeVideo'])
+
+/**
+ * 任务失败文案兜底过滤：后端 resMsg/remark 里的技术细节（MyBatis/SQL/死锁/堆栈摘要等）
+ * 属于运维诊断信息，不应直接展示给用户。命中技术特征时用中性文案替代；
+ * 正常业务文案（积分不足等）保留。后端已在 remark 写入前脱敏，这里做浮层保底。
+ */
+function sanitizeTaskFailureMessage(raw: string | null | undefined): string {
+  const message = String(raw || '').trim()
+  if (!message) return ''
+  const technical = /###\s|\.xml\b|mapper\.xml|Deadlock|Caused by:|jdbc:|stackTrace|GetConnectionTimeout/i
+  if (technical.test(message)) return '生成服务暂时繁忙，系统已自动重试仍未成功，请稍后重试'
+  return message
+}
 const NON_EXECUTABLE_REMOTE_NODE_KINDS = new Set(['text'])
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -1397,7 +1410,7 @@ async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Pr
   // 都必须转成 failed 显式终止轮询：漏判会被当成「排队中」无限轮询到超时。
   if (status.status === 'FAILED' || status.status === 'ERROR' || status.status === 'CANCEL') {
     const fallback = status.status === 'CANCEL' ? 'lens 任务已取消' : 'lens 任务失败'
-    const message = status.resMsg?.trim() || status.remark?.trim() || fallback
+    const message = sanitizeTaskFailureMessage(status.resMsg?.trim() || status.remark?.trim() || fallback)
     return { id: taskId, kind: taskKind, status: 'failed', assets: [], raw: { ...status, failureReason: message } }
   }
   if (status.status !== 'SUCCESS') {
@@ -3661,7 +3674,7 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
   // 失败终态：FAILED=渠道失败、ERROR=多次重试后最终失败、CANCEL=已取消
   if (statusUpper === 'FAILED' || statusUpper === 'ERROR' || statusUpper === 'CANCEL') {
     const fallback = statusUpper === 'CANCEL' ? '图片任务已取消' : '图片任务执行失败'
-    const message = snapshot.resMsg?.trim() || snapshot.remark?.trim() || fallback
+    const message = sanitizeTaskFailureMessage(snapshot.resMsg?.trim() || snapshot.remark?.trim() || fallback)
     setNodeStatus(id, 'error', { progress: 0, lastError: message })
     appendLog(id, `[${nowLabel()}] error: ${message}`)
     return
