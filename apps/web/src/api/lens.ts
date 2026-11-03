@@ -1759,6 +1759,81 @@ export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promi
 }
 
 /**
+ * 画布自由视频节点提交参数（lens 视频 v2 链路：lens_user_task + task_queue）。
+ */
+export interface LensCanvasVideoSubmitParams {
+  dramaId: string
+  episodeNum?: number
+  prompt: string
+  /** 视频模型（节点 videoModel，通常是 lens_application id 或模型名） */
+  model: string
+  channel?: string
+  ratio?: string
+  resolution?: string
+  duration?: number
+  quality?: string
+  mode?: string
+  refImages?: string[]
+  canvasFlowId?: number
+  canvasNodeAssetId?: number
+}
+
+/**
+ * 画布自由视频节点提交结果。
+ */
+export interface LensCanvasVideoSubmitResult {
+  taskId: number
+  lensUserTaskId: number
+  channel: string
+  model: string
+  status?: string
+}
+
+/**
+ * 提交画布自由视频节点任务。
+ *
+ * <p>后端走 lens 视频 v2 链路（复用 LensUserTaskLogic 的 components/runTask），
+ * 任务归属画布节点（asset_type=10 + canvasNodeAssetId，scene_id=canvasFlowId）；
+ * 分镜视频仍走 /api/storyboardTask/submit，不走本接口。
+ *
+ * @param params 提示词、模型、比例/分辨率/时长、参考图与画布节点归属
+ * @returns 后端提交结果（含 taskId，用于后续轮询）
+ */
+export async function runVideoTaskByCanvas(params: LensCanvasVideoSubmitParams): Promise<LensCanvasVideoSubmitResult> {
+  const payload: Record<string, unknown> = {
+    dramaId: params.dramaId,
+    prompt: params.prompt,
+    model: params.model,
+  }
+  if (typeof params.episodeNum === 'number' && Number.isFinite(params.episodeNum)) {
+    payload.episodeNum = Math.trunc(params.episodeNum)
+  }
+  if (typeof params.channel === 'string' && params.channel.trim()) payload.channel = params.channel.trim()
+  if (typeof params.ratio === 'string' && params.ratio.trim()) payload.ratio = params.ratio.trim()
+  if (typeof params.resolution === 'string' && params.resolution.trim()) payload.resolution = params.resolution.trim()
+  if (typeof params.duration === 'number' && Number.isFinite(params.duration)) payload.duration = Math.trunc(params.duration)
+  if (typeof params.quality === 'string' && params.quality.trim()) payload.quality = params.quality.trim()
+  if (typeof params.mode === 'string' && params.mode.trim()) payload.mode = params.mode.trim()
+  if (Array.isArray(params.refImages) && params.refImages.length) {
+    payload.refImages = JSON.stringify(params.refImages.map((url) => ({ url })))
+  }
+  if (typeof params.canvasFlowId === 'number' && Number.isFinite(params.canvasFlowId)) {
+    payload.canvasFlowId = Math.trunc(params.canvasFlowId)
+  }
+  if (typeof params.canvasNodeAssetId === 'number' && Number.isFinite(params.canvasNodeAssetId)) {
+    payload.canvasNodeAssetId = Math.trunc(params.canvasNodeAssetId)
+  }
+  const data = await lensFetch<LensCanvasVideoSubmitResult>('/api/canvas/videoNode/submit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (typeof data?.taskId !== 'number' || !Number.isFinite(data.taskId)) {
+    throw new Error('lens 视频任务提交失败：响应未返回合法 taskId')
+  }
+  return data
+}
+
+/**
  * lens task_queue 状态枚举的 name（对应后端 com.zsapps.api.enums.TaskQueueStatusEnum）。
  *
  * <p>必须与后端枚举完全一致：后端还有 {@code ERROR}（多次重试后的失败终态）与

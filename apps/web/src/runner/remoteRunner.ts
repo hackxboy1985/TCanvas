@@ -19,7 +19,7 @@ import {
 } from '../api/server'
 import { getAuthToken } from '../auth/store'
 import { useRFStore } from '../canvas/store'
-import { getCanvasTaskStatus, runTaskByCanvas } from '../api/lens'
+import { getCanvasTaskStatus, runTaskByCanvas, runVideoTaskByCanvas } from '../api/lens'
 import {
   CANVAS_NODE_ASSET_ID_FIELD,
   ensureCanvasNodeAssetId as allocateCanvasNodeAssetId,
@@ -1454,8 +1454,85 @@ async function runImageTaskByRuntime(
   urlParams: LensCanvasUrlParams | null,
   nodeData?: Record<string, unknown>,
 ): Promise<TaskResultDto> {
-  if (urlParams) return runLensCanvasImageTask(request, urlParams, nodeData)
+  if (urlParams) {
+    // 视频节点：部分执行入口的 request.kind 不是 video，按节点 data.kind/videoModel 兜底判定，
+    // 避免视频节点误走生图接口（runTaskByCanvas）。
+    const requestKind = String(request.kind || '').toLowerCase()
+    const extrasKind = String(request.extras?.nodeKind || '').toLowerCase()
+    const nodeKind = typeof nodeData?.kind === 'string' ? nodeData.kind.toLowerCase() : ''
+    const isVideoNode = requestKind === 'video' || requestKind === 'composevideo'
+      || extrasKind === 'video' || extrasKind === 'composevideo'
+      || nodeKind === 'video' || nodeKind === 'composevideo'
+      || typeof nodeData?.videoModel === 'string'
+    if (isVideoNode) {
+      return runLensCanvasVideoTask(request, urlParams, nodeData)
+    }
+    return runLensCanvasImageTask(request, urlParams, nodeData)
+  }
   return runAutoTask(request)
+}
+
+/**
+ * 提交画布自由视频节点任务（lens 模式）。
+ *
+ * <p>替换原先误走 /public/tasks 的视频链路：后端走 lens 视频 v2（lens_user_task + task_queue），
+ * 任务归属画布节点；结果轮询仍复用 lens task_queue 状态接口。
+ *
+ * @param request 节点任务请求（prompt/kind/extras）
+ * @param urlParams 画布 URL 参数（dramaId/episodeNum/flowId）
+ * @param nodeData 节点数据（videoModel/比例/分辨率/时长）
+ */
+async function runLensCanvasVideoTask(
+  request: TaskRequestDto,
+  urlParams: LensCanvasUrlParams,
+  nodeData?: Record<string, unknown>,
+): Promise<TaskResultDto> {
+  // 部分执行入口没有把节点 data 透传进来：按 extras.nodeId 从画布 store 兜底读取真实节点 data，
+  // 否则会误判为无模型而提交失败（不允许静默走生图/旧链路）。
+  let resolvedNodeData = nodeData
+  if (!resolvedNodeData) {
+    const nodeId = typeof request.extras?.nodeId === 'string' ? request.extras.nodeId : ''
+    if (nodeId) {
+      const storeNode = useRFStore.getState().nodes.find((node) => node.id === nodeId)
+      if (storeNode) resolvedNodeData = storeNode.data as Record<string, unknown>
+    }
+  }
+  const data = (resolvedNodeData ?? {}) as Record<string, unknown>
+  const modelRaw = data.videoModel ?? data.model
+  const model = typeof modelRaw === 'string' || typeof modelRaw === 'number' ? String(modelRaw).trim() : ''
+  if (!model) {
+    throw new Error('lens 视频任务提交失败：视频节点未选择模型（videoModel 为空）')
+  }
+  const ratio = typeof data.videoSize === 'string' && data.videoSize.trim() ? data.videoSize.trim() : undefined
+  const resolution = typeof data.videoResolution === 'string' && data.videoResolution.trim() ? data.videoResolution.trim() : undefined
+  const durationRaw = data.videoDurationSeconds ?? data.durationSeconds
+  const duration = typeof durationRaw === 'number' && Number.isFinite(durationRaw) ? Math.trunc(durationRaw) : undefined
+  const refs = Array.isArray(request.extras?.referenceImages)
+    ? request.extras.referenceImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+    : []
+  const canvasNodeAssetId = readCanvasNodeAssetId(data)
+  const submitted = await runVideoTaskByCanvas({
+    dramaId: urlParams.dramaId,
+    episodeNum: urlParams.episodeNum,
+    prompt: request.prompt,
+    model,
+    ratio,
+    resolution,
+    duration,
+    refImages: refs,
+    canvasFlowId: urlParams.flowId,
+    canvasNodeAssetId: canvasNodeAssetId === null ? undefined : canvasNodeAssetId,
+  })
+  return {
+    id: String(submitted.taskId),
+    kind: request.kind,
+    status: 'queued',
+    assets: [],
+    raw: {
+      provider: `lens:${submitted.channel || 'unknown'}`,
+      ...submitted,
+    },
+  }
 }
 
 /**

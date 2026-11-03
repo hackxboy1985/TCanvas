@@ -1748,6 +1748,101 @@ export default function LensCanvasApp(): JSX.Element {
     }
   }, [dramaId, episodeNum, loading, saveNow])
 
+
+  /**
+   * AI 对话回复资产自动加入画布：AiChatDialog（lens 模式）识别回复里的图片/视频 URL 后调用，
+   * 这里负责新建自由节点、按 URL 去重、保存 flow 并回传实际新增数量（重复 URL 不重复添加）。
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    /** AI 回复资产输入（与 AiChatDialog 的 AssistantAsset 对齐，只取必要字段） */
+    type AssistantAssetInput = { title?: string; url: string; mediaType?: 'image' | 'video' }
+    /** 加入结果 */
+    type AddAssetsResult = { added: number }
+    const win = window as unknown as {
+      __lensCanvasAddAssistantAssets?: (assets: AssistantAssetInput[]) => Promise<AddAssetsResult>
+    }
+    /**
+     * 收集画布已有媒体 URL（用于去重，避免同一资产被多次加入）。
+     *
+     * @param nodes 当前画布节点
+     * @returns 已存在的媒体 URL 集合
+     */
+    const collectMediaUrls = (nodes: Node[]): Set<string> => {
+      const urls = new Set<string>()
+      const push = (value: unknown): void => {
+        const url = String(value || '').trim()
+        if (url) urls.add(url)
+      }
+      for (const node of nodes) {
+        const data = (node.data || {}) as Record<string, unknown>
+        push(data.imageUrl)
+        push(data.videoUrl)
+        push(data.sourceUrl)
+        push(data.selectedImageUrl)
+        for (const key of ['imageResults', 'videoResults']) {
+          const results = data[key]
+          if (!Array.isArray(results)) continue
+          for (const item of results) {
+            if (item && typeof item === 'object') push((item as { url?: unknown }).url)
+          }
+        }
+      }
+      return urls
+    }
+    /**
+     * 把 AI 回复资产加入画布并保存 flow。
+     *
+     * @param assets 回复中提取的媒体资产
+     * @returns 实际新增节点数
+     */
+    const addAssets = async (assets: AssistantAssetInput[]): Promise<AddAssetsResult> => {
+      if (loading || loadedForRef.current !== `${dramaId}:${episodeNum}`) return { added: 0 }
+      const store = useRFStore.getState()
+      const existingUrls = collectMediaUrls(store.nodes)
+      // 落点：画布已有节点最右侧一列，避免覆盖用户内容
+      const maxX = store.nodes.reduce((acc, node) => Math.max(acc, node.position?.x ?? 0), 0)
+      const yValues = store.nodes.map((node) => node.position?.y ?? 0)
+      const baseY = yValues.length > 0 ? Math.min(...yValues) : 0
+      const created: Node[] = []
+      let index = 0
+      for (const asset of Array.isArray(assets) ? assets : []) {
+        const url = String(asset?.url || '').trim()
+        if (!url || existingUrls.has(url)) continue
+        existingUrls.add(url)
+        const mediaType = asset.mediaType === 'video' ? 'video' : 'image'
+        const title = String(asset.title || '').trim() || `AI${mediaType === 'video' ? '视频' : '图片'}-${index + 1}`
+        created.push({
+          id: `ai-reply-${mediaType}-${Date.now()}-${index}`,
+          type: 'taskNode',
+          position: { x: maxX + 420, y: baseY + index * 320 },
+          data: {
+            label: title,
+            kind: mediaType,
+            status: 'success',
+            source: 'ai_chat_reply_asset',
+            ...(mediaType === 'video' ? { videoUrl: url } : { imageUrl: url }),
+          },
+        })
+        index += 1
+      }
+      if (created.length === 0) return { added: 0 }
+      const nextNodes = [...store.nodes, ...created]
+      useRFStore.setState({ nodes: nextNodes })
+      // 立即落库：与普通自由节点一视同仁，刷新后仍保留；保存失败不回滚节点（节点仍在，等待下一次自动保存）
+      try {
+        await saveNow(episodeNum, { nodes: nextNodes, edges: store.edges })
+      } catch (error) {
+        console.warn('[lens-canvas] AI 回复资产保存画布失败', error)
+      }
+      return { added: created.length }
+    }
+    win.__lensCanvasAddAssistantAssets = addAssets
+    return () => {
+      if (win.__lensCanvasAddAssistantAssets === addAssets) delete win.__lensCanvasAddAssistantAssets
+    }
+  }, [dramaId, episodeNum, loading, saveNow])
+
   /**
    * 页面切到后台立即保存：自动保存间隔拉长到 15s 后，直接关闭标签页可能丢失
    * 最近改动（拖拽位置、提示词编辑等）。visibilitychange 比 beforeunload 可靠，
