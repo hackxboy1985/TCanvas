@@ -563,6 +563,8 @@ export type AgentsChatRequestDto = {
   canvasProjectId?: string
   canvasFlowId?: string
   canvasNodeId?: string
+  /** 用户 @ 引用的画布节点 ID（最多 5 个；lens 画布对话上下文） */
+  contextNodeIds?: string[]
   chatContext?: {
     currentProjectName?: string
     workspaceAction?: 'chapter_script_generation' | 'chapter_asset_generation' | 'shot_video_generation'

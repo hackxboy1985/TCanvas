@@ -8108,23 +8108,117 @@ body {
   flex: 0 0 auto;
 }
 
+/* 任务/能力菜单：固定宽高 + 内部滚动，避免 12 个能力 + 快捷任务把弹窗撑满屏幕 */
+.tc-ai-chat__experience-dropdown {
+  width: 400px;
+  max-width: min(400px, calc(100vw - 24px));
+  max-height: min(460px, calc(100dvh - 120px));
+  overflow-y: auto;
+  /* 只允许垂直滚动：水平方向一律裁掉，避免长文本撑出横向滚动条 */
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+
+/* lens 对话附件：缩略图/视频名 + 移除按钮（仅本轮有效） */
+.tc-ai-chat__lens-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 4px 0;
+}
+
+.tc-ai-chat__lens-attachment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 230px;
+  padding: 3px 6px;
+  border-radius: 8px;
+  background: var(--tc-color-surface-inline-weak);
+}
+
+.tc-ai-chat__lens-attachment-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.tc-ai-chat__lens-attachment-video {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.tc-ai-chat__lens-attachment-name {
+  max-width: 120px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-ai-chat__lens-attachment-remove {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--mantine-color-dimmed);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* 小屏/窄屏：占满可用宽度，高度进一步收紧 */
+@media (max-width: 640px) {
+  .tc-ai-chat__experience-dropdown {
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    max-height: min(420px, calc(100dvh - 160px));
+    padding: 4px;
+  }
+}
+
+/* 菜单项紧凑：名称一行、描述单行省略，减少行高与内边距 */
+.tc-ai-chat__experience-dropdown .tc-ai-chat__experience-menu-item {
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+
+.tc-ai-chat__experience-dropdown .mantine-Menu-label {
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mantine-color-dimmed);
+  position: sticky;
+  top: -6px;
+  z-index: 1;
+  background: var(--mantine-color-body);
+}
+
 .tc-ai-chat__experience-menu-content {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .tc-ai-chat__experience-menu-title {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tc-ai-chat__experience-menu-description {
   color: var(--mantine-color-dimmed);
   font-size: 11px;
   line-height: 1.35;
+  /* 能力描述较长：完整换行显示（靠菜单垂直滚动浏览），不做单行省略、不产生水平滚动 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tc-ai-chat__refs {
@@ -8419,6 +8513,74 @@ body {
 .tc-ai-chat__history-empty {
   font-size: 12px;
   color: var(--mantine-color-dimmed);
+}
+
+/* lens 画布 @ 引用：候选弹层 + 已引用节点 chips（最多 5 个） */
+.tc-ai-chat__mention-chips {
+  padding: 0 2px;
+}
+
+.tc-ai-chat__mention-chip {
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-ai-chat__mention-panel {
+  position: absolute;
+  bottom: 90px;
+  left: 14px;
+  right: 14px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--tc-ai-chat-surface-border);
+  border-radius: 10px;
+  background: var(--mantine-color-body);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.22);
+}
+
+.tc-ai-chat__mention-title {
+  padding: 4px 8px 2px;
+}
+
+.tc-ai-chat__mention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tc-ai-chat__mention-item:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.tc-ai-chat__mention-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.tc-ai-chat__mention-item-kind {
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .tc-ai-chat-bubble__todo {

@@ -211,6 +211,29 @@ async function lensAgentGetJson<T>(path: string): Promise<T> {
 }
 
 /**
+ * 获取 lens 画布内置能力列表（12 个 tapcanvas skills 拷贝，只返回 key/名称/描述）。
+ *
+ * @returns 能力列表；失败时抛错，由菜单展示显式错误
+ */
+export async function listLensAgentSkills(): Promise<Array<{ key: string; name: string; description: string }>> {
+  const data = await lensAgentGetJson<Array<{ key?: unknown; name?: unknown; description?: unknown }> | {
+    skills?: Array<{ key?: unknown; name?: unknown; description?: unknown }>
+  }>('/api/canvas/agent/skills')
+  const rawItems = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { skills?: unknown }).skills)
+      ? (data as { skills: Array<{ key?: unknown; name?: unknown; description?: unknown }> }).skills
+      : []
+  return rawItems
+    .map((item) => ({
+      key: String(item?.key || '').trim(),
+      name: String(item?.name || '').trim(),
+      description: String(item?.description || '').trim(),
+    }))
+    .filter((item) => Boolean(item.key))
+}
+
+/**
  * 获取当前剧集的 lens 历史会话列表（最近 20 条）。
  *
  * @returns 会话摘要列表（失败时抛错，由调用方展示）
@@ -300,8 +323,46 @@ async function readLensChatErrorMessage(response: Response): Promise<string> {
  * @param handlers 事件回调（onEvent / onOpen / onError）
  * @returns 中断函数（中止本次 SSE 连接）
  */
+/** 画布 Agent 对话附件（与 Java CanvasAgentAttachment 对齐） */
+export interface LensAgentAttachment {
+  type: 'image' | 'video'
+  url: string
+  name?: string
+}
+
+/**
+ * 上传对话附件到 lens OSS（不走 tapcanvas /public 接口）。
+ *
+ * @param file 图片或 mp4
+ * @param type 附件类型
+ * @returns OSS 地址与文件名
+ */
+export async function uploadLensChatAttachment(file: File, type: 'image' | 'video'): Promise<LensAgentAttachment> {
+  const form = new FormData()
+  form.set('file', file)
+  const endpoint = type === 'video'
+    ? '/api/oss/upload/video/lens-chat'
+    : '/api/oss/upload/img/lens-chat'
+  const token = readCookie('Admin-Token')
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`附件上传失败：HTTP ${response.status}`)
+  }
+  const body = await response.json() as { code?: number; msg?: string; data?: unknown }
+  const url = typeof body?.data === 'string' ? body.data.trim() : ''
+  if (Number(body?.code) !== 200 || !url) {
+    throw new Error(body?.msg || '附件上传失败：接口未返回 URL')
+  }
+  return { type, url, name: file.name }
+}
+
 export async function lensAgentsChatStream(
-  payload: AgentsChatRequestDto,
+  payload: AgentsChatRequestDto & { attachments?: LensAgentAttachment[] },
   handlers: {
     onEvent: (event: AgentsChatStreamEvent) => void
     onOpen?: () => void
@@ -325,6 +386,30 @@ export async function lensAgentsChatStream(
   if (selectedNodeIdRaw && !selectedNodeId) {
     console.warn('[lensAgentChat] selectedNodeId 格式非法，已忽略', selectedNodeIdRaw)
   }
+  // 本轮启用的 lens 内置能力 key（服务端白名单校验；只传 key，不传前端拼接的 prompt）
+  const skillKeyRaw = String(payload.chatContext?.skill?.key || '').trim()
+  const skillKey = /^[A-Za-z0-9_-]{1,64}$/.test(skillKeyRaw) ? skillKeyRaw : ''
+  if (skillKeyRaw && !skillKey) {
+    console.warn('[lensAgentChat] skillKey 格式非法，已忽略', skillKeyRaw)
+  }
+  // 用户 @ 引用的画布节点 ID：与后端 NODE_ID_PATTERN 对齐 + 去重 + 最多 5 个
+  const contextNodeIds = Array.isArray(payload.contextNodeIds)
+    ? Array.from(new Set(payload.contextNodeIds
+        .map((item) => String(item || '').trim())
+        .filter((item) => /^[A-Za-z0-9_:.\-]{1,128}$/.test(item))))
+        .slice(0, 5)
+    : []
+  // 本轮附件（最多 4 个；URL 必须 http(s)，非法项直接忽略并告警，避免整轮对话 400）
+  const attachments = Array.isArray(payload.attachments)
+    ? payload.attachments
+        .filter((item) => item && (item.type === 'image' || item.type === 'video'))
+        .filter((item) => /^https?:\/\//.test(String(item.url || '').trim()))
+        .slice(0, 4)
+        .map((item) => ({ type: item.type, url: String(item.url).trim(), ...(item.name ? { name: String(item.name).slice(0, 200) } : {}) }))
+    : []
+  if (Array.isArray(payload.attachments) && payload.attachments.length > attachments.length) {
+    console.warn('[lensAgentChat] 存在非法或超量附件，已忽略')
+  }
   const token = readCookie('Admin-Token')
 
   const response = await fetch(LENS_AGENT_CHAT_ENDPOINT, {
@@ -340,6 +425,9 @@ export async function lensAgentsChatStream(
       episodeNum: query.episodeNum,
       sessionId,
       ...(selectedNodeId ? { selectedNodeId } : {}),
+      ...(skillKey ? { skillKey } : {}),
+      ...(contextNodeIds.length ? { contextNodeIds } : {}),
+      ...(attachments.length ? { attachments } : {}),
     }),
     credentials: 'include',
     signal: controller.signal,
