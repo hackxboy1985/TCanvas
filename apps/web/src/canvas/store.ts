@@ -59,6 +59,18 @@ type RFState = {
   duplicateNode: (id: string) => void
   pasteFromClipboardAt: (pos: { x: number; y: number }) => void
   importWorkflow: (workflowData: CanvasImportData | SerializedCanvas | null | undefined, position?: { x: number; y: number }) => void
+  /**
+   * 批量追加「按绝对坐标摆好」的节点与连线（一次 set，只记一条撤销历史）。
+   *
+   * <p>用于程序化生成成组节点（如画布自由节点拆分镜：分镜节点 + 资产分组 + 连线），
+   * 保留节点自身的 id／父子关系／样式，不做自动避让与自动布局。
+   * 逐个调用 addNode 会导致位置重叠、每组各自避让，且一条连线各记一次历史。</p>
+   *
+   * @param nodes 待追加节点（id 不可与现有节点重复；parentId 必须是已有或同批的分组节点）
+   * @param edges 待追加连线（两端必须是已有或本批节点）
+   * @returns 实际追加成功的节点 id 列表
+   */
+  appendGraph: (nodes: Node[], edges?: Edge[]) => string[]
   selectAll: () => void
   clearSelection: () => void
   invertSelection: () => void
@@ -2646,6 +2658,51 @@ export const useRFStore = create<RFState>((set, get) => ({
       historyFuture: [],
     }
   }),
+  appendGraph: (incomingNodes, incomingEdges) => {
+    let createdIds: string[] = []
+    set((s) => {
+      const existingIds = new Set(s.nodes.map((node) => String(node.id || '')))
+      const prepared: Node[] = []
+      for (const node of incomingNodes || []) {
+        const nodeId = String(node && node.id ? node.id : '').trim()
+        // id 非法或与现有节点冲突直接跳过：节点 id 由调用方按固定规则生成，冲突说明画布状态异常
+        if (!nodeId || existingIds.has(nodeId)) continue
+        existingIds.add(nodeId)
+        prepared.push(enforceNodeSelectability({
+          ...node,
+          id: nodeId,
+          selected: false,
+          dragging: false,
+        } as Node))
+      }
+      if (!prepared.length) return {}
+      const allNodeIds = new Set(s.nodes.map((node) => String(node.id)).concat(prepared.map((node) => String(node.id))))
+      // 父节点必须排在子节点之前，组内子节点才会被正确归组
+      const orderedNodes = ensureParentFirstOrder(s.nodes.concat(prepared))
+      const nextEdges = [...s.edges]
+      const edgeKeys = new Set(nextEdges.map((edge) => [edge.source, edge.target, edge.sourceHandle ?? '', edge.targetHandle ?? ''].join('|')))
+      for (const edge of incomingEdges || []) {
+        if (!edge) continue
+        const source = String(edge.source || '')
+        const target = String(edge.target || '')
+        // 两端都必须真实存在：不存在时不留下悬空连线
+        if (!source || !target || !allNodeIds.has(source) || !allNodeIds.has(target)) continue
+        const key = [source, target, edge.sourceHandle ?? '', edge.targetHandle ?? ''].join('|')
+        if (edgeKeys.has(key)) continue
+        edgeKeys.add(key)
+        nextEdges.push({ ...edge, id: edge.id || key })
+      }
+      const past = [...s.historyPast, cloneGraph(s.nodes, s.edges)].slice(-50)
+      createdIds = prepared.map((node) => String(node.id))
+      return {
+        nodes: orderedNodes.map(stripNodePositionInternals),
+        edges: sanitizeEdgesForNodes(orderedNodes, nextEdges),
+        historyPast: past,
+        historyFuture: [],
+      }
+    })
+    return createdIds
+  },
   importWorkflow: (workflowData, position) => set((s) => {
     const sanitized = sanitizeGraphForCanvas(workflowData)
     if (!sanitized.nodes.length) return {}

@@ -1,4 +1,8 @@
 import React from 'react'
+import type { FreeformSplitActions } from '../projects/useFreeformSplit'
+
+/** 自由文本节点「拆分镜」能力（统一从此模块导出，避免各处重复引 hook 模块） */
+export type { FreeformSplitActions }
 
 /** 剧本类文本节点的业务类型：剧本=原文（novel_episode.content），台本=script_content */
 export type LensScriptTextKind = '剧本' | '台本'
@@ -52,6 +56,14 @@ export type CanvasRenderContextValue = {
    * 外部再包一层 Provider 会被覆盖，节点侧拿不到。</p>
    */
   lensScriptGeneration?: LensScriptGenerationActions
+  /**
+   * 画布自由文本节点「拆分镜」能力（lens 画布注入）。
+   *
+   * <p>只对自由节点（kind=text）生效：正文直接送 POST /api/canvas/splitShot，
+   * 结果落成画布自由节点（分镜节点 + 角色/场景/道具分组 + 连线），不写 lens 业务表。
+   * 带 dramaId 的 lens 剧本/台本节点仍走 {@link lensScriptGeneration} 的原链路。</p>
+   */
+  freeformSplit?: FreeformSplitActions
 }
 
 const DEFAULT_CANVAS_RENDER_CONTEXT: CanvasRenderContextValue = {

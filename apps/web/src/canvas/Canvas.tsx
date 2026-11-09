@@ -69,7 +69,7 @@ import { buildStoryboardEditorPatch, normalizeStoryboardNodeData } from './nodes
 import { resourceManager } from '../domain/resource-runtime'
 import { useUploadRuntimeStore } from '../domain/upload-runtime/store/uploadRuntimeStore'
 import { dedupeLocalFiles } from '../utils/localUploadDedup'
-import { CanvasRenderContext, type LensScriptGenerationActions } from './CanvasRenderContext'
+import { CanvasRenderContext, type FreeformSplitActions, type LensScriptGenerationActions } from './CanvasRenderContext'
 import { PanelCard } from '../ui/PanelCard'
 // 限制不同节点类型之间的连接关系；未匹配的类型默认放行，避免阻塞用户操作
 const isValidEdgeByType = buildEdgeValidator()
@@ -300,6 +300,14 @@ type CanvasInnerProps = {
    * 外部再包一层 Provider 会被覆盖，节点侧永远拿不到。</p>
    */
   lensScriptGeneration?: LensScriptGenerationActions
+  /**
+   * 画布自由文本节点「拆分镜」能力（lens 画布）。
+   *
+   * <p>只对自由节点生效（不带 dramaId 的 kind=text）；lens 剧本/台本节点仍走
+   * {@link lensScriptGeneration} 的原链路。同样必须作为 Canvas prop 透传，
+   * 原因与 {@link lensScriptGeneration} 相同。</p>
+   */
+  freeformSplit?: FreeformSplitActions
 }
 
 type CanvasStyle = React.CSSProperties & Record<'--tc-spotlight-grid-color' | '--tc-spotlight-radius', string>
@@ -378,7 +386,7 @@ const getStaticTargetHandles = (schema: TaskNodeSchema): TaskNodeHandleConfig[] 
   return Array.isArray(handles.targets) ? handles.targets : []
 }
 
-function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp, onOpenAssetLibrary, lensScriptGeneration }: CanvasInnerProps): JSX.Element {
+function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult: onOpenTaskResultProp, onOpenAssetLibrary, lensScriptGeneration, freeformSplit }: CanvasInnerProps): JSX.Element {
   const nodes = useRFStore((s) => s.nodes)
   const edges = useRFStore((s) => s.edges)
   const nodePrimaryImageBindings = useRFStore(selectNodePrimaryImageBindings, areNodePrimaryImageBindingsEqual)
@@ -2195,8 +2203,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       onOpenTaskResult: onOpenTaskResultProp,
       // 宿主注入的「生台本 / 拆分镜」能力（lens 画布剧本节点顶部工具栏），同样必须在此透传
       lensScriptGeneration,
+      // 宿主注入的自由文本节点「拆分镜」能力（结果只落画布，不写 lens 业务表）
+      freeformSplit,
     }),
-    [heavySelectionActive, heavySelectionDragging, selectedNodeCount, onOpenTaskResultProp, lensScriptGeneration],
+    [heavySelectionActive, heavySelectionDragging, selectedNodeCount, onOpenTaskResultProp, lensScriptGeneration, freeformSplit],
   )
   const canCreateScriptBundleFromSelection = useMemo(() => {
     if (dragging) return false
@@ -4217,8 +4227,8 @@ const ReactFlowProviderWithClass =
   ReactFlowProvider as unknown as React.FC<React.PropsWithChildren<{ className?: string }>>
 
 /** 画布组件：ReactFlowProvider 包裹 + ref 暴露视口 API（外部调用方通过 CanvasHandle 读写视口） */
-const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void; onOpenAssetLibrary?: () => void; lensScriptGeneration?: LensScriptGenerationActions }>(
-  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult, onOpenAssetLibrary, lensScriptGeneration }, ref): JSX.Element {
+const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: () => void; shotArrange?: 'column' | 'flow'; onShotArrangeChange?: (direction: 'column' | 'flow') => void; onOpenTaskResult?: (nodeId: string) => void; onOpenAssetLibrary?: () => void; lensScriptGeneration?: LensScriptGenerationActions; freeformSplit?: FreeformSplitActions }>(
+  function Canvas({ className, arrangeHandler, shotArrange, onShotArrangeChange, onOpenTaskResult, onOpenAssetLibrary, lensScriptGeneration, freeformSplit }, ref): JSX.Element {
     const innerClassName = ['tc-canvas-inner', className].filter(Boolean).join(' ')
 
     return (
@@ -4232,6 +4242,7 @@ const Canvas = forwardRef<CanvasHandle, { className?: string; arrangeHandler?: (
           onOpenTaskResult={onOpenTaskResult}
           onOpenAssetLibrary={onOpenAssetLibrary}
           lensScriptGeneration={lensScriptGeneration}
+          freeformSplit={freeformSplit}
         />
       </ReactFlowProviderWithClass>
     )

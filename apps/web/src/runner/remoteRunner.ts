@@ -1359,6 +1359,10 @@ async function runLensCanvasImageTask(
     // 二选一：业务身份 或 画布节点归属，绝不同时下发
     assetType: businessIdentity ? businessIdentity.assetType : undefined,
     assetId: businessIdentity ? businessIdentity.assetId : undefined,
+    // 角色投影节点「三视图」开关：缺省 true（老节点无该字段按 true 处理），仅角色节点下发
+    threeViewEnabled: businessIdentity && businessIdentity.assetType === 0
+      ? nodeData?.threeViewEnabled !== false
+      : undefined,
     canvasNodeAssetId: canvasNodeAssetId === null ? undefined : canvasNodeAssetId,
   })
   // 不返回具体结果，让既有轮询分支按 queued 状态接续推进（与 /public/tasks 链路同构）
@@ -3933,8 +3937,8 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     const sourceBookId = String((data as any)?.sourceBookId || '').trim()
     const isNovelStoryboard = !!sourceBookId
     const storyboardCount = isNovelStoryboard
-      ? clampInt((data as any)?.storyboardGroupSize || (data as any)?.storyboardCount, 1, 16, 1)
-      : clampInt((data as any)?.storyboardCount, 4, 16, 4)
+      ? clampInt((data as any)?.storyboardGroupSize || (data as any)?.storyboardCount, 1, 25, 1)
+      : clampInt((data as any)?.storyboardCount, 4, 25, 4)
     const storyboardAspect = normalizeStoryboardImageAspectRatio((data as any)?.storyboardAspectRatio)
     const storyboardStyle = normalizeStoryboardImageStyle((data as any)?.storyboardStyle)
 

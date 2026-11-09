@@ -18,6 +18,7 @@ import {
   IconPalette,
   IconPhotoSearch,
   IconRefresh,
+  IconScissors,
   IconSeparatorHorizontal,
   IconUsers,
   IconLayoutGrid,
@@ -2562,7 +2563,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     data,
     isAudioNode,
   ])
-  const { selectedNodeCount, onOpenTaskResult, lensScriptGeneration } = useCanvasRenderContext()
+  const { selectedNodeCount, onOpenTaskResult, lensScriptGeneration, freeformSplit } = useCanvasRenderContext()
   const isSingleSelectionActive = Boolean(selected && !dragging && selectedNodeCount <= 1)
   /**
    * lens 画布投影出的剧本类文本节点标签：『剧本』（原文）或『台本』。
@@ -4448,10 +4449,35 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       setSavingAssetPrompt(false)
     }
   }
+  // 角色投影节点（assetCategory=1 且有 entityId）：在「保存提示词」左侧显示「三视图」开关，缺省 true
+  const roleProjectionNode = Number((data as Record<string, unknown>).assetCategory) === 1
+    && String((data as Record<string, unknown>).entityId ?? '').trim().length > 0
+  const threeViewEnabled = (data as Record<string, unknown>).threeViewEnabled !== false
   const promptPolishActions = canUseStructuredPromptEditor ? (
     <Group className="tc-task-node__polish-actions" gap={4} wrap="nowrap">
       {lastPolishComparison ? <Button className="tc-task-node__polish-compare" size="compact-xs" variant="subtle" onClick={() => setShowLastPolishComparison(true)}>查看对比</Button> : null}
       {polishOriginal ? <Button className="tc-task-node__polish-restore" size="compact-xs" variant="subtle" disabled={viewOnly} onClick={handleRestorePolish}>恢复润色前</Button> : null}
+      {roleProjectionNode ? (
+        <Tooltip
+          className="tc-task-node__three-view-tooltip"
+          label="勾选后提交生图会拼接三视图与生图前置提示词（默认勾选）"
+          position="top"
+          openDelay={0}
+          withArrow
+        >
+          {/* Tooltip 需要可挂 ref 的宿主元素：Switch 内部 ref 指向 input，直接包裹会导致 hover 不触发，这里用 span 承接 */}
+          <span className="tc-task-node__three-view-tooltip-target" style={{ display: 'inline-flex' }}>
+            <Switch
+              className="tc-task-node__three-view-switch"
+              size="xs"
+              checked={threeViewEnabled}
+              disabled={viewOnly}
+              onChange={(event) => updateNodeData(id, { threeViewEnabled: event.currentTarget.checked })}
+              label="三视图"
+            />
+          </span>
+        </Tooltip>
+      ) : null}
       {typeof (data as Record<string, unknown>).assetCategory === 'number' && String((data as Record<string, unknown>).entityId ?? '').trim() ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>保存提示词</Button> : null}
       <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>{'AI润色'}</Button>
       {/* 费用说明：免费显示「（免费N次）」，免费用尽显示「（N积分）」；单独用 Text 渲染，不并入按钮文字 */}
@@ -5848,7 +5874,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (kind !== 'storyboardImage') return 4
     const raw = Number((data as any)?.storyboardCount)
     if (!Number.isFinite(raw)) return 4
-    return Math.max(4, Math.min(16, Math.floor(raw)))
+    return Math.max(4, Math.min(25, Math.floor(raw)))
   }, [data, kind])
 
   const storyboardImageAspectRatio =
@@ -6015,7 +6041,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       storyboardShotPrompts: normalized,
       storyboardCount: isNovelStoryboardNode
         ? Math.max(1, Math.min(25, count))
-        : Math.max(4, Math.min(16, count)),
+        : Math.max(4, Math.min(25, count)),
     })
   }, [id, isNovelStoryboardNode, updateNodeData])
 
@@ -7104,7 +7130,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (storyboardImageScriptLoading) return
     if (status === 'running' || status === 'queued') return
 
-    const desiredCount = Math.max(4, Math.min(16, Math.floor(storyboardCount || 4)))
+    const desiredCount = Math.max(4, Math.min(25, Math.floor(storyboardCount || 4)))
     const aspectRatio = storyboardImageAspectRatio
 
     const mentionList = connectedCharacterOptions
@@ -7229,7 +7255,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (!isStoryboardNode) return
     if (storyboardScriptLoading) return
 
-    const desiredCount = Math.max(4, Math.min(16, Math.floor(storyboardScenes.length || 4)))
+    const desiredCount = Math.max(4, Math.min(25, Math.floor(storyboardScenes.length || 4)))
     const orientation = normalizeOrientation(orientationRef.current)
     const aspectRatio = orientation === 'portrait' ? '9:16' : '16:9'
 
@@ -8885,6 +8911,26 @@ const rewritePromptWithCharacters = React.useCallback(
                 scriptNodeType={lensScriptNodeLabel === '台本' ? '台本' : '剧本'}
                 scriptText={textNodePlainText}
               />
+            )}
+            {/* 自由文本节点：拆分镜；正文直接送 /api/canvas/splitShot，结果只落画布（分镜节点 + 资产分组 + 连线），不写 lens 业务表 */}
+            {!isLensScriptProjectionNode && freeformSplit && (
+              <>
+                <div className="tc-task-node__text-inline-divider" style={{ width: 1, height: 20, background: inlineDividerColor }} />
+                <Tooltip label="用本节点正文拆分镜，按镜头在画布上生成分镜节点与角色/场景/道具节点（不写入剧集分镜表）" position="bottom" withArrow>
+                  <Button
+                    className="tc-task-node__text-inline-action tc-task-node__freeform-split-action"
+                    variant="light"
+                    size="compact-xs"
+                    radius="xl"
+                    loading={freeformSplit.splitting}
+                    disabled={freeformSplit.splitting}
+                    leftSection={<IconScissors size={13} />}
+                    onClick={() => freeformSplit.splitFreeform(id, textNodePlainText)}
+                  >
+                    拆分镜
+                  </Button>
+                </Tooltip>
+              </>
             )}
             {[1, 2, 3, 4].map((level) => (
               <Tooltip key={`h-${level}`} label={`H${level}`} position="bottom" withArrow>

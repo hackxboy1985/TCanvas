@@ -531,6 +531,11 @@ export interface LensCanvasTaskSubmitParams {
    * <p>业务投影节点必传。按字符串下发，避免 Long 主键在 Number 转换时丢精度。
    */
   assetId?: string
+  /**
+   * 角色投影节点的「三视图」开关：缺省 true（老节点兼容），仅 assetType=0 时生效。
+   * false 时后端按节点 prompt 原样提交，不拼接三视图模板与生图前置提示词。
+   */
+  threeViewEnabled?: boolean
 }
 
 /**
@@ -695,6 +700,85 @@ export async function submitSplitShotTask(
       linkSubScene: params.linkSubScene,
     }),
   })
+}
+
+/** 自由节点拆分镜：单镜明细（字段与后端 FreeformSplitItemField 一一对应） */
+export interface LensFreeformSplitShot {
+  /** 序号（从 1 开始） */
+  index: number
+  /** 时长（秒） */
+  duration: number
+  /** 场景描述 */
+  scene: string
+  /** 机位描述 */
+  camera: string
+  /** 站位/走位描述 */
+  blocking: string
+  /** 动作描述 */
+  action: string
+  /** 景别 */
+  shotSize: string
+  /** 台词/画面文本 */
+  dialogue: string
+  /** 本镜角色名（已去重） */
+  characters: string[]
+  /** 本镜场景名（已去重） */
+  sceneNames: string[]
+  /** 本镜道具名（已去重） */
+  propNames: string[]
+  /** 说话者名称 */
+  speakers: string[]
+  /** 画面提示词（分镜图生成用） */
+  prompt: string
+}
+
+/** 自由节点拆分镜接口返回 */
+export interface LensFreeformSplitResult {
+  /** 逐镜明细 */
+  shots: LensFreeformSplitShot[]
+  /** 分镜数量 */
+  shotCount: number
+  /** 本次消耗积分（0=免费） */
+  chargedCredit: number
+}
+
+/**
+ * 拆分纯正文（画布自由文本节点「拆分镜」，POST /api/canvas/splitShot）。
+ *
+ * <p>与 {@link submitSplitShotTask} 的区别：不依赖 dramaId/episodeNum，后端不写 lens 分镜表，
+ * 同步返回逐镜明细，由画布把结果落成自由节点；计费复用拆分镜应用单价，失败不扣费。</p>
+ *
+ * @param params content 必填；splitType/splitValue 可选（默认 BY_DURATION / 15 秒）；genre 仅日志留痕
+ * @returns 逐镜明细与计费结果
+ */
+export async function splitShotFreeform(params: {
+  content: string
+  splitType?: 'BY_DURATION' | 'BY_COUNT'
+  splitValue?: number
+  genre?: string
+}): Promise<LensFreeformSplitResult> {
+  const data = await lensFetch<{
+    shots?: LensFreeformSplitShot[]
+    shotCount?: number
+    chargedCredit?: number
+  }>('/api/canvas/splitShot', {
+    method: 'POST',
+    body: JSON.stringify({
+      content: params.content,
+      ...(params.splitType ? { splitType: params.splitType } : null),
+      ...(typeof params.splitValue === 'number' ? { splitValue: params.splitValue } : null),
+      ...(params.genre ? { genre: params.genre } : null),
+    }),
+  })
+  // 后端保证成功时 shots 是数组；缺失说明契约被破坏，显式失败而不是拿空数组当成功
+  if (!data || !Array.isArray(data.shots)) {
+    throw new Error('拆分镜接口未返回分镜明细')
+  }
+  return {
+    shots: data.shots,
+    shotCount: typeof data.shotCount === 'number' ? data.shotCount : data.shots.length,
+    chargedCredit: typeof data.chargedCredit === 'number' ? data.chargedCredit : 0,
+  }
 }
 
 /**
@@ -1746,6 +1830,10 @@ export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promi
   }
   if (typeof params.assetId === 'string' && params.assetId.trim()) {
     payload.assetId = params.assetId.trim()
+  }
+  // 角色投影节点三视图开关：只在角色节点（assetType=0）下发，缺省 true 由后端兜底
+  if (params.threeViewEnabled === true || params.threeViewEnabled === false) {
+    payload.threeViewEnabled = params.threeViewEnabled
   }
 
   const data = await lensFetch<LensCanvasTaskSubmitResult>('/api/application/runTaskByCanvas?as=lens', {

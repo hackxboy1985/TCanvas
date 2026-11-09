@@ -28,7 +28,7 @@ function renderStoryboardImageSection(form: any, setField: FormSetter) {
           min={4}
           max={16}
           value={form.storyboardCount ?? 4}
-          onChange={(v) => setField('storyboardCount', Math.max(4, Math.min(16, Math.floor(Number(v) || 4))))}
+          onChange={(v) => setField('storyboardCount', Math.max(4, Math.min(25, Math.floor(Number(v) || 4))))}
         />
         <Select
           className="param-modal-field"
