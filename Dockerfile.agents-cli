@@ -1,0 +1,37 @@
+# ============================================================
+# Lens 画布 Agent（tapcanvas agents-cli）运行镜像
+#
+# 构建上下文 = tapcanvas 仓库根；构建前必须先生成自包含部署目录：
+#   cd tapcanvas
+#   pnpm install --frozen-lockfile
+#   pnpm --filter agents build
+#   pnpm --filter agents deploy --legacy --prod ./agents-deploy
+#   docker build -f Dockerfile.agents-cli -t lens-canvas-agent:latest .
+#
+# 说明：
+#   · agents-cli 是 tsc 多文件 ESM 产物，运行期依赖 node_modules（commander/redis/xlsx/zod），
+#     因此镜像只 COPY pnpm deploy 生成的自包含目录，不在镜像内 npm install（版本可复现）。
+#   · 内部 token 必须通过环境变量 LENS_CANVAS_AGENT_INTERNAL_TOKEN 注入；缺失/为空在启动时 fail-fast，
+#     禁止以“无鉴权监听”方式运行（agents-cli http-server 在 token 为空时会放行所有请求）。
+#   · AGENTS_MEMORY_DIR 使用相对 cwd 的路径：agents-cli 内部 path.join(cwd, memoryDir)，
+#     容器 cwd=/app，../../data/memory 实际落 /data/memory（配合 /data 持久卷）。
+# ============================================================
+FROM node:20-alpine
+
+WORKDIR /app
+
+# pnpm deploy 生成的自包含目录（dist / skills / package.json / node_modules）
+COPY agents-deploy/ ./
+# 容器入口脚本：token 校验 + 日志双写（stdout + 文件）
+COPY agents-entrypoint.sh /app/agents-entrypoint.sh
+
+ENV AGENTS_WORKSPACE_ROOT=/data/workspace \
+    AGENTS_MEMORY_DIR=../../data/memory
+
+VOLUME ["/data"]
+
+EXPOSE 8799
+
+# 入口脚本：校验 token（缺失/为空 fail-fast）、注入 AGENTS_API_KEY、
+# 日志同时写 stdout（docker logs）与 AGENTS_LOG_DIR（默认 /data/logs，可挂载到宿主机）。
+ENTRYPOINT ["/bin/sh", "/app/agents-entrypoint.sh"]
