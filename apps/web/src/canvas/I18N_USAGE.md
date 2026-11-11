@@ -13,6 +13,11 @@
 
 lens 入口（`RuoYi-Vue3/src/utils/canvasEntry.js`）已按当前页面语言拼接 `?lang=`，因此主应用切英文后打开画布即为英文。直接访问 `/canvas/`（无参数）时按上面 2→4 回退。
 
+**手动切换**：
+- Lens 画布（`/canvas/?dramaId=...`，LensCanvasApp 顶栏）：右上角 **🌐 语言按钮**（`lens-canvas-lang-toggle`），点击在 zh/en 间切换，并同步更新 URL `lang` 参数（刷新/重开保持）。
+- 通用画布（非 dramaId 模式，App.tsx 顶栏）：右上角语言图标 `app-language-toggle`，行为相同。
+- 因为画布 i18n 在加载时确定（非响应式），模块级常量文案在切换后需要刷新页面才能全部更新。
+
 ## 2. 词表结构
 
 - `src/canvas/i18n/index.ts`：i18n 运行时（`$` / `$t` / `useI18n` / `getCurrentLanguage` / `setLanguage` / `initLanguage`）+ 内置基础词表 `builtinEnTranslations`（历史通用词汇）。

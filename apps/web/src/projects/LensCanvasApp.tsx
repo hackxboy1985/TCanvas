@@ -9,8 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert, Modal, Progress } from '@mantine/core'
-import { IconBoxMultiple, IconSettings, IconWand } from '@tabler/icons-react'
+import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert, Modal, Progress, ActionIcon } from '@mantine/core'
+import { IconBoxMultiple, IconLanguage, IconSettings, IconWand } from '@tabler/icons-react'
 import Canvas from '../canvas/Canvas'
 import PreviewModal from '../ui/PreviewModal'
 import type { CanvasHandle } from '../canvas/Canvas'
@@ -58,7 +58,7 @@ import { runNodeRemote } from '../runner/remoteRunner'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
 
-import { $, $t } from '../canvas/i18n'
+import { $, $t, getCurrentLanguage, setLanguage } from '../canvas/i18n'
 /** 读取 URL query 参数 */
 function readQueryParams(): { dramaId: string; episode: number } {
   const params = new URLSearchParams(window.location.search)
@@ -796,6 +796,7 @@ export default function LensCanvasApp(): JSX.Element {
   const setLensProjectConfig = useUIStore((state) => state.setLensProjectConfig)
   const { dramaId, episode: initialEpisode } = useMemo(() => readQueryParams(), [])
   const [episodeNum, setEpisodeNum] = useState<number>(initialEpisode)
+  const [currentLang, setCurrentLang] = useState<'zh' | 'en'>(() => getCurrentLanguage())
   const [episodes, setEpisodes] = useState<LensEpisodeBrief[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
@@ -2563,6 +2564,24 @@ export default function LensCanvasApp(): JSX.Element {
             }}
           >
             { $('返回分镜板') }</Button>
+          <ActionIcon
+            className="lens-canvas-lang-toggle"
+            size="md"
+            variant="subtle"
+            aria-label={$('切换语言')}
+            title={$('切换语言')}
+            onClick={() => {
+              const next = currentLang === 'zh' ? 'en' : 'zh'
+              setLanguage(next)
+              setCurrentLang(next)
+              // 同步到 URL：initLanguage 的 ?lang= 优先级最高，刷新/重开后仍保持所选语言
+              const url = new URL(window.location.href)
+              url.searchParams.set('lang', next)
+              window.history.replaceState(null, '', url.toString())
+            }}
+          >
+            <IconLanguage className="lens-canvas-lang-toggle-icon" size={16} />
+          </ActionIcon>
         </Group>
       </Group>
       {error && <Alert className="lens-canvas-error" color="red" title={$('提示')} mb={8}>{error}</Alert>}
