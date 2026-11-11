@@ -5,6 +5,7 @@ import {
   type StoryboardEditorCell,
   type StoryboardEditorGrid,
 } from './storyboardEditor'
+import { $, $t } from '../../i18n'
 
 const DEFAULT_TARGET_CELL_WIDTH = 480
 
@@ -23,7 +24,7 @@ const loadComposableImage = async (url: string): Promise<HTMLImageElement> => {
   } catch {
     const response = await fetch(url)
     if (!response.ok) {
-      throw new Error(`加载图片失败: ${response.status}`)
+      throw new Error($t('加载图片失败: {{v1}}', { v1: response.status }))
     }
     const blob = await response.blob()
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -31,12 +32,12 @@ const loadComposableImage = async (url: string): Promise<HTMLImageElement> => {
       reader.onload = () => {
         const result = typeof reader.result === 'string' ? reader.result : ''
         if (!result) {
-          reject(new Error('图片编码失败'))
+          reject(new Error($('图片编码失败')))
           return
         }
         resolve(result)
       }
-      reader.onerror = () => reject(new Error('图片编码失败'))
+      reader.onerror = () => reject(new Error($('图片编码失败')))
       reader.readAsDataURL(blob)
     })
     return loadImageElement(dataUrl)
@@ -98,7 +99,7 @@ export async function buildStoryboardComposeCanvas(input: {
 
   const context = canvas.getContext('2d')
   if (!context) {
-    throw new Error('浏览器无法创建画布上下文')
+    throw new Error($('浏览器无法创建画布上下文'))
   }
 
   const loadedImages = await Promise.all(
@@ -148,7 +149,7 @@ export const canvasToPngBlob = async (canvas: HTMLCanvasElement): Promise<Blob> 
           resolve(blob)
           return
         }
-        reject(new Error('合成图片编码失败'))
+        reject(new Error($('合成图片编码失败')))
       }, 'image/png')
     } catch (error) {
       reject(error)

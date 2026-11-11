@@ -1,5 +1,6 @@
 import { normalizeOrientation, type Orientation } from '../utils/orientation'
 import { normalizeVideoResolution } from '../utils/videoBillingSpec'
+import { $ } from '../canvas/i18n'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -199,9 +200,9 @@ function parseImageControlBinding(value: unknown): ImageModelControlBinding | nu
 }
 
 function defaultImageControlLabel(binding: ImageModelControlBinding): string {
-  if (binding === 'aspectRatio') return '比例'
-  if (binding === 'resolution') return '分辨率'
-  return '尺寸'
+  if (binding === 'aspectRatio') return $('比例')
+  if (binding === 'resolution') return $('分辨率')
+  return $('尺寸')
 }
 
 function defaultImageControlOptionSource(
@@ -332,7 +333,7 @@ function parseOrientationOption(value: unknown): VideoModelOrientationOption | n
     const normalized = normalizeOrientation(value)
     return {
       value: normalized,
-      label: normalized === 'portrait' ? '竖屏' : '横屏',
+      label: normalized === 'portrait' ? $('竖屏') : $('横屏'),
     }
   }
   if (!isRecord(value)) return null
@@ -340,7 +341,7 @@ function parseOrientationOption(value: unknown): VideoModelOrientationOption | n
   if (typeof orientationRaw === 'undefined') return null
   const normalized = normalizeOrientation(orientationRaw)
   const label =
-    asTrimmedString(value.label) || (normalized === 'portrait' ? '竖屏' : '横屏')
+    asTrimmedString(value.label) || (normalized === 'portrait' ? $('竖屏') : $('横屏'))
   const size = asTrimmedString(value.size).replace(/\s+/g, '')
   const aspectRatio = asTrimmedString(value.aspectRatio ?? value.aspect_ratio)
   return {
@@ -397,10 +398,10 @@ function parseControlBinding(value: unknown): VideoModelControlBinding | null {
 }
 
 function defaultControlLabel(binding: VideoModelControlBinding): string {
-  if (binding === 'durationSeconds') return '时长'
-  if (binding === 'resolution') return '分辨率'
-  if (binding === 'orientation') return '方向'
-  return '画幅'
+  if (binding === 'durationSeconds') return $('时长')
+  if (binding === 'resolution') return $('分辨率')
+  if (binding === 'orientation') return $('方向')
+  return $('画幅')
 }
 
 function defaultControlOptionSource(binding: VideoModelControlBinding): VideoModelControlOptionSource {

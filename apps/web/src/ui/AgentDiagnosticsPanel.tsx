@@ -1,6 +1,7 @@
 import React from 'react'
 import { Modal } from '@mantine/core'
 import AgentDiagnosticsContent from './AgentDiagnosticsContent'
+import { $ } from '../canvas/i18n'
 
 type AgentDiagnosticsPanelProps = {
   className?: string
@@ -17,7 +18,7 @@ export default function AgentDiagnosticsPanel(props: AgentDiagnosticsPanelProps)
       className={className}
       opened={opened}
       onClose={onClose}
-      title="AI 诊断面板"
+      title={ $('AI 诊断面板') }
       centered={false}
       size="xl"
       padding="md"

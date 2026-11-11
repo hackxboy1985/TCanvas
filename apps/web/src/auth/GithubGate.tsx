@@ -6,6 +6,7 @@ import { markPasswordSetupGuidePending } from './passwordSetupGuide'
 import { useAuth, type User } from './store'
 import { GITHUB_OAUTH_CALLBACK_PATH, STUDIO_PATH } from '../utils/appRoutes'
 import { PanelCard } from '../ui/PanelCard'
+import { $, $t } from '../canvas/i18n'
 
 type ViteEnvShape = ImportMeta & {
   env?: {
@@ -180,7 +181,7 @@ export default function GithubGate({ children, className }: { children: React.Re
     const url = new URL(window.location.href)
     if (url.pathname === GITHUB_OAUTH_CALLBACK_PATH && url.searchParams.get('code')) {
       if (!githubEnabled) {
-        toast('当前环境未配置 GitHub OAuth，请使用手机号登录', 'error')
+        toast($('当前环境未配置 GitHub OAuth，请使用手机号登录'), 'error')
         return
       }
       const stored = captureRedirectFromLocation()
@@ -196,7 +197,7 @@ export default function GithubGate({ children, className }: { children: React.Re
         })
         .catch((error: unknown) => {
           console.error('GitHub exchange failed', error)
-          toast('GitHub 登录失败，请改用手机号登录或检查后端 GitHub 配置', 'error')
+          toast($('GitHub 登录失败，请改用手机号登录或检查后端 GitHub 配置'), 'error')
         })
     }
   }, [completeLogin, githubEnabled])
@@ -232,11 +233,11 @@ export default function GithubGate({ children, className }: { children: React.Re
     const normalizedPhone = String(latestPhone || '').trim()
 
     if (!normalizedPhone) {
-      toast('请输入手机号', 'error')
+      toast($('请输入手机号'), 'error')
       return
     }
     if (otpCooldownSeconds > 0) {
-      toast(`请在 ${otpCooldownSeconds}s 后重试`, 'info')
+      toast($t('请在 {{seconds}}s 后重试', { seconds: otpCooldownSeconds }), 'info')
       return
     }
     if (otpSendLoading) return
@@ -246,13 +247,13 @@ export default function GithubGate({ children, className }: { children: React.Re
       const result = await requestPhoneLoginCode(normalizedPhone)
       setOtpCooldownSeconds(60)
       if (result.delivery === 'debug' && result.devCode) {
-        toast(`开发环境验证码：${result.devCode}`, 'info')
+        toast($t('开发环境验证码：{{code}}', { code: result.devCode }), 'info')
       } else {
-        toast('验证码已发送，请查收短信', 'success')
+        toast($('验证码已发送，请查收短信'), 'success')
       }
     } catch (error) {
       console.error('OTP code request failed', error)
-      toast(getErrorMessage(error, '验证码发送失败，请稍后再试'), 'error')
+      toast(getErrorMessage(error, $('验证码发送失败，请稍后再试')), 'error')
     } finally {
       setOtpSendLoading(false)
     }
@@ -265,11 +266,11 @@ export default function GithubGate({ children, className }: { children: React.Re
     const normalizedCode = String(latestCode || '').trim()
 
     if (!normalizedPhone) {
-      toast('请输入手机号', 'error')
+      toast($('请输入手机号'), 'error')
       return
     }
     if (!normalizedCode) {
-      toast('请输入验证码', 'error')
+      toast($('请输入验证码'), 'error')
       return
     }
     if (otpVerifyLoading) return
@@ -280,7 +281,7 @@ export default function GithubGate({ children, className }: { children: React.Re
       completeLogin(authToken, authUser)
     } catch (error) {
       console.error('OTP login failed', error)
-      toast(getErrorMessage(error, '验证码登录失败，请稍后再试'), 'error')
+      toast(getErrorMessage(error, $('验证码登录失败，请稍后再试')), 'error')
     } finally {
       setOtpVerifyLoading(false)
     }
@@ -291,11 +292,11 @@ export default function GithubGate({ children, className }: { children: React.Re
     const normalizedPassword = String(password || '').trim()
 
     if (!normalizedPhone) {
-      toast('请输入手机号', 'error')
+      toast($('请输入手机号'), 'error')
       return
     }
     if (!normalizedPassword) {
-      toast('请输入密码', 'error')
+      toast($('请输入密码'), 'error')
       return
     }
     if (passwordLoginLoading) return
@@ -306,7 +307,7 @@ export default function GithubGate({ children, className }: { children: React.Re
       completeLogin(authToken, authUser)
     } catch (error) {
       console.error('Phone password login failed', error)
-      toast(getErrorMessage(error, '手机号密码登录失败，请稍后再试'), 'error')
+      toast(getErrorMessage(error, $('手机号密码登录失败，请稍后再试')), 'error')
     } finally {
       setPasswordLoginLoading(false)
     }
@@ -314,7 +315,7 @@ export default function GithubGate({ children, className }: { children: React.Re
 
   const handleGithubLogin = React.useCallback(() => {
     if (!githubEnabled) {
-      toast('当前环境未配置 GitHub OAuth（缺少 VITE_GITHUB_CLIENT_ID）', 'error')
+      toast($('当前环境未配置 GitHub OAuth（缺少 VITE_GITHUB_CLIENT_ID）'), 'error')
       return
     }
     const redirectTarget = readStoredRedirect() || captureRedirectFromLocation() || readCurrentPageRedirect()
@@ -344,31 +345,31 @@ export default function GithubGate({ children, className }: { children: React.Re
       <PanelCard className="github-gate-card" padding="comfortable" style={{ width: 'min(460px, calc(100vw - 32px))' }}>
         <Stack className="github-gate-content" gap="md">
           <Stack className="github-gate-heading" gap={2}>
-            <Title className="github-gate-title" order={4} ta="center">登录 TapCanvas</Title>
+            <Title className="github-gate-title" order={4} ta="center">{$('登录 TapCanvas')}</Title>
             <Text className="github-gate-subtitle" c="dimmed" size="sm" ta="center">
-              使用 GitHub / 手机验证码 / 手机号密码 登录后方可使用
+              {$('使用 GitHub / 手机验证码 / 手机号密码 登录后方可使用')}
             </Text>
             <Group className="github-gate-guide-row" justify="center" gap={6}>
-              <Text className="github-gate-guide-prefix" size="xs" c="dimmed">不知道怎么用？</Text>
+              <Text className="github-gate-guide-prefix" size="xs" c="dimmed">{$('不知道怎么用？')}</Text>
               <Anchor className="github-gate-guide-link" size="xs" href={buildGuideUrl()} target="_blank" rel="noreferrer">
-                查看使用指引
+                {$('查看使用指引')}
               </Anchor>
             </Group>
           </Stack>
 
-          <Tooltip className="github-gate-github-tooltip" label={githubEnabled ? '' : '未配置 VITE_GITHUB_CLIENT_ID / VITE_GITHUB_REDIRECT_URI，已禁用 GitHub 登录'} disabled={githubEnabled}>
+          <Tooltip className="github-gate-github-tooltip" label={githubEnabled ? '' : $('未配置 VITE_GITHUB_CLIENT_ID / VITE_GITHUB_REDIRECT_URI，已禁用 GitHub 登录')} disabled={githubEnabled}>
             <Button className="github-gate-github" fullWidth onClick={handleGithubLogin} disabled={!githubEnabled}>
-              使用 GitHub 登录
+              {$('使用 GitHub 登录')}
             </Button>
           </Tooltip>
 
-          <Divider className="github-gate-divider" label="或使用手机号" labelPosition="center" />
+          <Divider className="github-gate-divider" label={$('或使用手机号')} labelPosition="center" />
 
           <Stack className="github-gate-phone-auth" gap="sm">
             <TextInput
               className="github-gate-phone-input"
               ref={phoneInputRef}
-              label="手机号"
+              label={$('手机号')}
               placeholder="+86 13800000000"
               value={phone}
               onChange={(event) => setPhone(event.currentTarget.value)}
@@ -384,7 +385,7 @@ export default function GithubGate({ children, className }: { children: React.Re
                   disabled={!normalizedPhone || otpSendLoading || otpCooldownSeconds > 0}
                   onClick={() => void handleOtpSendCode()}
                 >
-                  {otpCooldownSeconds > 0 ? `${otpCooldownSeconds}s` : '获取验证码'}
+                  {otpCooldownSeconds > 0 ? `${otpCooldownSeconds}s` : $('获取验证码')}
                 </Button>
               )}
               rightSectionWidth={110}
@@ -394,8 +395,8 @@ export default function GithubGate({ children, className }: { children: React.Re
             <TextInput
               className="github-gate-otp-code"
               ref={otpInputRef}
-              label="验证码登录"
-              placeholder="6 位验证码"
+              label={$('验证码登录')}
+              placeholder={$('6 位验证码')}
               value={otpCode}
               onChange={(event) => setOtpCode(event.currentTarget.value)}
               autoComplete="one-time-code"
@@ -415,18 +416,18 @@ export default function GithubGate({ children, className }: { children: React.Re
               disabled={!normalizedPhone || !normalizedCode || otpVerifyLoading}
               onClick={() => void handleOtpLogin()}
             >
-              手机验证码登录
+              {$('手机验证码登录')}
             </Button>
-            <Text className="github-gate-otp-hint" size="xs" c="dimmed">验证码 10 分钟内有效。若未设置密码，登录后会引导你完成设置。</Text>
+            <Text className="github-gate-otp-hint" size="xs" c="dimmed">{$('验证码 10 分钟内有效。若未设置密码，登录后会引导你完成设置。')}</Text>
           </Stack>
 
-          <Divider className="github-gate-divider github-gate-divider--password" label="或使用密码" labelPosition="center" />
+          <Divider className="github-gate-divider github-gate-divider--password" label={$('或使用密码')} labelPosition="center" />
 
           <Stack className="github-gate-password-auth" gap="sm">
             <PasswordInput
               className="github-gate-password-input"
-              label="密码登录"
-              placeholder="输入登录密码"
+              label={$('密码登录')}
+              placeholder={$('输入登录密码')}
               value={password}
               onChange={(event) => setPassword(event.currentTarget.value)}
               autoComplete="current-password"
@@ -443,9 +444,9 @@ export default function GithubGate({ children, className }: { children: React.Re
               disabled={!normalizedPhone || !normalizedPassword || passwordLoginLoading}
               onClick={() => void handlePhonePasswordLogin()}
             >
-              手机号 + 密码登录
+              {$('手机号 + 密码登录')}
             </Button>
-            <Text className="github-gate-password-hint" size="xs" c="dimmed">首次没有密码时，请先使用验证码登录一次。</Text>
+            <Text className="github-gate-password-hint" size="xs" c="dimmed">{$('首次没有密码时，请先使用验证码登录一次。')}</Text>
           </Stack>
         </Stack>
       </PanelCard>

@@ -150,9 +150,9 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
 }
 
 function formatStudioOwnerLabel(ownerType?: StudioOwnerType | null): string {
-  if (ownerType === 'chapter') return '章节流程'
-  if (ownerType === 'shot') return '镜头流程'
-  return '项目流程'
+  if (ownerType === 'chapter') return $('章节流程')
+  if (ownerType === 'shot') return $('镜头流程')
+  return $('项目流程')
 }
 
 type StudioOwnerContext = {
@@ -258,7 +258,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
 
   const detachCurrentFlowFromProject = React.useCallback(() => {
     const uiState = useUIStore.getState()
-    const nextFlowName = String(uiState.currentFlow.name || uiState.currentProject?.name || '未命名').trim() || '未命名'
+    const nextFlowName = String(uiState.currentFlow.name || uiState.currentProject?.name || $('未命名')).trim() || $('未命名')
     if (!uiState.currentFlow.id && uiState.currentFlow.source === 'local' && uiState.currentFlow.name === nextFlowName) {
       return
     }
@@ -271,10 +271,10 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
     const status = typeof typedError?.status === 'number' ? typedError.status : Number(typedError?.status)
     const message =
       code === 'project_not_found' || status === 404
-        ? '当前项目已不存在，自动保存失败。请重新选择项目或新建项目。'
+        ? $('当前项目已不存在，自动保存失败。请重新选择项目或新建项目。')
         : typeof typedError?.message === 'string' && typedError.message.trim()
           ? typedError.message.trim()
-          : '自动保存失败'
+          : $('自动保存失败')
     if (lastSilentSaveErrorRef.current === message) return
     lastSilentSaveErrorRef.current = message
     toast(message, 'error')
@@ -317,7 +317,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
       setCurrentProject(null)
       useRFStore.setState({ nodes: [], edges: [], nextId: 1, nextGroupId: 1 })
       restoreCreationSession(null)
-        setCurrentFlow({ id: null, name: '未命名', source: 'local', ownerType: null, ownerId: null })
+        setCurrentFlow({ id: null, name: $('未命名'), source: 'local', ownerType: null, ownerId: null })
       setDirty(false)
       setProjectSelectionReady(true)
       return
@@ -354,8 +354,8 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
           setCurrentProject(null)
           detachCurrentFlowFromProject()
           notifications.show({
-            title: '项目初始化失败',
-            message: resolveErrorMessage(error, '网络或服务器错误'),
+            title: $('项目初始化失败'),
+            message: resolveErrorMessage(error, $('网络或服务器错误')),
             color: 'red',
           })
         }
@@ -489,7 +489,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
       restoreCreationSession(null)
       setCurrentFlow({
         id: null,
-        name: projectName || '未命名',
+        name: projectName || $('未命名'),
         source: 'server',
         ownerType: studioOwnerContext?.ownerType || 'project',
         ownerId: studioOwnerContext?.ownerId || projectId,
@@ -548,7 +548,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
           })
           setDirty(false)
         } else {
-          const emptyFlowName = String(projectName || '未命名').trim() || '未命名'
+          const emptyFlowName = String(projectName || $('未命名')).trim() || $('未命名')
           try {
             const created = studioOwnerContext?.ownerType === 'chapter'
               ? await saveChapterFlow({
@@ -659,7 +659,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
     // 确保项目存在；若无则直接在此创建
     let { currentProject: proj } = readUiSnapshot()
     if (!proj?.id) {
-      const name = (readUiSnapshot().currentProject?.name || `未命名项目 ${new Date().toLocaleString()}`).trim()
+      const name = (readUiSnapshot().currentProject?.name || $t('未命名项目 {{time}}', { time: new Date().toLocaleString() })).trim()
       try {
         const p = await upsertProject({ name })
         setProjects(prev => [p, ...prev])
@@ -674,12 +674,12 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
         })
         proj = { id: p.id, name: p.name }
       } catch (e:any) {
-        notifications.show({ title: '创建项目失败', message: e?.message || '网络或服务器错误', color: 'red' })
+        notifications.show({ title: $('创建项目失败'), message: e?.message || $('网络或服务器错误'), color: 'red' })
         return
       }
     }
     // 项目即工作流：名称使用项目名
-    const flowName = proj!.name || '未命名'
+    const flowName = proj!.name || $('未命名')
     const nodes = useRFStore.getState().nodes
     const edges = useRFStore.getState().edges
     const { currentFlow: flow, canvasViewport: viewport } = readUiSnapshot()
@@ -745,8 +745,8 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
       })
       if (!workflowIoValidation.ok) {
         notifications.show({
-          title: '无法运行',
-          message: workflowIoValidation.message || '工作流校验失败',
+          title: $('无法运行'),
+          message: workflowIoValidation.message || $('工作流校验失败'),
           color: 'red',
         })
         return
@@ -757,18 +757,18 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
       }
       const flowId = useUIStore.getState().currentFlow.id
       if (!flowId) {
-        notifications.show({ title: '无法运行', message: '请先保存当前项目', color: 'red' })
+        notifications.show({ title: $('无法运行'), message: $('请先保存当前项目'), color: 'red' })
         return
       }
 
       const nid = `exec-${Date.now()}`
-      notifications.show({ id: nid, title: '开始运行', message: '正在启动工作流执行…', loading: true, autoClose: false, withCloseButton: false })
+      notifications.show({ id: nid, title: $('开始运行'), message: $('正在启动工作流执行…'), loading: true, autoClose: false, withCloseButton: false })
       const exec = await runWorkflowExecution({ flowId, concurrency: 1 })
       setExecId(exec.id)
       setExecLogOpen(true)
-      notifications.update({ id: nid, title: '已启动', message: '运行日志已打开', loading: false, autoClose: 1200, color: 'green' })
+      notifications.update({ id: nid, title: $('已启动'), message: $('运行日志已打开'), loading: false, autoClose: 1200, color: 'green' })
     } catch (e: any) {
-      notifications.show({ title: '启动失败', message: e?.message || '网络或服务器错误', color: 'red' })
+      notifications.show({ title: $('启动失败'), message: e?.message || $('网络或服务器错误'), color: 'red' })
     } finally {
       setExecStarting(false)
     }
@@ -790,7 +790,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
     // 确保项目存在
     let { currentProject: proj } = readUiSnapshot()
     if (!proj?.id) {
-      const name = (readUiSnapshot().currentProject?.name || `未命名项目 ${new Date().toLocaleString()}`).trim()
+      const name = (readUiSnapshot().currentProject?.name || $t('未命名项目 {{time}}', { time: new Date().toLocaleString() })).trim()
       try {
         const p = await upsertProject({ name })
         setProjects(prev => [p, ...prev])
@@ -810,7 +810,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
       }
     }
 
-    const flowName = proj!.name || '未命名'
+    const flowName = proj!.name || $('未命名')
     const nodes = useRFStore.getState().nodes
     const edges = useRFStore.getState().edges
     const { currentFlow: flow, canvasViewport: viewport } = readUiSnapshot()
@@ -975,10 +975,10 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
   const currentOwnerType = currentFlow.ownerType || studioOwnerContext?.ownerType || 'project'
   const currentOwnerId = String(currentFlow.ownerId || studioOwnerContext?.ownerId || currentProject?.id || '').trim()
   const studioHostDescription = currentOwnerType === 'chapter'
-    ? `当前画布只保存到章节宿主 ${currentOwnerId || '未绑定'}`
+    ? $t('当前画布只保存到章节宿主 {{host}}', { host: currentOwnerId || $('未绑定') })
     : currentOwnerType === 'shot'
-      ? `当前画布只保存到镜头宿主 ${currentOwnerId || '未绑定'}`
-      : `当前画布保存到项目宿主 ${currentProject?.name || currentOwnerId || '未绑定'}`
+      ? $t('当前画布只保存到镜头宿主 {{host}}', { host: currentOwnerId || $('未绑定') })
+      : $t('当前画布保存到项目宿主 {{host}}', { host: currentProject?.name || currentOwnerId || $('未绑定') })
 
   const handleExportCanvas = React.useCallback(() => {
     try {
@@ -1065,12 +1065,12 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
                       variant="light"
                       onClick={() => setHeaderAdminWorkbenchOpen(true)}
                     >
-                      AI 工作台
+                      {$('AI 工作台')}
                     </Button>
                   ) : null}
                   <Tooltip
                     className="app-credit-refresh-tooltip"
-                    label={headerPointsLoading ? '积分加载中…' : `当前积分 ${Math.max(0, Number(headerTeam?.creditsAvailable || 0))}`}
+                    label={headerPointsLoading ? $('积分加载中…') : $t('当前积分 {{count}}', { count: Math.max(0, Number(headerTeam?.creditsAvailable || 0)) })}
                     withArrow
                   >
                     <Button
@@ -1080,7 +1080,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
                       loading={headerRechargeLoading || headerPointsLoading}
                       onClick={() => setHeaderRechargeOpen(true)}
                     >
-                      充值
+                      {$('充值')}
                     </Button>
                   </Tooltip>
                 </>
@@ -1119,7 +1119,7 @@ function CanvasApp({ routeKey }: { routeKey?: string }): JSX.Element {
               <ActionIcon
                 className="app-language-toggle"
                 variant="subtle"
-                aria-label="Language / 语言"
+                aria-label={$('语言')}
                 onClick={() => {
                   const newLang = currentLang === 'zh' ? 'en' : 'zh'
                   setLanguage(newLang)
@@ -1298,7 +1298,7 @@ function RootEntryPage(): JSX.Element {
     <AppShell padding="md">
       <AppShell.Main>
         <Group justify="center" align="center" style={{ minHeight: '100vh' }}>
-          <Badge variant="light" color="gray">正在进入最近编辑章节…</Badge>
+          <Badge variant="light" color="gray">{$('正在进入最近编辑章节…')}</Badge>
         </Group>
       </AppShell.Main>
     </AppShell>
@@ -1334,7 +1334,7 @@ export default function App(): JSX.Element {
       <AppShell padding="md">
         <AppShell.Main>
           <Group justify="center" align="center" style={{ minHeight: '100vh' }}>
-            <Badge variant="light" color="gray">正在进入画布…</Badge>
+            <Badge variant="light" color="gray">{$('正在进入画布…')}</Badge>
           </Group>
         </AppShell.Main>
       </AppShell>

@@ -6,6 +6,7 @@ import { EnabledBadge } from './ModelCatalogBadges'
 import { ModelCatalogTableFooter } from './ModelCatalogTableFooter'
 import { TASK_KIND_OPTIONS } from './modelCatalog.constants'
 import { formatTaskKind, paginateItems, prettyJson } from './modelCatalog.utils'
+import { $ } from '../../../../canvas/i18n'
 
 export function ModelCatalogMappingsSection({
   loading,
@@ -69,19 +70,19 @@ export function ModelCatalogMappingsSection({
 
   return (
     <>
-      <Divider className="stats-model-catalog-divider" label="字段映射（Transform）" labelPosition="left" />
+      <Divider className="stats-model-catalog-divider" label={ $('字段映射（Transform）') } labelPosition="left" />
       <Group className="stats-model-catalog-mapping-search" gap="sm" wrap="wrap" align="flex-end">
         <Select
           className="stats-model-catalog-mapping-search-taskkind"
-          label="任务类型"
+          label={ $('任务类型') }
           value={taskKindFilterInput}
           onChange={(value) => setTaskKindFilterInput(((value as ProfileKind | 'all' | null) || 'all'))}
-          data={[{ value: 'all', label: '全部任务类型' }, ...TASK_KIND_OPTIONS]}
+          data={[{ value: 'all', label: $('全部任务类型') }, ...TASK_KIND_OPTIONS]}
           w={240}
         />
         <Select
           className="stats-model-catalog-mapping-search-vendor"
-          label="厂商"
+          label={ $('厂商') }
           value={vendorFilterInput}
           onChange={(value) => setVendorFilterInput(value || 'all')}
           data={vendorSelectData}
@@ -92,18 +93,18 @@ export function ModelCatalogMappingsSection({
           className="stats-model-catalog-mapping-search-enabled"
           checked={enabledOnlyInput}
           onChange={(event) => setEnabledOnlyInput(event.currentTarget.checked)}
-          label="仅看启用映射"
+          label={ $('仅看启用映射') }
           mb={4}
         />
         <Group className="stats-model-catalog-mapping-search-actions" gap={8} mb={4}>
           <Button className="stats-model-catalog-mapping-search-submit" size="xs" onClick={submitSearch}>
-            查询
+            { $('查询') }
           </Button>
           <Button className="stats-model-catalog-mapping-search-reset" size="xs" variant="subtle" onClick={resetSearch}>
-            重置
+            { $('重置') }
           </Button>
           <Button className="stats-model-catalog-mapping-create" size="xs" variant="light" leftSection={<IconPlus className="stats-model-catalog-mapping-create-icon" size={14} />} onClick={onCreateMapping}>
-            新增映射
+            { $('新增映射') }
           </Button>
         </Group>
       </Group>
@@ -112,13 +113,13 @@ export function ModelCatalogMappingsSection({
         <Table className="stats-model-catalog-mappings-table" striped highlightOnHover withTableBorder withColumnBorders>
           <Table.Thead className="stats-model-catalog-mappings-table-head">
             <Table.Tr className="stats-model-catalog-mappings-table-head-row">
-              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 120 }}>厂商</Table.Th>
-              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 170 }}>任务类型</Table.Th>
-              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 180 }}>名称</Table.Th>
-              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 90 }}>状态</Table.Th>
+              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 120 }}>{ $('厂商') }</Table.Th>
+              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 170 }}>{ $('任务类型') }</Table.Th>
+              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 180 }}>{ $('名称') }</Table.Th>
+              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 90 }}>{ $('状态') }</Table.Th>
               <Table.Th className="stats-model-catalog-mappings-table-head-cell">Request</Table.Th>
               <Table.Th className="stats-model-catalog-mappings-table-head-cell">Response</Table.Th>
-              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 110 }}>操作</Table.Th>
+              <Table.Th className="stats-model-catalog-mappings-table-head-cell" style={{ width: 110 }}>{ $('操作') }</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody className="stats-model-catalog-mappings-table-body">
@@ -127,14 +128,14 @@ export function ModelCatalogMappingsSection({
                 <Table.Td className="stats-model-catalog-mappings-table-cell" colSpan={7}>
                   <Group className="stats-model-catalog-loading" gap="xs" align="center">
                     <Loader className="stats-model-catalog-loading-icon" size="sm" />
-                    <Text className="stats-model-catalog-loading-text" size="sm" c="dimmed">加载中…</Text>
+                    <Text className="stats-model-catalog-loading-text" size="sm" c="dimmed">{ $('加载中…') }</Text>
                   </Group>
                 </Table.Td>
               </Table.Tr>
             ) : !pagedMappings.length ? (
               <Table.Tr className="stats-model-catalog-mappings-table-row-empty">
                 <Table.Td className="stats-model-catalog-mappings-table-cell" colSpan={7}>
-                  <Text className="stats-model-catalog-empty" size="sm" c="dimmed">暂无映射</Text>
+                  <Text className="stats-model-catalog-empty" size="sm" c="dimmed">{ $('暂无映射') }</Text>
                 </Table.Td>
               </Table.Tr>
             ) : (
@@ -167,7 +168,7 @@ export function ModelCatalogMappingsSection({
                   </Table.Td>
                   <Table.Td className="stats-model-catalog-mappings-table-cell">
                     <Group className="stats-model-catalog-mapping-row-actions" gap={6} justify="flex-end" wrap="nowrap">
-                      <Button className="stats-model-catalog-mapping-edit" size="xs" variant="light" onClick={() => onEditMapping(mapping)}>编辑</Button>
+                      <Button className="stats-model-catalog-mapping-edit" size="xs" variant="light" onClick={() => onEditMapping(mapping)}>{ $('编辑') }</Button>
                       <ActionIcon className="stats-model-catalog-mapping-delete" size="sm" variant="light" color="red" aria-label="delete-mapping" onClick={() => void onDeleteMapping(mapping)}>
                         <IconTrash className="stats-model-catalog-mapping-delete-icon" size={14} />
                       </ActionIcon>

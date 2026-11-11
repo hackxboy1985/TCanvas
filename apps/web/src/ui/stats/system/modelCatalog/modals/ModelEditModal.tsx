@@ -5,6 +5,7 @@ import type { BillingModelKind, ModelCatalogModelDto } from '../deps'
 import { toast, upsertModelCatalogModel } from '../deps'
 import { KIND_OPTIONS } from '../modelCatalog.constants'
 import { defaultModelPricingCost, prettyJson, safeParseJson } from '../modelCatalog.utils'
+import { $, $t } from '../../../../../canvas/i18n'
 
 export type ModelEditorState =
   | { mode: 'create' }
@@ -146,25 +147,25 @@ export function ModelEditModal({
     const normalizedPricingCost = typeof pricingCost === 'number' && Number.isFinite(pricingCost) ? Math.max(0, Math.floor(pricingCost)) : NaN
 
     if (!trimmedVendorKey) {
-      toast('请选择厂商', 'error')
+      toast($('请选择厂商'), 'error')
       return
     }
     if (!trimmedModelKey) {
-      toast('请填写模型 Key（例如 gpt-4.1 / nano-banana-pro）', 'error')
+      toast($('请填写模型 Key（例如 gpt-4.1 / nano-banana-pro）'), 'error')
       return
     }
     if (!trimmedLabelZh) {
-      toast('请填写中文名称', 'error')
+      toast($('请填写中文名称'), 'error')
       return
     }
     if (!Number.isFinite(normalizedPricingCost) || normalizedPricingCost < 0) {
-      toast('请填写有效价格（积分，>= 0）', 'error')
+      toast($('请填写有效价格（积分，>= 0）'), 'error')
       return
     }
 
     const metaParsed = safeParseJson(meta)
     if (!metaParsed.ok) {
-      toast(`meta JSON 无效：${metaParsed.error}`, 'error')
+      toast($t('meta JSON 无效：{{error}}', { error: metaParsed.error }), 'error')
       return
     }
 
@@ -176,15 +177,15 @@ export function ModelEditModal({
 
     for (const spec of normalizedSpecs) {
       if (!spec.specKey) {
-        toast('规格价格的 specKey 不能为空', 'error')
+        toast($('规格价格的 specKey 不能为空'), 'error')
         return
       }
       if (!/^[a-z0-9:_-]+$/i.test(spec.specKey)) {
-        toast(`规格 Key 格式无效：${spec.specKey}`, 'error')
+        toast($t('规格 Key 格式无效：{{specKey}}', { specKey: spec.specKey }), 'error')
         return
       }
       if (!Number.isFinite(spec.cost) || spec.cost < 0) {
-        toast(`规格 ${spec.specKey} 的价格无效`, 'error')
+        toast($t('规格 {{specKey}} 的价格无效', { specKey: spec.specKey }), 'error')
         return
       }
     }
@@ -193,7 +194,7 @@ export function ModelEditModal({
     for (const spec of normalizedSpecs) {
       const dedupeKey = spec.specKey.toLowerCase()
       if (seenSpecKeys.has(dedupeKey)) {
-        toast(`规格 Key 重复：${spec.specKey}`, 'error')
+        toast($t('规格 Key 重复：{{specKey}}', { specKey: spec.specKey }), 'error')
         return
       }
       seenSpecKeys.add(dedupeKey)
@@ -216,12 +217,12 @@ export function ModelEditModal({
         },
         ...(typeof metaParsed.value === 'undefined' ? {} : { meta: metaParsed.value }),
       })
-      toast('已保存模型', 'success')
+      toast($('已保存模型'), 'success')
       onClose()
       await onSaved()
     } catch (error: unknown) {
       console.error('save model failed', error)
-      toast(toErrorMessage(error, '保存模型失败'), 'error')
+      toast(toErrorMessage(error, $('保存模型失败')), 'error')
     } finally {
       setSubmitting(false)
     }
@@ -232,7 +233,7 @@ export function ModelEditModal({
       className="stats-model-catalog-model-modal"
       opened={opened}
       onClose={onClose}
-      title={mode === 'edit' ? '编辑模型' : mode === 'duplicate' ? '复制模型' : '新增模型'}
+      title={mode === 'edit' ? $('编辑模型') : mode === 'duplicate' ? $('复制模型') : $('新增模型')}
       size="lg"
       radius="md"
       centered
@@ -241,7 +242,7 @@ export function ModelEditModal({
       <Stack className="stats-model-catalog-model-form" gap="sm">
         <Select
           className="stats-model-catalog-model-form-vendor"
-          label="所属平台"
+          label={ $('所属平台') }
           data={vendorOptions}
           value={vendorKey}
           onChange={(value) => setVendorKey(value || '')}
@@ -250,30 +251,30 @@ export function ModelEditModal({
         />
         <TextInput
           className="stats-model-catalog-model-form-key"
-          label="唯一标识"
-          placeholder="例如 gpt-4.1 / nano-banana-pro"
+          label={ $('唯一标识') }
+          placeholder={ $('例如 gpt-4.1 / nano-banana-pro') }
           value={modelKey}
           onChange={(event) => setModelKey(event.currentTarget.value)}
           disabled={!isNew}
         />
         <Select
           className="stats-model-catalog-model-form-kind"
-          label="模型类型"
+          label={ $('模型类型') }
           data={KIND_OPTIONS}
           value={kind}
           onChange={(value) => setKind(parseBillingModelKind(value))}
         />
         <TextInput
           className="stats-model-catalog-model-form-label"
-          label="模型名称"
-          placeholder="例如 GPT-4.1 / Gemini 3.1 Flash Image"
+          label={ $('模型名称') }
+          placeholder={ $('例如 GPT-4.1 / Gemini 3.1 Flash Image') }
           value={labelZh}
           onChange={(event) => setLabelZh(event.currentTarget.value)}
         />
         <TextInput
           className="stats-model-catalog-model-form-alias"
-          label="Public 别名"
-          placeholder="留空则自动使用模型 Key"
+          label={ $('Public 别名') }
+          placeholder={ $('留空则自动使用模型 Key') }
           value={modelAlias}
           onChange={(event) => {
             setModelAliasAuto(false)
@@ -284,7 +285,7 @@ export function ModelEditModal({
         <Group className="stats-model-catalog-model-form-pricing-row" grow align="flex-end">
           <NumberInput
             className="stats-model-catalog-model-form-pricing-cost"
-            label="价格（积分）"
+            label={ $('价格（积分）') }
             min={0}
             step={1}
             allowNegative={false}
@@ -295,14 +296,14 @@ export function ModelEditModal({
             className="stats-model-catalog-model-form-pricing-enabled"
             checked={pricingEnabled}
             onChange={(event) => setPricingEnabled(event.currentTarget.checked)}
-            label="价格启用"
+            label={ $('价格启用') }
             mb={6}
           />
         </Group>
 
         <Stack className="stats-model-catalog-model-form-pricing-specs" gap={8}>
           <Group className="stats-model-catalog-model-form-pricing-specs-header" justify="space-between" align="center">
-            <Text className="stats-model-catalog-model-form-pricing-specs-title" size="sm" fw={600}>规格价格</Text>
+            <Text className="stats-model-catalog-model-form-pricing-specs-title" size="sm" fw={600}>{ $('规格价格') }</Text>
             <Button
               className="stats-model-catalog-model-form-pricing-specs-add"
               size="xs"
@@ -310,12 +311,12 @@ export function ModelEditModal({
               leftSection={<IconPlus className="stats-model-catalog-model-form-pricing-specs-add-icon" size={14} />}
               onClick={() => setPricingSpecs((current) => [...current, nextPricingSpecRow()])}
             >
-              添加规格
+              { $('添加规格') }
             </Button>
           </Group>
           {!pricingSpecs.length ? (
             <Text className="stats-model-catalog-model-form-pricing-specs-empty" size="xs" c="dimmed">
-              不填则直接使用上面的基础价格。可用于 `orientation:landscape`、`duration:10s`、`quality:pro` 这类差异化计费。
+              { $('不填则直接使用上面的基础价格。可用于 `orientation:landscape`、`duration:10s`、`quality:pro` 这类差异化计费。') }
             </Text>
           ) : (
             pricingSpecs.map((spec) => (
@@ -323,7 +324,7 @@ export function ModelEditModal({
                 <TextInput
                   className="stats-model-catalog-model-form-pricing-spec-key"
                   label="specKey"
-                  placeholder="例如 duration:10s"
+                  placeholder={ $('例如 duration:10s') }
                   value={spec.specKey}
                   onChange={(event) => {
                     const nextValue = event.currentTarget.value
@@ -333,7 +334,7 @@ export function ModelEditModal({
                 />
                 <NumberInput
                   className="stats-model-catalog-model-form-pricing-spec-cost"
-                  label="价格"
+                  label={ $('价格') }
                   min={0}
                   step={1}
                   allowNegative={false}
@@ -351,7 +352,7 @@ export function ModelEditModal({
                     const nextValue = event.currentTarget.checked
                     setPricingSpecs((current) => current.map((item) => item.id === spec.id ? { ...item, enabled: nextValue } : item))
                   }}
-                  label="启用"
+                  label={ $('启用') }
                   mb={6}
                 />
                 <ActionIcon
@@ -359,7 +360,7 @@ export function ModelEditModal({
                   size="lg"
                   variant="light"
                   color="red"
-                  aria-label="删除规格价格"
+                  aria-label={ $('删除规格价格') }
                   mb={4}
                   onClick={() => setPricingSpecs((current) => current.filter((item) => item.id !== spec.id))}
                 >
@@ -370,22 +371,22 @@ export function ModelEditModal({
           )}
         </Stack>
 
-        <Textarea className="stats-model-catalog-model-form-meta" label="描述 / meta（JSON，可选）" value={meta} onChange={(event) => setMeta(event.currentTarget.value)} minRows={4} autosize />
+        <Textarea className="stats-model-catalog-model-form-meta" label={ $('描述 / meta（JSON，可选）') } value={meta} onChange={(event) => setMeta(event.currentTarget.value)} minRows={4} autosize />
         <Text className="stats-model-catalog-model-form-meta-hint" size="xs" c="dimmed">
-          视频模型可在 `meta.videoOptions.controls` 或 `meta.videoOptions.controlMappings` 中声明节点控制栏映射。
-          例如：`controls: [&#123; key: "duration", binding: "durationSeconds" &#125;, &#123; key: "size", binding: "size" &#125;]`。
+          { $('视频模型可在 `meta.videoOptions.controls` 或 `meta.videoOptions.controlMappings` 中声明节点控制栏映射。') }{' '}
+          { $('例如：`controls: [{ key: "duration", binding: "durationSeconds" }, { key: "size", binding: "size" }]`。') }
         </Text>
-        <Switch className="stats-model-catalog-model-form-enabled" checked={enabled} onChange={(event) => setEnabled(event.currentTarget.checked)} label="模型启用" />
+        <Switch className="stats-model-catalog-model-form-enabled" checked={enabled} onChange={(event) => setEnabled(event.currentTarget.checked)} label={ $('模型启用') } />
 
-        <Divider className="stats-model-catalog-model-form-divider" label="保存说明" labelPosition="left" />
+        <Divider className="stats-model-catalog-model-form-divider" label={ $('保存说明') } labelPosition="left" />
         <Text className="stats-model-catalog-model-form-hint" size="xs" c="dimmed">
-          模型基础价格和规格价格会与模型配置一起保存；复制模型时也会一起带过去，避免再去单独维护积分表。
+          { $('模型基础价格和规格价格会与模型配置一起保存；复制模型时也会一起带过去，避免再去单独维护积分表。') }
         </Text>
 
         <Group className="stats-model-catalog-model-form-actions" justify="flex-end" gap={8}>
-          <Button className="stats-model-catalog-model-form-cancel" variant="subtle" onClick={onClose}>取消</Button>
+          <Button className="stats-model-catalog-model-form-cancel" variant="subtle" onClick={onClose}>{ $('取消') }</Button>
           <Button className="stats-model-catalog-model-form-save" onClick={() => void submitModel()} loading={submitting}>
-            保存
+            { $('保存') }
           </Button>
         </Group>
       </Stack>

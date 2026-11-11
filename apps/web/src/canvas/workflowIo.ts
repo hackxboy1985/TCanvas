@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import { validateWorkflowEdgeMeta, validateWorkflowNodeMeta } from './workflowMeta'
+import { $ } from './i18n'
 
 export const WORKFLOW_INPUT_KIND = 'workflowInput'
 export const WORKFLOW_OUTPUT_KIND = 'workflowOutput'
@@ -44,7 +45,7 @@ export function validateWorkflowIoForRun(params: ValidateWorkflowIoParams): Work
     return {
       ...stats,
       ok: false,
-      message: '当前工作流必须至少包含 1 个「工作流输出」节点',
+      message: $('当前工作流必须至少包含 1 个「工作流输出」节点'),
     }
   }
   for (const node of params.nodes) {

@@ -15,6 +15,7 @@
  * </ol>
  */
 import { createSseEventParser } from './sse'
+import { $, $t } from '../canvas/i18n'
 import type {
   AgentsChatRequestDto,
   AgentsChatResponseDto,
@@ -202,10 +203,10 @@ async function lensAgentGetJson<T>(path: string): Promise<T> {
   const code = Number(body?.code)
   if (!response.ok || (Number.isFinite(code) && code !== 200)) {
     const msg = String(body?.msg || body?.message || '').trim()
-    throw new Error(msg || `会话接口请求失败：HTTP ${response.status}`)
+    throw new Error(msg || $t('会话接口请求失败：HTTP {{status}}', { status: response.status }))
   }
   if (!body || body.data === undefined) {
-    throw new Error('会话接口返回数据为空')
+    throw new Error($('会话接口返回数据为空'))
   }
   return body.data as T
 }
@@ -298,13 +299,13 @@ export async function reloadLensCanvasFlow(): Promise<LensCanvasReloadResult> {
  * @returns 可读错误信息
  */
 async function readLensChatErrorMessage(response: Response): Promise<string> {
-  let message = `画布 Agent 对话失败：HTTP ${response.status}`
+  let message = $t('画布 Agent 对话失败：HTTP {{status}}', { status: response.status })
   try {
     const body = await response.json() as Record<string, unknown>
     const code = Number(body?.code)
     const msg = String(body?.msg || body?.message || '').trim()
     if (code === 401) {
-      message = msg || '登录已过期，请重新登录后再使用 AI 对话'
+      message = msg || $('登录已过期，请重新登录后再使用 AI 对话')
     } else if (msg) {
       message = msg
     }
@@ -351,12 +352,12 @@ export async function uploadLensChatAttachment(file: File, type: 'image' | 'vide
     credentials: 'include',
   })
   if (!response.ok) {
-    throw new Error(`附件上传失败：HTTP ${response.status}`)
+    throw new Error($t('附件上传失败：HTTP {{status}}', { status: response.status }))
   }
   const body = await response.json() as { code?: number; msg?: string; data?: unknown }
   const url = typeof body?.data === 'string' ? body.data.trim() : ''
   if (Number(body?.code) !== 200 || !url) {
-    throw new Error(body?.msg || '附件上传失败：接口未返回 URL')
+    throw new Error(body?.msg || $('附件上传失败：接口未返回 URL'))
   }
   return { type, url, name: file.name }
 }
@@ -371,14 +372,14 @@ export async function lensAgentsChatStream(
 ): Promise<() => void> {
   const query = readLensCanvasQuery()
   if (!query) {
-    throw new Error('当前页面不是 lens 画布（缺少 dramaId 参数），无法发起画布 Agent 对话')
+    throw new Error($('当前页面不是 lens 画布（缺少 dramaId 参数），无法发起画布 Agent 对话'))
   }
   const controller = new AbortController()
   // agents-cli 按 (userId, sessionId) 持久化会话历史，这里只传 sessionId，不再由前端附带 history
   const sessionId = resolveLensChatSessionId()
   const prompt = String(payload.prompt || '').trim()
   if (!prompt) {
-    throw new Error('对话内容不能为空')
+    throw new Error($('对话内容不能为空'))
   }
   // 与后端 NODE_ID_PATTERN 对齐：非法 id 直接忽略（降级为不传选中节点），避免整轮对话因格式返回 400
   const selectedNodeIdRaw = String(payload.canvasNodeId || '').trim()
@@ -441,7 +442,7 @@ export async function lensAgentsChatStream(
     throw new Error(await readLensChatErrorMessage(response))
   }
   if (!response.body) {
-    throw new Error('画布 Agent 对话未返回流式响应体')
+    throw new Error($('画布 Agent 对话未返回流式响应体'))
   }
 
   handlers.onOpen?.()
@@ -497,11 +498,11 @@ export async function lensAgentsChatStream(
         }
       }
       if (!controller.signal.aborted && !terminalReceived) {
-        handlers.onError?.(new Error('画布 Agent 对话在结束事件前中断，请重试'))
+        handlers.onError?.(new Error($('画布 Agent 对话在结束事件前中断，请重试')))
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        handlers.onError?.(error instanceof Error ? error : new Error('画布 Agent 对话读取失败'))
+        handlers.onError?.(error instanceof Error ? error : new Error($('画布 Agent 对话读取失败')))
       }
     } finally {
       try {
@@ -540,15 +541,15 @@ export async function lensAgentsChat(payload: AgentsChatRequestDto): Promise<Age
           if (responseBody) {
             resolve(responseBody)
           } else {
-            reject(new Error('画布 Agent 结果事件缺少 response'))
+            reject(new Error($('画布 Agent 结果事件缺少 response')))
           }
           return
         }
         if (event.event === 'error') {
           settled = true
           const message = (event.data && typeof event.data === 'object' && 'message' in event.data)
-            ? String(event.data.message || '对话失败')
-            : '对话失败'
+            ? String(event.data.message || $('对话失败'))
+            : $('对话失败')
           reject(new Error(message))
         }
       },
@@ -560,7 +561,7 @@ export async function lensAgentsChat(payload: AgentsChatRequestDto): Promise<Age
     }).catch((error: unknown) => {
       if (settled) return
       settled = true
-      reject(error instanceof Error ? error : new Error('对话失败'))
+      reject(error instanceof Error ? error : new Error($('对话失败')))
     })
   })
 }

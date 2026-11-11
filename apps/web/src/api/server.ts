@@ -3,6 +3,7 @@ import type { PublicFlowAnchorBinding } from '@tapcanvas/flow-anchor-bindings'
 import type { StoryboardSelectionContext } from '@tapcanvas/storyboard-selection-protocol'
 import { getAuthToken, getAuthTokenFromCookie, type User } from '../auth/store'
 import { sanitizeFlowValueForPersistence } from '../canvas/utils/persistenceSanitizer'
+import { $, $t } from '../canvas/i18n'
 import { useUploadRuntimeStore } from '../domain/upload-runtime/store/uploadRuntimeStore'
 import type { StoryboardStructuredData } from '../storyboard/storyboardStructure'
 import {
@@ -4274,7 +4275,7 @@ export async function upsertProjectRoleCardAsset(
 
   const created = await createServerAsset({
     projectId: projectIdTrimmed,
-    name: `角色卡 · ${roleName}`,
+    name: $t('角色卡 · {{name}}', { name: roleName }),
     data: nextData,
   })
   const createdData: ProjectRoleCardAssetData = {
@@ -5394,7 +5395,7 @@ export async function uploadServerAssetFile(file: File, name?: string, meta?: Up
   const effectiveFileName =
     (typeof name === 'string' && name.trim()) ||
     (typeof file.name === 'string' && file.name.trim()) ||
-    '未命名文件'
+    $('未命名文件')
   const trimmedProjectId = typeof meta?.projectId === 'string' && meta.projectId.trim() ? meta.projectId.trim() : ''
   const ownerNodeId = typeof meta?.ownerNodeId === 'string' && meta.ownerNodeId.trim() ? meta.ownerNodeId.trim() : ''
   const existing = inflightAssetUploadRequests.get(requestKey)
@@ -5885,7 +5886,7 @@ export async function runPublicTask(apiKey: string, payload: PublicRunTaskReques
     } catch (error) {
       const e = error as PublicTaskError
       if (e.code === 'team_required') {
-        e.message = '个人账号也可使用，但需要有积分；新用户通过 GitHub/手机号注册赠送 100 积分。'
+        e.message = $('个人账号也可使用，但需要有积分；新用户通过 GitHub/手机号注册赠送 100 积分。')
       }
       throw e
     }
@@ -5934,7 +5935,7 @@ export async function fetchPublicTaskResult(apiKey: string, payload: PublicFetch
       err.details = body.details
       if (err.code === 'team_required') {
         err.message =
-          '个人账号也可使用，但需要有积分；新用户通过 GitHub/手机号注册赠送 100 积分。'
+          $('个人账号也可使用，但需要有积分；新用户通过 GitHub/手机号注册赠送 100 积分。')
       }
     }
     throw err
@@ -6741,7 +6742,7 @@ export async function searchMemoryEntries(payload: MemorySearchRequestDto): Prom
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }))
-  if (!r.ok) await throwApiError(r, '查询记忆失败')
+  if (!r.ok) await throwApiError(r, $('查询记忆失败'))
   return await r.json() as MemorySearchResponseDto
 }
 
@@ -6789,7 +6790,7 @@ export async function getMemoryContext(payload: MemoryContextRequestDto): Promis
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }))
-  if (!r.ok) await throwApiError(r, '获取记忆上下文失败')
+  if (!r.ok) await throwApiError(r, $('获取记忆上下文失败'))
   return await r.json() as MemoryContextResponseDto
 }
 
@@ -6839,6 +6840,6 @@ export async function listProjectChatArtifactSessions(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }))
-  if (!r.ok) await throwApiError(r, '获取项目对话产物历史失败')
+  if (!r.ok) await throwApiError(r, $('获取项目对话产物历史失败'))
   return await r.json() as ProjectChatArtifactSessionsResponseDto
 }

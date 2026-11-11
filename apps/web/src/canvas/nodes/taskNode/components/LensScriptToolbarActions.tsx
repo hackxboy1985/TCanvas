@@ -2,6 +2,7 @@ import React from 'react'
 import { Button, Tooltip } from '@mantine/core'
 import { IconDeviceFloppy, IconScissors, IconScript } from '@tabler/icons-react'
 import type { LensScriptGenerationActions, LensScriptTextKind } from '../../../CanvasRenderContext'
+import { $ } from '../../../i18n'
 
 type LensScriptToolbarActionsProps = {
   /** 宿主注入的生成/保存能力（接口调用/轮询/刷新/保存都在 LensCanvasApp 完成） */
@@ -42,7 +43,7 @@ export function LensScriptToolbarActions({
       <div className="tc-task-node__text-inline-divider" style={{ width: 1, height: 20, background: dividerColor }} />
       {canGenerateScript && (
         <Tooltip
-          label={hasScript ? '根据本集剧本原文重新生成台本（覆盖现有台本）' : '根据本集剧本原文生成台本'}
+          label={hasScript ? $('根据本集剧本原文重新生成台本（覆盖现有台本）') : $('根据本集剧本原文生成台本')}
           position="bottom"
           withArrow
         >
@@ -56,12 +57,12 @@ export function LensScriptToolbarActions({
             leftSection={<IconScript size={13} />}
             onClick={generateScript}
           >
-            生台本
+            {$('生台本')}
           </Button>
         </Tooltip>
       )}
       <Tooltip
-        label="按本集台本（无台本时用剧本原文）拆分镜，结果自动保存到分镜表"
+        label={$("按本集台本（无台本时用剧本原文）拆分镜，结果自动保存到分镜表")}
         position="bottom"
         withArrow
       >
@@ -75,11 +76,11 @@ export function LensScriptToolbarActions({
           leftSection={<IconScissors size={13} />}
           onClick={splitShots}
         >
-          拆分镜
+          {$('拆分镜')}
         </Button>
       </Tooltip>
       <Tooltip
-        label={scriptNodeType === '台本' ? '保存台本到本集业务表（script_content）' : '保存剧本原文到本集业务表（content）'}
+        label={scriptNodeType === '台本' ? $('保存台本到本集业务表（script_content）') : $('保存剧本原文到本集业务表（content）')}
         position="bottom"
         withArrow
       >
@@ -93,7 +94,7 @@ export function LensScriptToolbarActions({
           leftSection={<IconDeviceFloppy size={13} />}
           onClick={() => saveScriptText(scriptNodeType, scriptText)}
         >
-          保存
+          {$('保存')}
         </Button>
       </Tooltip>
     </>

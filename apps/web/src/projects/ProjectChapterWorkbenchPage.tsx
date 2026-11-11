@@ -41,6 +41,7 @@ import {
 } from './projectShotRender'
 import { buildStoryboardProductionSummary } from '../ui/nanoComic/storyboardProduction'
 
+import { $, $t } from '../canvas/i18n'
 type ProjectChapterWorkbenchLoadError = {
   message: string
   status: number | null
@@ -80,13 +81,13 @@ function parseChapterRoute(): { projectId: string; chapterId?: string; shotId?: 
 }
 
 function formatChapterProductionStatus(status: string): string {
-  if (status === 'planning') return '策划中'
-  if (status === 'producing') return '生产中'
-  if (status === 'review') return '待审阅'
-  if (status === 'approved') return '已确认'
-  if (status === 'locked') return '已锁定'
-  if (status === 'archived') return '已归档'
-  return '草稿'
+  if (status === 'planning') return $('策划中')
+  if (status === 'producing') return $('生产中')
+  if (status === 'review') return $('待审阅')
+  if (status === 'approved') return $('已确认')
+  if (status === 'locked') return $('已锁定')
+  if (status === 'archived') return $('已归档')
+  return $('草稿')
 }
 
 function getChapterProductionStatusTone(status: string): 'gray' | 'blue' | 'yellow' | 'green' {
@@ -97,10 +98,10 @@ function getChapterProductionStatusTone(status: string): 'gray' | 'blue' | 'yell
 }
 
 function formatShotProductionStatus(status: string): string {
-  if (status === 'running') return '生成中'
-  if (status === 'succeeded') return '可审阅'
-  if (status === 'failed') return '待返工'
-  return '待处理'
+  if (status === 'running') return $('生成中')
+  if (status === 'succeeded') return $('可审阅')
+  if (status === 'failed') return $('待返工')
+  return $('待处理')
 }
 
 function getShotProductionStatusTone(status: string): 'gray' | 'blue' | 'green' | 'red' {
@@ -245,7 +246,7 @@ function toWorkbenchLoadError(error: unknown, fallback: string): ProjectChapterW
 
 function formatMoment(value?: string | null): string {
   const text = String(value || '').trim()
-  if (!text) return '未记录'
+  if (!text) return $('未记录')
   const ts = Date.parse(text)
   if (!Number.isFinite(ts)) return text
   return new Date(ts).toLocaleString()
@@ -492,52 +493,52 @@ function evaluateChapterPrerequisites(input: {
   const items: ChapterPrerequisiteStatus['items'] = [
     {
       key: 'source',
-      label: '原文绑定',
+      label: $('原文绑定'),
       ready: input.hasBoundSourceChapter || Boolean(resumeStatus),
       required: true,
       detail: input.hasBoundSourceChapter
-        ? '已锁定章节原文。'
+        ? $('已锁定章节原文。')
         : resumeStatus
-          ? '老数据可先续接执行，后续再补录原文绑定。'
-          : '当前章节未绑定原文。',
+          ? $('老数据可先续接执行，后续再补录原文绑定。')
+          : $('当前章节未绑定原文。'),
     },
     {
       key: 'text',
-      label: '文本上下文',
+      label: $('文本上下文'),
       ready: input.hasChapterText || Boolean(resumeStatus),
       required: true,
       detail: input.hasChapterText
-        ? '章节文本窗口可用。'
+        ? $('章节文本窗口可用。')
         : resumeStatus
-          ? '已检测到历史章节结果，可先按旧结果续接，再补齐摘要/正文。'
-          : '章节正文/摘要不足，无法稳定生成。',
+          ? $('已检测到历史章节结果，可先按旧结果续接，再补齐摘要/正文。')
+          : $('章节正文/摘要不足，无法稳定生成。'),
     },
     {
       key: 'shots',
-      label: '镜头单元',
+      label: $('镜头单元'),
       ready: input.hasShotUnits,
       required: true,
-      detail: input.hasShotUnits ? '镜头板已建立。' : '当前章节还没有镜头单元。',
+      detail: input.hasShotUnits ? $('镜头板已建立。') : $('当前章节还没有镜头单元。'),
     },
     {
       key: 'scene_anchor',
-      label: '场景锚点',
+      label: $('场景锚点'),
       ready: input.sceneReferenceImageCount > 0,
       required: true,
       detail: input.sceneReferenceImageCount > 0
-        ? `已命中 ${input.sceneReferenceImageCount} 个场景视觉锚点。`
-        : '缺少可执行场景锚点图。',
+        ? $t('已命中 {{sceneReferenceImageCount}} 个场景视觉锚点。', { sceneReferenceImageCount: input.sceneReferenceImageCount })
+        : $('缺少可执行场景锚点图。'),
     },
     {
       key: 'character_anchor',
-      label: '人物锚点',
+      label: $('人物锚点'),
       ready: input.characterRequirementCount <= 0 || input.characterReferenceImageCount > 0,
       required: input.characterRequirementCount > 0,
       detail: input.characterRequirementCount <= 0
-        ? '本章未识别到强人物需求。'
+        ? $('本章未识别到强人物需求。')
         : input.characterReferenceImageCount > 0
-          ? `已命中 ${input.characterReferenceImageCount} 个人物锚点图。`
-          : '已识别人物需求，但没有人物锚点图。',
+          ? $t('已命中 {{characterReferenceImageCount}} 个人物锚点图。', { characterReferenceImageCount: input.characterReferenceImageCount })
+          : $('已识别人物需求，但没有人物锚点图。'),
     },
   ]
   const requiredItems = items.filter((item) => item.required)
@@ -562,22 +563,22 @@ function buildChapterResumeStatus(input: {
   recentTaskCount: number
 }): ChapterResumeStatus {
   const details: string[] = []
-  if (input.shotCount > 0) details.push(`已有 ${input.shotCount} 个镜头单元`)
-  if (input.generatedShotCount > 0) details.push(`已有 ${input.generatedShotCount} 个镜头进入可审阅/已出图状态`)
-  if (input.reviewShotCount > 0) details.push(`已有 ${input.reviewShotCount} 个镜头待审阅`)
-  if (input.reworkShotCount > 0) details.push(`已有 ${input.reworkShotCount} 个镜头待返工`)
-  if (input.sceneAssetCount > 0) details.push(`已沉淀 ${input.sceneAssetCount} 个章节场景资产`)
-  if (input.baseSceneAnchorCount > 0) details.push(`已有 ${input.baseSceneAnchorCount} 个基础场景锚点`)
-  if (input.storyboardChunkCount > 0) details.push(`已有 ${input.storyboardChunkCount} 组分镜结果`)
-  if (input.storyboardPlanShotCount > 0) details.push(`已有 ${input.storyboardPlanShotCount} 条分镜脚本`)
-  if (input.recentTaskCount > 0) details.push(`最近还有 ${input.recentTaskCount} 条章节任务记录`)
+  if (input.shotCount > 0) details.push($t('已有 {{shotCount}} 个镜头单元', { shotCount: input.shotCount }))
+  if (input.generatedShotCount > 0) details.push($t('已有 {{generatedShotCount}} 个镜头进入可审阅/已出图状态', { generatedShotCount: input.generatedShotCount }))
+  if (input.reviewShotCount > 0) details.push($t('已有 {{reviewShotCount}} 个镜头待审阅', { reviewShotCount: input.reviewShotCount }))
+  if (input.reworkShotCount > 0) details.push($t('已有 {{reworkShotCount}} 个镜头待返工', { reworkShotCount: input.reworkShotCount }))
+  if (input.sceneAssetCount > 0) details.push($t('已沉淀 {{sceneAssetCount}} 个章节场景资产', { sceneAssetCount: input.sceneAssetCount }))
+  if (input.baseSceneAnchorCount > 0) details.push($t('已有 {{baseSceneAnchorCount}} 个基础场景锚点', { baseSceneAnchorCount: input.baseSceneAnchorCount }))
+  if (input.storyboardChunkCount > 0) details.push($t('已有 {{storyboardChunkCount}} 组分镜结果', { storyboardChunkCount: input.storyboardChunkCount }))
+  if (input.storyboardPlanShotCount > 0) details.push($t('已有 {{storyboardPlanShotCount}} 条分镜脚本', { storyboardPlanShotCount: input.storyboardPlanShotCount }))
+  if (input.recentTaskCount > 0) details.push($t('最近还有 {{recentTaskCount}} 条章节任务记录', { recentTaskCount: input.recentTaskCount }))
   const totalEvidenceCount = details.length
   return {
     continuable: totalEvidenceCount > 0,
     totalEvidenceCount,
     summary: totalEvidenceCount > 0
-      ? `检测到 ${totalEvidenceCount} 类历史产物，可直接续接当前章节。`
-      : '当前章节还没有可续接的历史产物。',
+      ? $t('检测到 {{totalEvidenceCount}} 类历史产物，可直接续接当前章节。', { totalEvidenceCount: totalEvidenceCount })
+      : $('当前章节还没有可续接的历史产物。'),
     details,
   }
 }
@@ -626,9 +627,9 @@ function buildProjectStyleAnchorName(input: {
 }): string {
   const artStyleName = String(input.artStyleName || '').trim()
   const styleBibleName = String(input.styleBibleName || '').trim()
-  if (artStyleName) return `项目画风锚点 · ${artStyleName}`
-  if (styleBibleName) return `项目画风锚点 · ${styleBibleName}`
-  return '项目画风锚点'
+  if (artStyleName) return $t('项目画风锚点 · {{artStyleName}}', { artStyleName: artStyleName })
+  if (styleBibleName) return $t('项目画风锚点 · {{styleBibleName}}', { styleBibleName: styleBibleName })
+  return $('项目画风锚点')
 }
 
 function diagnoseShotGenerationFailure(input: {
@@ -641,56 +642,56 @@ function diagnoseShotGenerationFailure(input: {
   const normalized = message.toLowerCase()
   if (!input.hasBoundSourceChapter) {
     return {
-      title: '原文上下文不足',
-      detail: '当前章节还没锁定原文，先完成章节绑定，再重新启动镜头生成。',
+      title: $('原文上下文不足'),
+      detail: $('当前章节还没锁定原文，先完成章节绑定，再重新启动镜头生成。'),
       tone: 'yellow',
     }
   }
   if (!String(input.prompt || '').trim()) {
     return {
-      title: '镜头 Prompt 为空',
-      detail: '当前镜头还没有可执行 Prompt，先整理镜头摘要或重建 Prompt。',
+      title: $('镜头 Prompt 为空'),
+      detail: $('当前镜头还没有可执行 Prompt，先整理镜头摘要或重建 Prompt。'),
       tone: 'yellow',
     }
   }
   if (input.suggestedAssetCount === 0) {
     return {
-      title: '项目锚点偏少',
-      detail: '当前镜头缺少可复用角色 / 场景 / 道具 / 风格锚点，结果容易不稳定，可先同步章节线索。',
+      title: $('项目锚点偏少'),
+      detail: $('当前镜头缺少可复用角色 / 场景 / 道具 / 风格锚点，结果容易不稳定，可先同步章节线索。'),
       tone: 'gray',
     }
   }
   if (/401|403|unauthorized|forbidden|auth|登录|权限/.test(normalized)) {
     return {
-      title: '权限或登录状态异常',
-      detail: '生成请求可能没有通过鉴权，先确认登录状态、团队额度或接口权限。',
+      title: $('权限或登录状态异常'),
+      detail: $('生成请求可能没有通过鉴权，先确认登录状态、团队额度或接口权限。'),
       tone: 'red',
     }
   }
   if (/timeout|timed out|504|轮询|未返回任务 id|task id/.test(normalized)) {
     return {
-      title: '任务执行或轮询超时',
-      detail: '模型任务可能已排队过久、轮询超时或上游未返回稳定任务状态，可重试当前镜头。',
+      title: $('任务执行或轮询超时'),
+      detail: $('模型任务可能已排队过久、轮询超时或上游未返回稳定任务状态，可重试当前镜头。'),
       tone: 'red',
     }
   }
   if (/积分不足|credit|credits|quota|team_insufficient_credits/.test(normalized)) {
     return {
-      title: '当前账号没有可用积分',
-      detail: '正式出图依赖模型额度；本地开发环境会自动切到演示图，线上环境请先补足积分后再生成。',
+      title: $('当前账号没有可用积分'),
+      detail: $('正式出图依赖模型额度；本地开发环境会自动切到演示图，线上环境请先补足积分后再生成。'),
       tone: 'red',
     }
   }
   if (/model|vendor|api|quota|credit|余额|额度|上游|502|503|500/.test(normalized)) {
     return {
-      title: '模型或上游接口异常',
-      detail: '问题更像发生在模型服务、额度或上游通道，不是本章文本本身。',
+      title: $('模型或上游接口异常'),
+      detail: $('问题更像发生在模型服务、额度或上游通道，不是本章文本本身。'),
       tone: 'red',
     }
   }
   return {
-    title: '当前镜头生成失败',
-    detail: '先检查本章文本窗口、项目锚点和当前 Prompt；如果都正常，再重试模型任务。',
+    title: $('当前镜头生成失败'),
+    detail: $('先检查本章文本窗口、项目锚点和当前 Prompt；如果都正常，再重试模型任务。'),
     tone: 'yellow',
   }
 }
@@ -723,10 +724,10 @@ function buildDraftShotsFromChapterText(input: {
   if (chunks.length === 0 && rawSummary) chunks.push(rawSummary)
   return chunks.slice(0, 8).map((chunk, index) => {
     const clean = chunk.replace(/\s+/g, ' ').trim()
-    const titleSource = clean.split(/[，,。！？!?；;：:]/).map((item) => item.trim()).filter(Boolean)[0] || `${input.chapterTitle} 镜头 ${index + 1}`
+    const titleSource = clean.split(/[，,。！？!?；;：:]/).map((item) => item.trim()).filter(Boolean)[0] || $t('{{chapterTitle}} 镜头 {{index}}', { chapterTitle: input.chapterTitle, index: index + 1 })
     const title = titleSource.length > 18 ? `${titleSource.slice(0, 18)}…` : titleSource
     return {
-      title: `镜头 ${index + 1} · ${title}`,
+      title: $t('镜头 {{index}} · {{title}}', { index: index + 1, title: title }),
       summary: clean,
     }
   })
@@ -1066,7 +1067,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           }
           return
         }
-        setLoadError(toWorkbenchLoadError(error, '加载章节工作台失败'))
+        setLoadError(toWorkbenchLoadError(error, $('加载章节工作台失败')))
         setChapters([])
         setWorkbench(null)
         setProjectSetup(DEFAULT_PROJECT_SETUP_PROFILE)
@@ -1128,7 +1129,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           setWorkbench(refreshed.chapterWorkbench)
           setBookIndex(refreshed.nextBookIndex)
           setProjectTextAsset(refreshed.textAsset)
-          toast(`已自动补齐剩余 ${result.createdCount} 个章节。`, 'success')
+          toast($t('已自动补齐剩余 {{createdCount}} 个章节。', { createdCount: result.createdCount }), 'success')
         })
       })
       .catch(() => {
@@ -1321,7 +1322,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       let targetFlowId = chapterPreferredFlowId
       let launchMode: 'existing' | 'starter_created' = targetFlowId ? 'existing' : 'starter_created'
       if (!targetFlowId) {
-        const currentChapterTitle = String(workbench.chapter.title || '章节页').trim() || '章节页'
+        const currentChapterTitle = String(workbench.chapter.title || $('章节页')).trim() || $('章节页')
         const chapterSummary = String(workbench.chapter.summary || chapterMetaDraft.summary || '').trim()
         const chapterPrompt = [
           `章节：${currentChapterTitle}`,
@@ -1340,7 +1341,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             id: 'chapter_context',
             x: 40,
             y: 80,
-            label: '章节上下文',
+            label: $('章节上下文'),
             kind: 'text',
             prompt: chapterPrompt,
             width: 360,
@@ -1349,7 +1350,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             id: 'chapter_storyboard',
             x: 420,
             y: 80,
-            label: '章节分镜推进',
+            label: $('章节分镜推进'),
             kind: 'storyboard',
             prompt: storyboardPrompt,
             width: 520,
@@ -1361,7 +1362,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         const created = await saveChapterFlow({
           projectId,
           chapterId,
-          name: `${currentChapterTitle} · 章节流程`,
+          name: $t('{{currentChapterTitle}} · 章节流程', { currentChapterTitle: currentChapterTitle }),
           nodes: starterNodes,
           edges: starterEdges,
         })
@@ -1385,7 +1386,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       })
     } catch (error) {
       console.error('打开章节流程失败', error)
-      toast(describeError(error, '打开章节流程失败'), 'error')
+      toast(describeError(error, $('打开章节流程失败')), 'error')
     } finally {
       setOpeningChapterStudio(false)
     }
@@ -1406,7 +1407,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       let targetFlowId = shotPreferredFlowId
       let launchMode: 'existing' | 'starter_created' = targetFlowId ? 'existing' : 'starter_created'
       if (!targetFlowId) {
-        const currentChapterTitle = String(workbench?.chapter.title || '章节页').trim() || '章节页'
+        const currentChapterTitle = String(workbench?.chapter.title || $('章节页')).trim() || $('章节页')
         const selectedImageUrl = String(activeShotRender?.data.selectedImageUrl || '').trim()
         const shotSummary = String(activeShot.summary || '').trim()
         const shotPrompt = [
@@ -1422,7 +1423,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             id: 'shot_context',
             x: 40,
             y: 80,
-            label: '镜头上下文',
+            label: $('镜头上下文'),
             kind: 'text',
             prompt: shotPrompt,
             width: 360,
@@ -1431,7 +1432,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             id: 'shot_image',
             x: 420,
             y: 80,
-            label: '镜头出图',
+            label: $('镜头出图'),
             kind: 'image',
             prompt: imagePrompt,
             width: 360,
@@ -1443,7 +1444,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         const created = await saveShotFlow({
           projectId,
           shotId: targetShotId,
-          name: `${activeShot.title || `Shot ${activeShot.shotIndex + 1}`} · 镜头流程`,
+          name: $t('{{shotIndex}} · 镜头流程', { shotIndex: activeShot.title || `Shot ${activeShot.shotIndex + 1}` }),
           nodes: starterNodes,
           edges: starterEdges,
         })
@@ -1467,7 +1468,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       })
     } catch (error) {
       console.error('打开镜头流程失败', error)
-      toast(describeError(error, '打开镜头流程失败'), 'error')
+      toast(describeError(error, $('打开镜头流程失败')), 'error')
     } finally {
       setOpeningShotStudio(false)
     }
@@ -1640,7 +1641,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
 
   const workbenchStats = workbench?.stats || EMPTY_WORKBENCH_STATS
   const chapterMissing = loadError?.status === 404 && (loadError.code === 'chapter_not_found' || loadError.code === 'project_not_found')
-  const chapterTitle = workbench?.chapter.title || '章节页'
+  const chapterTitle = workbench?.chapter.title || $('章节页')
 
   const handleCreateChapter = async () => {
     const title = nameDraft.trim()
@@ -1648,11 +1649,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     setCreating(true)
     try {
       const created = await createProjectChapter(projectId, { title })
-      toast('新章节已创建。', 'success')
+      toast($('新章节已创建。'), 'success')
       spaNavigate(buildProjectChapterUrl(projectId, created.id))
     } catch (error) {
       console.error('创建章节失败', error)
-      toast(describeError(error, '创建章节失败，请稍后重试'), 'error')
+      toast(describeError(error, $('创建章节失败，请稍后重试')), 'error')
     } finally {
       setCreating(false)
     }
@@ -1678,10 +1679,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         setWorkbench(refreshed.chapterWorkbench)
         setBookIndex(refreshed.nextBookIndex)
       }
-      toast(direction === 'up' ? '章节已上移。' : '章节已下移。', 'success')
+      toast(direction === 'up' ? $('章节已上移。') : $('章节已下移。'), 'success')
     } catch (error) {
       console.error('章节排序失败', error)
-      toast(describeError(error, '章节排序失败，请稍后重试'), 'error')
+      toast(describeError(error, $('章节排序失败，请稍后重试')), 'error')
     } finally {
       setReorderingChapter(false)
     }
@@ -1695,7 +1696,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       setProjectSetup(saved.profile)
     } catch (error) {
       console.error('保存项目设定失败', error)
-      toast(describeError(error, '保存项目设定失败，请稍后重试'), 'error')
+      toast(describeError(error, $('保存项目设定失败，请稍后重试')), 'error')
     } finally {
       setSavingSetup(false)
     }
@@ -1735,10 +1736,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         setBookIndex(refreshed.nextBookIndex)
         setProjectTextAsset(refreshed.textAsset)
       }
-      toast(uploaded.mode === 'book' ? '文本已上传，项目章节目录会自动按原文补齐。' : '文本已上传到当前项目。', 'success')
+      toast(uploaded.mode === 'book' ? $('文本已上传，项目章节目录会自动按原文补齐。') : $('文本已上传到当前项目。'), 'success')
     } catch (error) {
       console.error('上传项目文本失败', error)
-      toast(describeError(error, '上传项目文本失败，请稍后重试'), 'error')
+      toast(describeError(error, $('上传项目文本失败，请稍后重试')), 'error')
     } finally {
       setUploadingText(false)
     }
@@ -1756,7 +1757,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           ? parsedSourceChapter
           : null
       await updateChapter(chapterId, {
-        title: chapterMetaDraft.title.trim() || '未命名章节',
+        title: chapterMetaDraft.title.trim() || $('未命名章节'),
         summary: chapterMetaDraft.summary.trim(),
         status: workbench.chapter.status,
         sourceBookId: nextSourceChapter ? projectBooks[0]?.bookId || null : null,
@@ -1768,10 +1769,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         setWorkbench(refreshed.chapterWorkbench)
         setBookIndex(refreshed.nextBookIndex)
       }
-      toast('章节信息已保存。', 'success')
+      toast($('章节信息已保存。'), 'success')
     } catch (error) {
       console.error('保存章节映射失败', error)
-      toast(describeError(error, '保存章节映射失败，请稍后重试'), 'error')
+      toast(describeError(error, $('保存章节映射失败，请稍后重试')), 'error')
     } finally {
       setSavingChapterMeta(false)
     }
@@ -1790,7 +1791,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       )
       const missing = sourceChapters.filter((item) => !mappedSourceChapterNos.has(item.chapter))
       if (missing.length === 0) {
-        toast('原文章节已经全部导入，无需重复生成。', 'info')
+        toast($('原文章节已经全部导入，无需重复生成。'), 'info')
         return
       }
       const limit =
@@ -1800,7 +1801,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       const targetItems = limit ? missing.slice(0, limit) : missing
       for (const item of targetItems) {
         const created = await createProjectChapter(projectId, {
-          title: item.title || `第${item.chapter}章`,
+          title: item.title || $t('第{{chapter}}章', { chapter: item.chapter }),
           summary: item.summary || item.coreConflict || '',
         })
         await updateChapter(created.id, {
@@ -1819,13 +1820,13 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       const remainingCount = Math.max(0, missing.length - targetItems.length)
       toast(
         remainingCount > 0
-          ? `已补齐 ${targetItems.length} 个章节，还剩 ${remainingCount} 个待导入。`
-          : `已按原文目录补齐 ${targetItems.length} 个章节。`,
+          ? $t('已补齐 {{count}} 个章节，还剩 {{remainingCount}} 个待导入。', { count: targetItems.length, remainingCount: remainingCount })
+          : $t('已按原文目录补齐 {{count}} 个章节。', { count: targetItems.length }),
         'success',
       )
     } catch (error) {
       console.error('按原文章节导入失败', error)
-      toast(describeError(error, '按原文章节导入失败，请稍后重试'), 'error')
+      toast(describeError(error, $('按原文章节导入失败，请稍后重试')), 'error')
     } finally {
       setImportingChapters(false)
     }
@@ -1847,15 +1848,15 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       .sort((left, right) => right.score - left.score)
     const best = ranked[0]
     if (!best || best.score < 45) {
-      toast('没有找到足够可信的原文章节，请手动绑定。', 'warning')
+      toast($('没有找到足够可信的原文章节，请手动绑定。'), 'warning')
       return
     }
     setAutoBindingChapter(true)
     try {
       if (options?.autoDraftAfterBind) {
-        announceChapterAutoRelay('正在为这一章对上原文，接着会直接起镜头板并启动关键镜头。')
+        announceChapterAutoRelay($('正在为这一章对上原文，接着会直接起镜头板并启动关键镜头。'))
       }
-      const nextTitle = chapterMetaDraft.title.trim() || best.item.title || workbench.chapter.title || '未命名章节'
+      const nextTitle = chapterMetaDraft.title.trim() || best.item.title || workbench.chapter.title || $('未命名章节')
       const nextSummary = chapterMetaDraft.summary.trim() || best.item.summary || best.item.coreConflict || ''
       await updateChapter(chapterId, {
         title: nextTitle,
@@ -1884,7 +1885,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             || nextSummary.trim()
           )
         ) {
-          announceChapterAutoRelay('本章已自动绑定原文，正在生成镜头板并准备启动关键镜头。')
+          announceChapterAutoRelay($('本章已自动绑定原文，正在生成镜头板并准备启动关键镜头。'))
           window.setTimeout(() => {
             void handleDraftShotsFromChapter({ silent: true, autoOpenPreferredShot: true, autoKickoffPreferredShot: true })
           }, 0)
@@ -1894,12 +1895,12 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           void handleSyncChapterMemory({ silent: true, includeStyleAnchor: true })
         }, 0)
         if (options?.autoDraftAfterBind) {
-          announceChapterAutoRelay('本章原文已自动绑定。', { autoClearMs: 2600 })
+          announceChapterAutoRelay($('本章原文已自动绑定。'), { autoClearMs: 2600 })
         }
       }
     } catch (error) {
       console.error('智能绑定章节失败', error)
-      toast(describeError(error, '智能绑定章节失败，请稍后重试'), 'error')
+      toast(describeError(error, $('智能绑定章节失败，请稍后重试')), 'error')
     } finally {
       setAutoBindingChapter(false)
     }
@@ -1910,7 +1911,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     const sourceItems = bookIndex.chapters
     const unmapped = chapters.filter((chapter) => !chapter.sourceBookChapter)
     if (unmapped.length === 0) {
-      toast('当前项目章节已经都有原文绑定。', 'info')
+      toast($('当前项目章节已经都有原文绑定。'), 'info')
       return
     }
     setAutoBindingAllChapters(true)
@@ -1938,7 +1939,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         const best = ranked[0]
         if (!best || best.score < 45) continue
         await updateChapter(chapter.id, {
-          title: chapter.title || best.item.title || '未命名章节',
+          title: chapter.title || best.item.title || $('未命名章节'),
           summary: chapter.summary || best.item.summary || best.item.coreConflict || '',
           status: chapter.status,
           sourceBookId: projectBooks[0].bookId,
@@ -1953,10 +1954,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         setWorkbench(refreshed.chapterWorkbench)
         setBookIndex(refreshed.nextBookIndex)
       }
-      toast(changedCount > 0 ? `已自动绑定 ${changedCount} 个章节。` : '没有找到足够可信的待绑定章节。', changedCount > 0 ? 'success' : 'warning')
+      toast(changedCount > 0 ? $t('已自动绑定 {{changedCount}} 个章节。', { changedCount: changedCount }) : $('没有找到足够可信的待绑定章节。'), changedCount > 0 ? 'success' : 'warning')
     } catch (error) {
       console.error('自动绑定项目章节失败', error)
-      toast(describeError(error, '自动绑定项目章节失败，请稍后重试'), 'error')
+      toast(describeError(error, $('自动绑定项目章节失败，请稍后重试')), 'error')
     } finally {
       setAutoBindingAllChapters(false)
     }
@@ -1978,11 +1979,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         setWorkbench(refreshed.chapterWorkbench)
         setBookIndex(refreshed.nextBookIndex)
       }
-      toast('镜头已创建。', 'success')
+      toast($('镜头已创建。'), 'success')
       spaNavigate(buildProjectChapterUrl(projectId, chapterId, created.id))
     } catch (error) {
       console.error('创建镜头失败', error)
-      toast(describeError(error, '创建镜头失败，请稍后重试'), 'error')
+      toast(describeError(error, $('创建镜头失败，请稍后重试')), 'error')
     } finally {
       setCreatingShot(false)
     }
@@ -1997,14 +1998,14 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     })
     if (draftItems.length === 0) {
       if (!options?.silent) {
-        toast('当前章节文本窗口还不足以自动起稿镜头，请先绑定原文或补充章节摘要。', 'warning')
+        toast($('当前章节文本窗口还不足以自动起稿镜头，请先绑定原文或补充章节摘要。'), 'warning')
       }
       return
     }
     setDraftingShots(true)
     try {
       if (options?.autoKickoffPreferredShot) {
-        announceChapterAutoRelay('正在根据本章文本建立镜头板，并会直接启动关键镜头。')
+        announceChapterAutoRelay($('正在根据本章文本建立镜头板，并会直接启动关键镜头。'))
       }
       const existingSummaryKeys = new Set((workbench?.shots || []).map((item) => normalizeAssetName(item.summary || '').toLowerCase()).filter(Boolean))
       let createdCount = 0
@@ -2047,18 +2048,18 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             }
             if (options?.autoKickoffPreferredShot) {
               pendingAutoKickoffShotIdRef.current = preferredShotId
-              announceChapterAutoRelay('镜头板已就位，正在打开关键镜头并开始出图。')
+              announceChapterAutoRelay($('镜头板已就位，正在打开关键镜头并开始出图。'))
             }
           }
         }
       }
       if (!options?.silent || createdCount > 0) {
-        toast(createdCount > 0 ? `已根据本章文本起稿 ${createdCount} 个镜头。` : '当前章节镜头板已经包含这些文本片段，无需重复起稿。', createdCount > 0 ? 'success' : 'info')
+        toast(createdCount > 0 ? $t('已根据本章文本起稿 {{createdCount}} 个镜头。', { createdCount: createdCount }) : $('当前章节镜头板已经包含这些文本片段，无需重复起稿。'), createdCount > 0 ? 'success' : 'info')
       }
     } catch (error) {
       console.error('按章节文本起稿镜头失败', error)
       if (!options?.silent) {
-        toast(describeError(error, '按章节文本起稿镜头失败，请稍后重试'), 'error')
+        toast(describeError(error, $('按章节文本起稿镜头失败，请稍后重试')), 'error')
       }
     } finally {
       setDraftingShots(false)
@@ -2071,7 +2072,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (!boundSourceChapterDetail?.content?.trim() && !boundSourceChapterDetail?.summary?.trim() && !boundSourceChapterDetail?.coreConflict?.trim() && !chapterMetaDraft.summary.trim()) return
     if (autoDraftedChapterIdsRef.current.has(chapterId)) return
     autoDraftedChapterIdsRef.current.add(chapterId)
-    announceChapterAutoRelay('已识别到本章文本，正在建立镜头板并启动关键镜头。')
+    announceChapterAutoRelay($('已识别到本章文本，正在建立镜头板并启动关键镜头。'))
     void handleDraftShotsFromChapter({ silent: true, autoOpenPreferredShot: true, autoKickoffPreferredShot: true })
   }, [
     announceChapterAutoRelay,
@@ -2094,10 +2095,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         setWorkbench(refreshed.chapterWorkbench)
         setBookIndex(refreshed.nextBookIndex)
       }
-      toast(direction === 'up' ? '镜头已上移。' : '镜头已下移。', 'success')
+      toast(direction === 'up' ? $('镜头已上移。') : $('镜头已下移。'), 'success')
     } catch (error) {
       console.error('镜头排序失败', error)
-      toast(describeError(error, '镜头排序失败，请稍后重试'), 'error')
+      toast(describeError(error, $('镜头排序失败，请稍后重试')), 'error')
     } finally {
       setReorderingShotId(null)
     }
@@ -2107,7 +2108,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (!chapterId || batchUpdatingShots) return
     const targetIds = selectedShotIds.length > 0 ? selectedShotIds : filteredShots.map((item) => item.id)
     if (targetIds.length === 0) {
-      toast('请先选择镜头，或至少保留一组筛选结果。', 'warning')
+      toast($('请先选择镜头，或至少保留一组筛选结果。'), 'warning')
       return
     }
     setBatchUpdatingShots(true)
@@ -2126,7 +2127,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       setSelectedShotIds([])
     } catch (error) {
       console.error('批量更新镜头状态失败', error)
-      toast(describeError(error, '批量更新镜头状态失败，请稍后重试'), 'error')
+      toast(describeError(error, $('批量更新镜头状态失败，请稍后重试')), 'error')
     } finally {
       setBatchUpdatingShots(false)
     }
@@ -2145,10 +2146,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       if (refreshed) {
         setWorkbench(refreshed.chapterWorkbench)
       }
-      toast('镜头信息已保存。', 'success')
+      toast($('镜头信息已保存。'), 'success')
     } catch (error) {
       console.error('保存镜头失败', error)
-      toast(describeError(error, '保存镜头失败，请稍后重试'), 'error')
+      toast(describeError(error, $('保存镜头失败，请稍后重试')), 'error')
     } finally {
       setSavingShot(false)
     }
@@ -2156,7 +2157,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
 
   const handleDeleteShot = async () => {
     if (!chapterId || !shotDraft?.shotId || deletingShot) return
-    const ok = window.confirm('删除这个镜头？')
+    const ok = window.confirm($('删除这个镜头？'))
     if (!ok) return
     setDeletingShot(true)
     try {
@@ -2173,10 +2174,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         } : null)
         spaNavigate(buildProjectChapterUrl(projectId, chapterId))
       }
-      toast('镜头已删除。', 'success')
+      toast($('镜头已删除。'), 'success')
     } catch (error) {
       console.error('删除镜头失败', error)
-      toast(describeError(error, '删除镜头失败，请稍后重试'), 'error')
+      toast(describeError(error, $('删除镜头失败，请稍后重试')), 'error')
     } finally {
       setDeletingShot(false)
     }
@@ -2184,19 +2185,19 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
 
   const handleDeleteChapter = async () => {
     if (!chapterId || deletingChapter) return
-    const ok = window.confirm('删除当前章节？章节下镜头会一并删除。')
+    const ok = window.confirm($('删除当前章节？章节下镜头会一并删除。'))
     if (!ok) return
     setDeletingChapter(true)
     try {
       await deleteChapter(chapterId)
-      toast('章节已删除。', 'success')
+      toast($('章节已删除。'), 'success')
       const remaining = chapters.filter((item) => item.id !== chapterId)
       const next = remaining[0] || null
       if (next) spaNavigate(buildProjectChapterUrl(projectId, next.id))
       else spaNavigate('/projects')
     } catch (error) {
       console.error('删除章节失败', error)
-      toast(describeError(error, '删除章节失败，请稍后重试'), 'error')
+      toast(describeError(error, $('删除章节失败，请稍后重试')), 'error')
     } finally {
       setDeletingChapter(false)
     }
@@ -2224,10 +2225,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       } catch (error) {
         console.warn('章节状态已更新，但章节页刷新未完全成功', error)
       }
-      toast(nextArchived ? '章节已归档。' : '章节已恢复到草稿。', 'success')
+      toast(nextArchived ? $('章节已归档。') : $('章节已恢复到草稿。'), 'success')
     } catch (error) {
       console.error('切换章节归档状态失败', error)
-      toast(describeError(error, '切换章节归档状态失败，请稍后重试'), 'error')
+      toast(describeError(error, $('切换章节归档状态失败，请稍后重试')), 'error')
     }
   }
 
@@ -2258,7 +2259,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       }
     } catch (error) {
       console.error('提交镜头审核结果失败', error)
-      toast(describeError(error, '提交镜头审核结果失败，请稍后重试'), 'error')
+      toast(describeError(error, $('提交镜头审核结果失败，请稍后重试')), 'error')
     } finally {
       setSavingShot(false)
     }
@@ -2498,7 +2499,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     })
     const taskId = started.result?.id
     const vendor = started.vendor
-    if (!taskId) throw new Error('章节基础空间锚点未返回任务 ID。')
+    if (!taskId) throw new Error($('章节基础空间锚点未返回任务 ID。'))
 
     let finalResult = started.result
     for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -2517,14 +2518,14 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       const message =
         typeof finalResult.raw?.message === 'string' && finalResult.raw.message.trim()
           ? finalResult.raw.message.trim()
-          : '章节基础空间锚点生成失败，请稍后重试'
+          : $('章节基础空间锚点生成失败，请稍后重试')
       throw new Error(message)
     }
 
     const primaryAsset = (finalResult.assets || []).find((item) => item.type === 'image' && typeof item.url === 'string' && item.url.trim()) || null
     const imageUrl = primaryAsset?.url?.trim() || ''
     if (!imageUrl) {
-      throw new Error('章节基础空间锚点没有返回可用图片 URL。')
+      throw new Error($('章节基础空间锚点没有返回可用图片 URL。'))
     }
 
     const versionData: ChapterBaseSceneAnchorVersionData = {
@@ -2555,7 +2556,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (existingAnchorAsset) {
       await createMaterialVersion(existingAnchorAsset.id, {
         data: versionData,
-        note: `刷新章节基础空间锚点：${chapterTitle}`,
+        note: $t('刷新章节基础空间锚点：{{chapterTitle}}', { chapterTitle: chapterTitle }),
       })
       asset = existingAnchorAsset
       version = existingAnchorAsset.currentVersion + 1
@@ -2565,7 +2566,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         kind: 'scene',
         name: anchorName,
         initialData: versionData,
-        note: '由章节基础空间锚点生成',
+        note: $('由章节基础空间锚点生成'),
       })
       asset = created.asset
       version = created.version.version
@@ -2606,11 +2607,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (!workbench || !shotDraft?.shotId || generatingShotImage) return
     const prompt = shotRenderPrompt.trim()
     if (!prompt) {
-      toast('请先整理镜头 prompt。', 'warning')
+      toast($('请先整理镜头 prompt。'), 'warning')
       return
     }
     if (!chapterPrerequisiteStatus.ready) {
-      toast('检测到前置资产未完备，系统正在自动补齐并继续执行。', 'info')
+      toast($('检测到前置资产未完备，系统正在自动补齐并继续执行。'), 'info')
       try {
         if (!workbench.chapter.sourceBookChapter) {
           await handleAutoBindChapter({ autoDraftAfterBind: false })
@@ -2717,7 +2718,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       })
       const taskId = started.result?.id
       const vendor = started.vendor
-      if (!taskId) throw new Error('未返回任务 ID，无法轮询结果。')
+      if (!taskId) throw new Error($('未返回任务 ID，无法轮询结果。'))
       let finalResult = started.result
       for (let attempt = 0; attempt < 40; attempt += 1) {
         if (finalResult.status === 'succeeded' || finalResult.status === 'failed') break
@@ -2734,7 +2735,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         const message =
           typeof finalResult.raw?.message === 'string' && finalResult.raw.message.trim()
             ? finalResult.raw.message.trim()
-            : '镜头出图失败，请稍后重试'
+            : $('镜头出图失败，请稍后重试')
         await persistShotRenderAsset({
           shotId: shotDraft.shotId,
           prompt: refinedPrompt,
@@ -2792,10 +2793,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           images: demoImages,
           selectedAssetIndex: 0,
         }).catch(() => {})
-        toast('当前账号积分不足，已自动切到本地演示图继续验证章节链路。', 'warning')
+        toast($('当前账号积分不足，已自动切到本地演示图继续验证章节链路。'), 'warning')
         return
       }
-      const message = error instanceof Error ? error.message : '镜头出图失败，请稍后重试'
+      const message = error instanceof Error ? error.message : $('镜头出图失败，请稍后重试')
       if (shotDraft?.shotId) {
         await persistShotRenderAsset({
           shotId: shotDraft.shotId,
@@ -2816,17 +2817,17 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     String(currentShotRender?.data.selectedImageUrl || '').trim()
     || String(currentShotImages[0]?.thumbnailUrl || currentShotImages[0]?.url || '').trim()
   const shotHasRenderResult = Boolean(currentShotRender?.data.images?.length)
-  const shotWorkspacePrimaryActionLabel = shotHasRenderResult ? '确认当前结果并继续' : '生成当前镜头'
+  const shotWorkspacePrimaryActionLabel = shotHasRenderResult ? $('确认当前结果并继续') : $('生成当前镜头')
   const shotWorkspacePrimaryActionHint = shotHasRenderResult
-    ? '会自动确认当前选图、写入项目共享场景，并切到下一个优先镜头。'
-    : '会自动保存当前镜头信息、补齐命中资产，并开始出图。'
+    ? $('会自动确认当前选图、写入项目共享场景，并切到下一个优先镜头。')
+    : $('会自动保存当前镜头信息、补齐命中资产，并开始出图。')
 
   React.useEffect(() => {
     const pendingShotId = pendingAutoKickoffShotIdRef.current
     if (!pendingShotId || shotDraft?.shotId !== pendingShotId) return
     pendingAutoKickoffShotIdRef.current = null
     if (currentShotRender?.data.images?.length || generatingShotImage) return
-    announceChapterAutoRelay('正在启动当前关键镜头。')
+    announceChapterAutoRelay($('正在启动当前关键镜头。'))
     window.setTimeout(() => {
       void handleGenerateShotImage()
     }, 120)
@@ -2850,7 +2851,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       })
     } catch (error) {
       console.error('切换镜头结果失败', error)
-      toast(describeError(error, '切换镜头结果失败，请稍后重试'), 'error')
+      toast(describeError(error, $('切换镜头结果失败，请稍后重试')), 'error')
     } finally {
       setSavingShotSelection(false)
     }
@@ -2862,7 +2863,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   }) => {
     const effectiveShotId = String(input?.shotId || shotDraft?.shotId || '').trim()
     if (!projectId || !chapterId || !effectiveShotId) {
-      throw new Error('当前镜头不存在')
+      throw new Error($('当前镜头不存在'))
     }
     const matched =
       input?.renderAsset && normalizeProjectShotRenderAssetData(input.renderAsset.data)
@@ -2873,10 +2874,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         : pickShotRenderAsset(shotRenderAssets, effectiveShotId)
     const selectedImageUrl = matched?.data.selectedImageUrl
     if (!matched || !selectedImageUrl) {
-      throw new Error('当前镜头还没有选中的结果图。')
+      throw new Error($('当前镜头还没有选中的结果图。'))
     }
     const shot = workbench?.shots.find((item) => item.id === effectiveShotId) || null
-    if (!shot) throw new Error('当前镜头不存在')
+    if (!shot) throw new Error($('当前镜头不存在'))
     const assetName = `${chapterTitle} / ${shot.title || `Shot ${shot.shotIndex + 1}`}`
     const existingAssets = await listMaterialAssets({ projectId, kind: 'scene' })
     const existing = existingAssets.find((item) => item.name.trim() === assetName) || null
@@ -2896,7 +2897,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (existing) {
       await createMaterialVersion(existing.id, {
         data: versionData,
-        note: `镜头结果同步 ${assetName}`,
+        note: $t('镜头结果同步 {{assetName}}', { assetName: assetName }),
       })
       asset = existing
       assetVersionToBind = existing.currentVersion + 1
@@ -2906,7 +2907,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         kind: 'scene',
         name: assetName,
         initialData: versionData,
-        note: '由章节镜头结果提升',
+        note: $('由章节镜头结果提升'),
       })
       asset = created.asset
       assetVersionToBind = created.version.version
@@ -2927,7 +2928,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     setPromotingShotResult(true)
     try {
       const promotion = await upsertCurrentShotSceneAsset()
-      toast(promotion.created ? '已创建场景物料并绑定到当前镜头。' : '已更新场景物料并绑定到当前镜头。', 'success')
+      toast(promotion.created ? $('已创建场景物料并绑定到当前镜头。') : $('已更新场景物料并绑定到当前镜头。'), 'success')
       const refreshed = await reloadProjectContext({ bypassBookThrottle: true })
       if (refreshed) {
         setChapters(refreshed.chapterItems)
@@ -2938,7 +2939,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       }
     } catch (error) {
       console.error('提升镜头结果失败', error)
-      toast(describeError(error, '提升镜头结果失败，请稍后重试'), 'error')
+      toast(describeError(error, $('提升镜头结果失败，请稍后重试')), 'error')
     } finally {
       setPromotingShotResult(false)
     }
@@ -2948,7 +2949,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (!chapterId || !shotDraft?.shotId || confirmingShotResult) return
     const matched = pickShotRenderAsset(shotRenderAssets, shotDraft.shotId)
     if (!matched?.data.selectedImageUrl) {
-      toast('请先选中一张当前最佳结果。', 'warning')
+      toast($('请先选中一张当前最佳结果。'), 'warning')
       return
     }
     setConfirmingShotResult(true)
@@ -2987,23 +2988,23 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         if (remaining > 0) {
           if (nextPendingShotId) {
             pendingAutoKickoffShotIdRef.current = nextPendingShotId
-            announceChapterAutoRelay(`当前镜头已确认，正在接力下一个待处理镜头。`, {
+            announceChapterAutoRelay($(`当前镜头已确认，正在接力下一个待处理镜头。`), {
               autoClearMs: 5200,
             })
             renderSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
-          toast(`当前镜头已确认。本章还剩 ${remaining} 个镜头待收口。`, 'success')
+          toast($t('当前镜头已确认。本章还剩 {{remaining}} 个镜头待收口。', { remaining: remaining }), 'success')
         } else {
-          announceChapterAutoRelay(nextChapter ? '本章已全部收口，可直接进入下一章。' : '本章已全部收口，可继续做整章深化或补齐后续章节。', {
+          announceChapterAutoRelay(nextChapter ? $('本章已全部收口，可直接进入下一章。') : $('本章已全部收口，可继续做整章深化或补齐后续章节。'), {
             autoClearMs: 5200,
           })
           chapterStageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          toast('当前镜头已确认，本章已全部收口。', 'success')
+          toast($('当前镜头已确认，本章已全部收口。'), 'success')
         }
       }
     } catch (error) {
       console.error('确认镜头结果失败', error)
-      toast(describeError(error, '确认镜头结果失败，请稍后重试'), 'error')
+      toast(describeError(error, $('确认镜头结果失败，请稍后重试')), 'error')
     } finally {
       setConfirmingShotResult(false)
     }
@@ -3031,11 +3032,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     }
     renderSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     if (!currentShotRender?.data.images?.length) {
-      announceChapterAutoRelay('正在启动当前关键镜头。', { autoClearMs: 5000 })
+      announceChapterAutoRelay($('正在启动当前关键镜头。'), { autoClearMs: 5000 })
       await handleGenerateShotImage()
       return
     }
-    announceChapterAutoRelay('当前关键镜头已有结果图，可直接继续确认或深化。', { autoClearMs: 3200 })
+    announceChapterAutoRelay($('当前关键镜头已有结果图，可直接继续确认或深化。'), { autoClearMs: 3200 })
   }, [announceChapterAutoRelay, chapterId, currentShotRender?.data.images?.length, projectId, shotDraft?.shotId, workbench])
 
   const handleFillChapterPrerequisite = React.useCallback(async (key: ChapterPrerequisiteKey) => {
@@ -3068,7 +3069,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           nextLatestVersions[asset.id] = asset.latestVersion || null
         }
         setAssetLatestVersions(nextLatestVersions)
-        toast('已补齐本章场景锚点。', 'success')
+        toast($('已补齐本章场景锚点。'), 'success')
         return
       }
       window.location.href = buildStudioUrl({
@@ -3078,7 +3079,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       })
     } catch (error) {
       console.error('补齐章节前置资产失败', error)
-      toast(describeError(error, '补齐章节前置资产失败，请稍后重试'), 'error')
+      toast(describeError(error, $('补齐章节前置资产失败，请稍后重试')), 'error')
     } finally {
       setFillingPrerequisiteKey(null)
     }
@@ -3120,16 +3121,16 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     } catch {}
     window.setTimeout(() => {
       if (!workbench.chapter.sourceBookChapter) {
-        announceChapterAutoRelay('已从上一章接力，正在为这一章对上原文。')
+        announceChapterAutoRelay($('已从上一章接力，正在为这一章对上原文。'))
         void handleAutoBindChapter({ autoDraftAfterBind: true })
         return
       }
       if (workbench.shots.length === 0) {
-        announceChapterAutoRelay('已从上一章接力，正在生成镜头板并启动关键镜头。')
+        announceChapterAutoRelay($('已从上一章接力，正在生成镜头板并启动关键镜头。'))
         void handleDraftShotsFromChapter({ silent: true, autoOpenPreferredShot: true, autoKickoffPreferredShot: true })
         return
       }
-      announceChapterAutoRelay('已从上一章接力，正在恢复当前关键镜头。', { autoClearMs: 5000 })
+      announceChapterAutoRelay($('已从上一章接力，正在恢复当前关键镜头。'), { autoClearMs: 5000 })
       void handleKickoffCurrentChapter()
     }, 180)
   }, [announceChapterAutoRelay, chapterId, handleKickoffCurrentChapter, projectId, workbench])
@@ -3218,7 +3219,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
 
     if (!chapterCharacters.length && !chapterProps.length && !chapterScenes.length && !styleAnchorDescription.trim()) {
       if (!options?.silent) {
-        toast('当前章节文本窗口还没有足够的角色、场景、道具或画风锚点。', 'warning')
+        toast($('当前章节文本窗口还没有足够的角色、场景、道具或画风锚点。'), 'warning')
       }
       return
     }
@@ -3277,7 +3278,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
           if (matched) {
             await createMaterialVersion(matched.id, {
               data: versionData,
-              note: `同步${kind === 'character' ? '角色' : kind === 'prop' ? '道具' : '场景'}线索：${clue.name}`,
+              note: $t('同步{{value}}线索：{{name}}', { value: kind === 'character' ? $('角色') : kind === 'prop' ? $('道具') : $('场景'), name: clue.name }),
             })
             updatedCount += 1
             continue
@@ -3287,7 +3288,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             kind,
             name: clue.name,
             initialData: versionData,
-            note: `由章节文本窗口沉淀${kind === 'character' ? '角色' : kind === 'prop' ? '道具' : '场景'}线索`,
+            note: $t('由章节文本窗口沉淀{{value}}线索', { value: kind === 'character' ? $('角色') : kind === 'prop' ? $('道具') : $('场景') }),
           })
           createdCount += 1
         }
@@ -3318,7 +3319,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         if (matchedStyleAsset) {
           await createMaterialVersion(matchedStyleAsset.id, {
             data: styleVersionData,
-            note: `同步项目画风锚点：${styleAnchorName}`,
+            note: $t('同步项目画风锚点：{{styleAnchorName}}', { styleAnchorName: styleAnchorName }),
           })
           styleResult = { createdCount: 0, updatedCount: 1 }
         } else {
@@ -3327,7 +3328,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             kind: 'style',
             name: styleAnchorName,
             initialData: styleVersionData,
-            note: '由项目设定与风格圣经沉淀画风锚点',
+            note: $('由项目设定与风格圣经沉淀画风锚点'),
           })
           styleResult = { createdCount: 1, updatedCount: 0 }
         }
@@ -3352,17 +3353,17 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       const totalCreated = characterResult.createdCount + propResult.createdCount + sceneResult.createdCount + styleResult.createdCount
       const totalUpdated = characterResult.updatedCount + propResult.updatedCount + sceneResult.updatedCount + styleResult.updatedCount
       const coverageSummary = [
-        `人物 ${coverageByKind.character.matchedCount}/${coverageByKind.character.chapterRequirementCount}`,
-        `场景 ${coverageByKind.scene.matchedCount}/${coverageByKind.scene.chapterRequirementCount}`,
-        `道具 ${coverageByKind.prop.matchedCount}/${coverageByKind.prop.chapterRequirementCount}`,
+        $t('人物 {{matchedCount}}/{{chapterRequirementCount}}', { matchedCount: coverageByKind.character.matchedCount, chapterRequirementCount: coverageByKind.character.chapterRequirementCount }),
+        $t('场景 {{matchedCount}}/{{chapterRequirementCount}}', { matchedCount: coverageByKind.scene.matchedCount, chapterRequirementCount: coverageByKind.scene.chapterRequirementCount }),
+        $t('道具 {{matchedCount}}/{{chapterRequirementCount}}', { matchedCount: coverageByKind.prop.matchedCount, chapterRequirementCount: coverageByKind.prop.chapterRequirementCount }),
       ].join(' · ')
       if (!options?.silent || totalCreated > 0 || totalUpdated > 0) {
-        toast(`已同步章节线索到项目记忆：新增 ${totalCreated}，更新 ${totalUpdated}。全局匹配：${coverageSummary}。`, 'success')
+        toast($t('已同步章节线索到项目记忆：新增 {{totalCreated}}，更新 {{totalUpdated}}。全局匹配：{{coverageSummary}}。', { totalCreated: totalCreated, totalUpdated: totalUpdated, coverageSummary: coverageSummary }), 'success')
       }
     } catch (error) {
       console.error('同步章节记忆失败', error)
       if (!options?.silent) {
-        toast(describeError(error, '同步章节记忆失败，请稍后重试'), 'error')
+        toast(describeError(error, $('同步章节记忆失败，请稍后重试')), 'error')
       }
     } finally {
       setSyncingChapterMemory(false)
@@ -3372,7 +3373,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   const handleBindShotMemory = async () => {
     if (!projectId || !activeShot?.id || bindingShotMemory) return
     if (suggestedShotMemoryAssets.length === 0) {
-      toast('当前章节还没有可绑定到镜头的项目记忆资产。', 'warning')
+      toast($('当前章节还没有可绑定到镜头的项目记忆资产。'), 'warning')
       return
     }
     setBindingShotMemory(true)
@@ -3396,10 +3397,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         refs: Array.from(mergedRefs.values()),
       })
       setCurrentShotRefs(saved)
-      toast(`已为当前镜头绑定 ${suggestedShotMemoryAssets.length} 个项目记忆资产。`, 'success')
+      toast($t('已为当前镜头绑定 {{count}} 个项目记忆资产。', { count: suggestedShotMemoryAssets.length }), 'success')
     } catch (error) {
       console.error('绑定镜头记忆失败', error)
-      toast(describeError(error, '绑定镜头记忆失败，请稍后重试'), 'error')
+      toast(describeError(error, $('绑定镜头记忆失败，请稍后重试')), 'error')
     } finally {
       setBindingShotMemory(false)
     }
@@ -3462,7 +3463,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   })()
   const sourceChapterOptions = (bookIndex?.chapters || []).map((item) => ({
     value: String(item.chapter),
-    label: `第${item.chapter}章 · ${item.title || '未命名章节'}`,
+    label: $t('第{{chapter}}章 · {{value}}', { chapter: item.chapter, value: item.title || $('未命名章节') }),
   }))
   const selectedDirectorManualPreset = getDirectorManualPresetById(projectSetup.directorManualPresetId)
   const currentChapterIndex = chapters.findIndex((item) => item.id === chapterId)
@@ -3616,34 +3617,34 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   const currentShotChecklistItems = [
     {
       key: 'prompt',
-      label: '执行 Prompt',
+      label: $('执行 Prompt'),
       ready: Boolean(shotRenderPrompt.trim()),
-      detail: shotRenderPrompt.trim() ? '已生成，可直接执行。' : '当前镜头还没有可执行 Prompt。',
+      detail: shotRenderPrompt.trim() ? $('已生成，可直接执行。') : $('当前镜头还没有可执行 Prompt。'),
     },
     {
       key: 'memory',
-      label: '项目记忆',
+      label: $('项目记忆'),
       ready: currentShotBoundAssetCards.length > 0 || suggestedShotMemoryAssets.length > 0,
       detail:
         currentShotBoundAssetCards.length > 0
-          ? `已绑定 ${currentShotBoundAssetCards.length} 个项目资产。`
+          ? $t('已绑定 {{count}} 个项目资产。', { count: currentShotBoundAssetCards.length })
           : suggestedShotMemoryAssets.length > 0
-            ? `可自动命中 ${suggestedShotMemoryAssets.length} 个项目资产。`
-            : '当前还没有命中可复用资产。',
+            ? $t('可自动命中 {{count}} 个项目资产。', { count: suggestedShotMemoryAssets.length })
+            : $('当前还没有命中可复用资产。'),
     },
     {
       key: 'image',
-      label: '当前结果图',
+      label: $('当前结果图'),
       ready: Boolean(currentShotPreviewUrl),
-      detail: currentShotPreviewUrl ? '已有当前结果，可直接选图确认。' : '当前镜头还没有结果图。',
+      detail: currentShotPreviewUrl ? $('已有当前结果，可直接选图确认。') : $('当前镜头还没有结果图。'),
     },
     {
       key: 'scene',
-      label: '共享场景',
+      label: $('共享场景'),
       ready: Boolean(activeSceneAssetId),
       detail: activeSceneAssetId
-        ? `已沉淀为「${sceneAssets.find((item) => item.id === activeSceneAssetId)?.name || '当前共享场景'}」。`
-        : '当前结果还没有沉淀为共享场景。',
+        ? $t('已沉淀为「{{value}}」。', { value: sceneAssets.find((item) => item.id === activeSceneAssetId)?.name || $('当前共享场景') })
+        : $('当前结果还没有沉淀为共享场景。'),
     },
   ] as const
   const chapterHasTextContext = Boolean(
@@ -3679,21 +3680,21 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     legacyResumeStatus: chapterResumeStatus,
   })
   const chapterPrerequisiteActionMeta: Record<ChapterPrerequisiteKey, { actionLabel: string; disabled?: boolean }> = {
-    source: { actionLabel: '绑定原文' },
+    source: { actionLabel: $('绑定原文') },
     text: {
-      actionLabel: workbench?.chapter.sourceBookChapter ? '查看原文' : chapterResumeStatus.continuable ? '续接后补录' : '先绑定原文',
+      actionLabel: workbench?.chapter.sourceBookChapter ? $('查看原文') : chapterResumeStatus.continuable ? $('续接后补录') : $('先绑定原文'),
       disabled: chapterHasTextContext || chapterResumeStatus.continuable,
     },
     shots: {
-      actionLabel: Boolean(workbench?.shots.length) ? '继续补镜头' : '生成镜头板',
+      actionLabel: Boolean(workbench?.shots.length) ? $('继续补镜头') : $('生成镜头板'),
       disabled: !workbench?.chapter.sourceBookChapter && !chapterHasTextContext,
     },
     scene_anchor: {
-      actionLabel: '补场景锚点',
+      actionLabel: $('补场景锚点'),
       disabled: !chapterHasTextContext,
     },
     character_anchor: {
-      actionLabel: '去补人物锚点',
+      actionLabel: $('去补人物锚点'),
       disabled: chapterCharacterNames.length <= 0,
     },
   }
@@ -3745,16 +3746,16 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   const shotControlSummary = (() => {
     if (workbenchStats.totalShots === 0) {
       return canDraftShotsFromChapter
-        ? '先按本章文本起稿，这里会直接生成第一版镜头板。'
-        : '先补齐章节文本窗口，再起稿镜头板。'
+        ? $('先按本章文本起稿，这里会直接生成第一版镜头板。')
+        : $('先补齐章节文本窗口，再起稿镜头板。')
     }
     if (selectedShotIds.length > 0) {
-      return `当前已选 ${selectedShotIds.length} 个镜头，可批量调整状态。`
+      return $t('当前已选 {{count}} 个镜头，可批量调整状态。', { count: selectedShotIds.length })
     }
     if (shotStatusFilter !== 'all' || shotQuery.trim()) {
-      return `当前只显示 ${filteredShots.length} 个镜头，清空筛选后可恢复完整镜头板。`
+      return $t('当前只显示 {{count}} 个镜头，清空筛选后可恢复完整镜头板。', { count: filteredShots.length })
     }
-    return `当前已有 ${workbenchStats.totalShots} 个镜头，先点开一个镜头，再进入下方“镜头生产”。`
+    return $t('当前已有 {{totalShots}} 个镜头，先点开一个镜头，再进入下方“镜头生产”。', { totalShots: workbenchStats.totalShots })
   })()
   const recommendedShotIds = React.useMemo(() => {
     if (!workbench?.shots?.length) return []
@@ -3827,10 +3828,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
         spaNavigate(buildProjectChapterUrl(projectId, nextChapter.id))
         return
       }
-      toast('当前已经是最后一章，可继续补齐章节或回到项目总览。', 'info')
+      toast($('当前已经是最后一章，可继续补齐章节或回到项目总览。'), 'info')
     } catch (error) {
       console.error('推进到下一章失败', error)
-      toast(describeError(error, '推进到下一章失败，请稍后重试'), 'error')
+      toast(describeError(error, $('推进到下一章失败，请稍后重试')), 'error')
     } finally {
       setAdvancingChapter(false)
     }
@@ -3838,112 +3839,112 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   const nextStepItems = (() => {
     if (!workbench) {
       return [
-        '当前章节数据正在加载。',
-        '加载完成后再继续绑定原文、整理镜头和执行生产。',
+        $('当前章节数据正在加载。'),
+        $('加载完成后再继续绑定原文、整理镜头和执行生产。'),
       ]
     }
     if (chapterResumeStatus.continuable && !workbench.chapter.sourceBookChapter) {
       return [
         chapterResumeStatus.summary,
-        chapterResumeStatus.details[0] ? `可先从旧结果续接：${chapterResumeStatus.details[0]}。` : '可先从已有章节结果续接。',
-        '建议先进入镜头板确认当前可复用结果，再按需要补录原文绑定、摘要和分镜脚本。',
+        chapterResumeStatus.details[0] ? $t('可先从旧结果续接：{{details}}。', { details: chapterResumeStatus.details[0] }) : $('可先从已有章节结果续接。'),
+        $('建议先进入镜头板确认当前可复用结果，再按需要补录原文绑定、摘要和分镜脚本。'),
       ]
     }
     if (!projectBooks.length && !projectTextAsset) {
       return [
-        '当前项目还没有原文。',
-        '可继续补充项目简介、画风和导演规则。',
+        $('当前项目还没有原文。'),
+        $('可继续补充项目简介、画风和导演规则。'),
       ]
     }
     if (projectBooks.length > 0 && !workbench.chapter.sourceBookChapter) {
       return [
-        '当前章节还没有锁定对应原文。',
-        '点击主按钮即可自动绑定，并继续生成第一版镜头。',
+        $('当前章节还没有锁定对应原文。'),
+        $('点击主按钮即可自动绑定，并继续生成第一版镜头。'),
       ]
     }
     if (workbench.shots.length === 0) {
       return [
-        '当前章节还没有镜头执行单元。',
-        '点击主按钮后，这里会按本章文本自动建立第一版镜头板。',
+        $('当前章节还没有镜头执行单元。'),
+        $('点击主按钮后，这里会按本章文本自动建立第一版镜头板。'),
       ]
     }
     if (chapterReadyToAdvance) {
       return [
         nextChapter
-          ? `本章镜头已经收口，可进入 ${nextChapter.title || `第 ${nextChapter.index} 章`}。`
-          : '本章镜头已经全部收口，可继续补齐后续章节或回到项目总览。',
-        '确认本章后，会把本章标记为已确认，并切到下一章继续生产。',
+          ? $t('本章镜头已经收口，可进入 {{index}}。', { index: nextChapter.title || $t('第 {{index}} 章', { index: nextChapter.index }) })
+          : $('本章镜头已经全部收口，可继续补齐后续章节或回到项目总览。'),
+        $('确认本章后，会把本章标记为已确认，并切到下一章继续生产。'),
       ]
     }
     if (remainingChapterShotsToFinish > 0 && workbenchStats.generatedShots > 0) {
       return [
-        `本章还剩 ${remainingChapterShotsToFinish} 个镜头待收口。`,
-        '先确认关键镜头结果并沉淀共享资产，再扩展剩余镜头。',
+        $t('本章还剩 {{remainingChapterShotsToFinish}} 个镜头待收口。', { remainingChapterShotsToFinish: remainingChapterShotsToFinish }),
+        $('先确认关键镜头结果并沉淀共享资产，再扩展剩余镜头。'),
       ]
     }
     if (recommendedShots.length > 0) {
       return [
-        `建议先做关键镜头：${recommendedShotLabel}。`,
-        '先把开场、冲突或结尾钩子镜头打稳，再扩展整章，质量更容易稳定。',
+        $t('建议先做关键镜头：{{recommendedShotLabel}}。', { recommendedShotLabel: recommendedShotLabel }),
+        $('先把开场、冲突或结尾钩子镜头打稳，再扩展整章，质量更容易稳定。'),
       ]
     }
     return [
-      '当前章节已经具备文本窗口和镜头列表。',
-      '可继续处理镜头、资源和审阅。',
+      $('当前章节已经具备文本窗口和镜头列表。'),
+      $('可继续处理镜头、资源和审阅。'),
     ]
   })()
   const currentStage = (() => {
     if (!workbench) {
       return {
-        badge: '加载中',
-        title: '当前章节数据正在准备',
-        description: '等待这一页加载完成后，再继续原文绑定、镜头整理和生产。',
-        actionLabel: '查看章节列表',
+        badge: $('加载中'),
+        title: $('当前章节数据正在准备'),
+        description: $('等待这一页加载完成后，再继续原文绑定、镜头整理和生产。'),
+        actionLabel: $('查看章节列表'),
         onAction: () => undefined,
       }
     }
     if (!projectBooks.length && !projectTextAsset) {
       if (chapterResumeStatus.continuable) {
         return {
-          badge: '续接老数据',
-          title: '检测到历史章节资产，可直接续接当前章节',
-          description: chapterResumeStatus.details.slice(0, 2).join('；') || '当前章节已有旧镜头、分镜或沉淀资产，可先接着做。',
-          actionLabel: workbench.shots.length > 0 ? '进入镜头板续接' : '查看章节资产',
+          badge: $('续接老数据'),
+          title: $('检测到历史章节资产，可直接续接当前章节'),
+          description: chapterResumeStatus.details.slice(0, 2).join('；') || $('当前章节已有旧镜头、分镜或沉淀资产，可先接着做。'),
+          actionLabel: workbench.shots.length > 0 ? $('进入镜头板续接') : $('查看章节资产'),
           onAction: () => shotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
         }
       }
       return {
-        badge: '先导入文本',
-        title: '当前项目还没有生产底稿',
-        description: '上传文本后即可继续章节导入和后续配置。',
-        actionLabel: '跳到文本导入',
+        badge: $('先导入文本'),
+        title: $('当前项目还没有生产底稿'),
+        description: $('上传文本后即可继续章节导入和后续配置。'),
+        actionLabel: $('跳到文本导入'),
         onAction: () => textSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       }
     }
     if (chapterResumeStatus.continuable && !workbench.chapter.sourceBookChapter) {
       return {
-        badge: '续接当前章节',
-        title: '老章节已有结果，可先续接再补齐新链路字段',
-        description: chapterResumeStatus.details.slice(0, 3).join('；') || '当前章节已经存在可复用的历史结果。',
-        actionLabel: workbench.shots.length > 0 ? '进入镜头板续接' : '查看可复用资产',
+        badge: $('续接当前章节'),
+        title: $('老章节已有结果，可先续接再补齐新链路字段'),
+        description: chapterResumeStatus.details.slice(0, 3).join('；') || $('当前章节已经存在可复用的历史结果。'),
+        actionLabel: workbench.shots.length > 0 ? $('进入镜头板续接') : $('查看可复用资产'),
         onAction: () => shotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       }
     }
     if (!workbench.chapter.sourceBookChapter) {
       return {
-        badge: '先绑定原文',
-        title: '先把这一章绑定到正确的原文章节',
-        description: '这里会优先自动绑定；如果这章还没有镜头板，会继续按本章文本起出第一版镜头。',
-        actionLabel: '自动绑定并继续',
+        badge: $('先绑定原文'),
+        title: $('先把这一章绑定到正确的原文章节'),
+        description: $('这里会优先自动绑定；如果这章还没有镜头板，会继续按本章文本起出第一版镜头。'),
+        actionLabel: $('自动绑定并继续'),
         onAction: () => void handleAutoBindChapter({ autoDraftAfterBind: true }),
       }
     }
     if (workbench.shots.length === 0) {
       return {
-        badge: '先建镜头板',
-        title: '章节已经就位，但还没有镜头执行单元',
-        description: '这里会直接按本章文本起镜头板，并优先打开关键镜头开始出图。',
-        actionLabel: canDraftShotsFromChapter ? '一键生成镜头板' : '查看镜头区',
+        badge: $('先建镜头板'),
+        title: $('章节已经就位，但还没有镜头执行单元'),
+        description: $('这里会直接按本章文本起镜头板，并优先打开关键镜头开始出图。'),
+        actionLabel: canDraftShotsFromChapter ? $('一键生成镜头板') : $('查看镜头区'),
         onAction: () => {
           if (canDraftShotsFromChapter) {
             void handleDraftShotsFromChapter({ autoOpenPreferredShot: true, autoKickoffPreferredShot: true })
@@ -3955,56 +3956,56 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     }
     if (recommendedShots.length > 0 && !activeShot) {
       return {
-        badge: '先做关键镜头',
-        title: `建议先做 ${recommendedShots[0]?.title || `Shot ${(recommendedShots[0]?.shotIndex ?? 0) + 1}`}`,
-        description: '先把关键镜头做稳，再扩展整章，连续性和风格更容易锁住。',
-        actionLabel: '查看推荐镜头',
+        badge: $('先做关键镜头'),
+        title: $t('建议先做 {{shotIndex}}', { shotIndex: recommendedShots[0]?.title || `Shot ${(recommendedShots[0]?.shotIndex ?? 0) + 1}` }),
+        description: $('先把关键镜头做稳，再扩展整章，连续性和风格更容易锁住。'),
+        actionLabel: $('查看推荐镜头'),
         onAction: () => shotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       }
     }
     if (!chapterPrerequisiteStatus.ready) {
       return {
-        badge: '自动补齐前置',
-        title: '当前章节前置资产未完备',
-        description: `系统会先自动补齐：${chapterPrerequisiteStatus.missingDetails.join('；')}，再继续当前镜头。`,
-        actionLabel: '自动补齐并继续',
+        badge: $('自动补齐前置'),
+        title: $('当前章节前置资产未完备'),
+        description: $t('系统会先自动补齐：{{join}}，再继续当前镜头。', { join: chapterPrerequisiteStatus.missingDetails.join('；') }),
+        actionLabel: $('自动补齐并继续'),
         onAction: () => void handleKickoffCurrentChapter(),
       }
     }
     if (!currentShotRender?.data.images?.length) {
       return {
-        badge: '开始出图',
-        title: '当前章节已具备执行条件',
-        description: '这里会优先启动当前关键镜头，并自动带上本章命中资产与跨章连续资产。',
-        actionLabel: '启动当前关键镜头',
+        badge: $('开始出图'),
+        title: $('当前章节已具备执行条件'),
+        description: $('这里会优先启动当前关键镜头，并自动带上本章命中资产与跨章连续资产。'),
+        actionLabel: $('启动当前关键镜头'),
         onAction: () => void handleKickoffCurrentChapter(),
       }
     }
     if (workbenchStats.reworkShots > 0) {
       return {
-        badge: '优先返工',
-        title: '这一章已经出现待返工镜头',
-        description: '当前有待返工镜头，可回到镜头板查看。',
-        actionLabel: '查看镜头板',
+        badge: $('优先返工'),
+        title: $('这一章已经出现待返工镜头'),
+        description: $('当前有待返工镜头，可回到镜头板查看。'),
+        actionLabel: $('查看镜头板'),
         onAction: () => shotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       }
     }
     if (chapterReadyToAdvance) {
       return {
-        badge: '进入下一章',
-        title: nextChapter ? '这一章已经收口，可以继续下一章' : '这一章已经收口',
+        badge: $('进入下一章'),
+        title: nextChapter ? $('这一章已经收口，可以继续下一章') : $('这一章已经收口'),
         description: nextChapter
-          ? `下一章 ${nextChapter.title || `第 ${nextChapter.index} 章`} 已经接好。`
-          : '当前没有下一章，可继续补齐章节或回到项目总览。',
-        actionLabel: nextChapter ? '完成本章并进入下一章' : '完成本章',
+          ? $t('下一章 {{index}} 已经接好。', { index: nextChapter.title || $t('第 {{index}} 章', { index: nextChapter.index }) })
+          : $('当前没有下一章，可继续补齐章节或回到项目总览。'),
+        actionLabel: nextChapter ? $('完成本章并进入下一章') : $('完成本章'),
         onAction: () => void handleAdvanceToNextChapter(),
       }
     }
     return {
-      badge: '继续推进',
-      title: '这一章已经进入连续生产状态',
-      description: '可继续处理出图、结果选择和审阅。',
-      actionLabel: '继续当前镜头',
+      badge: $('继续推进'),
+      title: $('这一章已经进入连续生产状态'),
+      description: $('可继续处理出图、结果选择和审阅。'),
+      actionLabel: $('继续当前镜头'),
       onAction: () => renderSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     }
   })()
@@ -4039,19 +4040,19 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     if (!currentShotRender?.data.images?.length && !chapterReadyToAdvance) return null
     if (chapterReadyToAdvance) {
       return {
-        title: '本章已经收口，可做整章深化或交接下一章',
+        title: $('本章已经收口，可做整章深化或交接下一章'),
         description: nextChapter
-          ? '如需继续做整章节奏、镜头联动或输出链路，可进入章节流程；若当前镜头还要继续打磨，也可以直接进镜头流程。'
-          : '如果还要补整章节奏、镜头联动或输出链路，可进入章节流程；当前镜头也可单独继续深化。',
-        primaryLabel: '进入章节深化',
-        secondaryLabel: shotDraft?.shotId ? '进入当前镜头成片' : '',
+          ? $('如需继续做整章节奏、镜头联动或输出链路，可进入章节流程；若当前镜头还要继续打磨，也可以直接进镜头流程。')
+          : $('如果还要补整章节奏、镜头联动或输出链路，可进入章节流程；当前镜头也可单独继续深化。'),
+        primaryLabel: $('进入章节深化'),
+        secondaryLabel: shotDraft?.shotId ? $('进入当前镜头成片') : '',
       }
     }
     return {
-      title: '当前已经有稳定结果，可继续做成片推进',
-      description: '优先进入章节流程做整章编排与连续性控制；若只想深挖当前镜头，则直接进入镜头流程。',
-      primaryLabel: '整章深化',
-      secondaryLabel: shotDraft?.shotId ? '当前镜头成片' : '',
+      title: $('当前已经有稳定结果，可继续做成片推进'),
+      description: $('优先进入章节流程做整章编排与连续性控制；若只想深挖当前镜头，则直接进入镜头流程。'),
+      primaryLabel: $('整章深化'),
+      secondaryLabel: shotDraft?.shotId ? $('当前镜头成片') : '',
     }
   })()
   const showBindingEditor = showAdvancedPanels || !workbench?.chapter.sourceBookChapter
@@ -4066,97 +4067,97 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   const continuityChecks = workbench ? [
     {
       key: 'source-window',
-      label: '章节文本窗口',
+      label: $('章节文本窗口'),
       status: workbench.chapter.sourceBookChapter ? 'ready' : 'missing',
       detail: workbench.chapter.sourceBookChapter
-        ? `当前镜头只消费原文第 ${workbench.chapter.sourceBookChapter} 章。`
-        : '当前还没绑定原文章节。',
+        ? $t('当前镜头只消费原文第 {{sourceBookChapter}} 章。', { sourceBookChapter: workbench.chapter.sourceBookChapter })
+        : $('当前还没绑定原文章节。'),
     },
     {
       key: 'style-bible',
-      label: '项目画风锚点',
+      label: $('项目画风锚点'),
       status: projectSetup.artStyleName.trim() || projectSetup.styleDirectives.trim() || styleAssets.length > 0 ? 'ready' : 'missing',
       detail: projectSetup.artStyleName.trim()
-        ? `已配置画风「${projectSetup.artStyleName.trim()}」。`
+        ? $t('已配置画风「{{trim}}」。', { trim: projectSetup.artStyleName.trim() })
         : styleAssets.length > 0
-          ? `已有 ${styleAssets.length} 个风格资产。`
-          : '当前还没有配置画风信息。',
+          ? $t('已有 {{count}} 个风格资产。', { count: styleAssets.length })
+          : $('当前还没有配置画风信息。'),
     },
     {
       key: 'roles-memory',
-      label: '角色连续性',
+      label: $('角色连续性'),
       status: projectMemorySummary.roleHintCount > 0 || projectMemorySummary.characterAssetCount > 0 ? 'ready' : 'warning',
       detail: projectMemorySummary.characterAssetCount > 0
-        ? `项目层已有 ${projectMemorySummary.characterAssetCount} 个角色资产。`
+        ? $t('项目层已有 {{characterAssetCount}} 个角色资产。', { characterAssetCount: projectMemorySummary.characterAssetCount })
         : projectMemorySummary.roleHintCount > 0
-          ? `本章识别到 ${projectMemorySummary.roleHintCount} 个角色线索。`
-          : '本章还没有明确角色线索。',
+          ? $t('本章识别到 {{roleHintCount}} 个角色线索。', { roleHintCount: projectMemorySummary.roleHintCount })
+          : $('本章还没有明确角色线索。'),
     },
     {
       key: 'prop-memory',
-      label: '道具锚点',
+      label: $('道具锚点'),
       status: projectMemorySummary.propAssetCount > 0 || ((boundSourceChapterDetail?.props || mappedSourceChapterMeta?.props || []).length > 0) ? 'ready' : 'warning',
       detail: projectMemorySummary.propAssetCount > 0
-        ? `项目层已有 ${projectMemorySummary.propAssetCount} 个道具资产。`
+        ? $t('项目层已有 {{propAssetCount}} 个道具资产。', { propAssetCount: projectMemorySummary.propAssetCount })
         : ((boundSourceChapterDetail?.props || mappedSourceChapterMeta?.props || []).length > 0)
-          ? `当前文本窗口已识别 ${(boundSourceChapterDetail?.props || mappedSourceChapterMeta?.props || []).length} 个道具线索。`
-          : '当前章节还没有道具线索。',
+          ? $t('当前文本窗口已识别 {{count}} 个道具线索。', { count: (boundSourceChapterDetail?.props || mappedSourceChapterMeta?.props || []).length })
+          : $('当前章节还没有道具线索。'),
     },
     {
       key: 'scene-memory',
-      label: '场景复用',
+      label: $('场景复用'),
       status: currentSceneAsset ? (outdatedShotCount > 0 ? 'warning' : 'ready') : 'missing',
       detail: currentSceneAsset
         ? outdatedShotCount > 0
-          ? `当前共享场景仍有 ${outdatedShotCount} 个镜头绑定旧版本。`
-          : `当前镜头已接入共享场景「${currentSceneAsset.name}」。`
-        : '当前镜头还没有绑定共享场景。',
+          ? $t('当前共享场景仍有 {{outdatedShotCount}} 个镜头绑定旧版本。', { outdatedShotCount: outdatedShotCount })
+          : $t('当前镜头已接入共享场景「{{name}}」。', { name: currentSceneAsset.name })
+        : $('当前镜头还没有绑定共享场景。'),
     },
     {
       key: 'review-loop',
-      label: '返工闭环',
+      label: $('返工闭环'),
       status: workbenchStats.reworkShots > 0 ? 'warning' : (workbenchStats.generatedShots > 0 ? 'ready' : 'missing'),
       detail: workbenchStats.reworkShots > 0
-        ? `本章还有 ${workbenchStats.reworkShots} 个镜头待返工，应先收口。`
+        ? $t('本章还有 {{reworkShots}} 个镜头待返工，应先收口。', { reworkShots: workbenchStats.reworkShots })
         : workbenchStats.generatedShots > 0
-          ? '当前章节已有可审阅结果，可以继续推进或确认。'
-          : '还没有形成可审阅结果，质量闭环尚未启动。',
+          ? $('当前章节已有可审阅结果，可以继续推进或确认。')
+          : $('还没有形成可审阅结果，质量闭环尚未启动。'),
     },
   ] as const : []
   const activeSharedMemorySignals = [
-    projectMemorySummary.sourceReady ? `项目原文已接入，当前项目共 ${chapters.length} 章。` : '项目原文尚未接入。',
+    projectMemorySummary.sourceReady ? $t('项目原文已接入，当前项目共 {{count}} 章。', { count: chapters.length }) : $('项目原文尚未接入。'),
     currentChapterPrimaryBaseSceneAnchor
-      ? `本章基础空间锚点已沉淀为「${currentChapterPrimaryBaseSceneAnchor.asset.name}」。`
-      : '本章还没有基础空间锚点。',
+      ? $t('本章基础空间锚点已沉淀为「{{name}}」。', { name: currentChapterPrimaryBaseSceneAnchor.asset.name })
+      : $('本章还没有基础空间锚点。'),
     currentSceneAsset
-      ? `当前镜头复用了共享场景「${currentSceneAsset.name}」，影响 ${impactedShotCount} 个镜头。`
-      : '当前镜头还没有绑定共享场景。',
+      ? $t('当前镜头复用了共享场景「{{name}}」，影响 {{impactedShotCount}} 个镜头。', { name: currentSceneAsset.name, impactedShotCount: impactedShotCount })
+      : $('当前镜头还没有绑定共享场景。'),
     styleAssets.length > 0
-      ? `项目层已有 ${styleAssets.length} 个风格资产锚点。`
-      : '项目层还没有风格资产锚点。',
+      ? $t('项目层已有 {{count}} 个风格资产锚点。', { count: styleAssets.length })
+      : $('项目层还没有风格资产锚点。'),
     propAssets.length > 0
-      ? `项目层已有 ${propAssets.length} 个可复用道具资产。`
-      : '项目层还没有稳定的道具资产。',
+      ? $t('项目层已有 {{count}} 个可复用道具资产。', { count: propAssets.length })
+      : $('项目层还没有稳定的道具资产。'),
     projectMemorySummary.roleHintCount > 0
-      ? `本章文本窗口识别到 ${projectMemorySummary.roleHintCount} 个角色线索。`
-      : '本章文本窗口还没有角色线索。',
+      ? $t('本章文本窗口识别到 {{roleHintCount}} 个角色线索。', { roleHintCount: projectMemorySummary.roleHintCount })
+      : $('本章文本窗口还没有角色线索。'),
   ]
   const chapterReusableMemoryGroups = [
     {
       key: 'character',
-      label: '角色',
+      label: $('角色'),
       ready: matchedCharacterAssets.length > 0 || carryoverCharacterAssets.length > 0,
       names: [...matchedCharacterAssets, ...carryoverCharacterAssets].slice(0, 4).map((item) => item.name).filter(Boolean),
       emptyText:
         carryoverCharacterAssets.length > 0
-          ? '本章将优先继承上一章的连续角色。'
+          ? $('本章将优先继承上一章的连续角色。')
           : chapterCharacterNames.length > 0
-            ? '本章识别到角色，但项目里还没有可复用角色资产。'
-            : '本章还没识别到明确角色线索。',
+            ? $('本章识别到角色，但项目里还没有可复用角色资产。')
+            : $('本章还没识别到明确角色线索。'),
     },
     {
       key: 'scene',
-      label: '场景',
+      label: $('场景'),
       ready: currentChapterBaseSceneAssets.length > 0 || matchedSceneAssets.length > 0 || currentChapterSceneAssets.length > 0 || carryoverSceneAssets.length > 0,
       names: [
         ...currentChapterBaseSceneAssets.map((item) => item.asset),
@@ -4166,96 +4167,96 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       ].slice(0, 4).map((item) => item.name).filter(Boolean),
       emptyText:
         currentChapterBaseSceneAssets.length > 0
-          ? '本章基础空间锚点已经就绪，后续镜头会优先继承这个稳定场景。'
+          ? $('本章基础空间锚点已经就绪，后续镜头会优先继承这个稳定场景。')
         : currentChapterSceneAssets.length > 0
-          ? '本章已经沉淀出可复用场景，会直接带入后续镜头。'
+          ? $('本章已经沉淀出可复用场景，会直接带入后续镜头。')
         : carryoverSceneAssets.length > 0
-          ? '本章将优先继承上一章沉淀的连续场景。'
+          ? $('本章将优先继承上一章沉淀的连续场景。')
           : chapterSceneNames.length > 0
-            ? '本章识别到场景，但项目里还没有稳定场景资产。'
-            : '本章还没识别到明确场景线索。',
+            ? $('本章识别到场景，但项目里还没有稳定场景资产。')
+            : $('本章还没识别到明确场景线索。'),
     },
     {
       key: 'prop',
-      label: '道具',
+      label: $('道具'),
       ready: matchedPropAssets.length > 0 || carryoverPropAssets.length > 0,
       names: [...matchedPropAssets, ...carryoverPropAssets].slice(0, 4).map((item) => item.name).filter(Boolean),
       emptyText:
         carryoverPropAssets.length > 0
-          ? '本章将优先继承上一章的连续道具。'
+          ? $('本章将优先继承上一章的连续道具。')
           : chapterPropNames.length > 0
-            ? '本章识别到道具，但项目里还没有可复用道具资产。'
-            : '本章还没识别到明确道具线索。',
+            ? $('本章识别到道具，但项目里还没有可复用道具资产。')
+            : $('本章还没识别到明确道具线索。'),
     },
   ] as const
   const chapterMemoryReadinessSummary = (() => {
     const readyCount = chapterReusableMemoryGroups.filter((item) => item.ready).length
-    if (readyCount === 3) return '本章可直接复用现有角色、场景和道具。'
-    if (readyCount > 0) return `本章已命中 ${readyCount} 类可复用资产，其余内容会在本章继续沉淀。`
-    return '本章还没有命中可直接复用的共享资产，先从关键镜头开始沉淀。'
+    if (readyCount === 3) return $('本章可直接复用现有角色、场景和道具。')
+    if (readyCount > 0) return $t('本章已命中 {{readyCount}} 类可复用资产，其余内容会在本章继续沉淀。', { readyCount: readyCount })
+    return $('本章还没有命中可直接复用的共享资产，先从关键镜头开始沉淀。')
   })()
   const chapterRelaySummary = (() => {
     const inheritedKinds = chapterReusableMemoryGroups.filter((item) => item.ready)
     if (previousChapter?.status === 'approved' && inheritedKinds.length > 0) {
-      return `上一章已确认，本章可直接继承 ${inheritedKinds.map((item) => item.label).join('、')} 资产继续生产。`
+      return $t('上一章已确认，本章可直接继承 {{join}} 资产继续生产。', { join: inheritedKinds.map((item) => item.label).join('、') })
     }
     if (previousChapter?.status === 'approved') {
-      return '上一章已确认，本章可以沿着既有画风和共享场景继续推进。'
+      return $('上一章已确认，本章可以沿着既有画风和共享场景继续推进。')
     }
     if (inheritedKinds.length > 0) {
-      return `本章已经命中 ${inheritedKinds.length} 类共享资产，可直接承接连续性。`
+      return $t('本章已经命中 {{count}} 类共享资产，可直接承接连续性。', { count: inheritedKinds.length })
     }
-    return '本章将从当前项目画风和后续沉淀的共享资产中继续建立连续性。'
+    return $('本章将从当前项目画风和后续沉淀的共享资产中继续建立连续性。')
   })()
   const reworkDiagnosisItems = (() => {
     const items: Array<{ title: string; detail: string; tone: 'red' | 'yellow' | 'gray' }> = []
     if (!workbench) {
       items.push({
-        title: '章节数据尚未加载',
-        detail: '等待这一页返回当前章节数据。',
+        title: $('章节数据尚未加载'),
+        detail: $('等待这一页返回当前章节数据。'),
         tone: 'gray',
       })
       return items
     }
     if (workbenchStats.reworkShots > 0) {
       items.push({
-        title: '存在待返工镜头',
-        detail: `当前章节有 ${workbenchStats.reworkShots} 个镜头处于返工态。`,
+        title: $('存在待返工镜头'),
+        detail: $t('当前章节有 {{reworkShots}} 个镜头处于返工态。', { reworkShots: workbenchStats.reworkShots }),
         tone: 'red',
       })
     }
     if (!workbench.chapter.sourceBookChapter) {
       items.push({
-        title: '原文章节未锁定',
-        detail: '当前还没有绑定原文章节。',
+        title: $('原文章节未锁定'),
+        detail: $('当前还没有绑定原文章节。'),
         tone: 'yellow',
       })
     }
     if (!currentShotRender?.data.images?.length) {
       items.push({
-        title: '当前镜头还没有稳定结果',
-        detail: '还没有可审阅结果图。',
+        title: $('当前镜头还没有稳定结果'),
+        detail: $('还没有可审阅结果图。'),
         tone: 'gray',
       })
     }
     if (!projectSetup.artStyleName.trim() && !projectSetup.styleDirectives.trim() && styleAssets.length === 0) {
       items.push({
-        title: '画风锚点不足',
-        detail: '项目层还没有明确画风规则或风格资产。',
+        title: $('画风锚点不足'),
+        detail: $('项目层还没有明确画风规则或风格资产。'),
         tone: 'yellow',
       })
     }
     if (currentSceneAsset && outdatedShotCount > 0) {
       items.push({
-        title: '共享场景版本未同步',
-        detail: `当前共享场景仍有 ${outdatedShotCount} 个旧版本引用。`,
+        title: $('共享场景版本未同步'),
+        detail: $t('当前共享场景仍有 {{outdatedShotCount}} 个旧版本引用。', { outdatedShotCount: outdatedShotCount }),
         tone: 'yellow',
       })
     }
     if (items.length === 0) {
       items.push({
-        title: '当前章节没有明显返工阻塞',
-        detail: '当前章节没有明显阻塞项。',
+        title: $('当前章节没有明显返工阻塞'),
+        detail: $('当前章节没有明显阻塞项。'),
         tone: 'gray',
       })
     }
@@ -4266,16 +4267,16 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
     const matchedShot = isShot && workbench ? workbench.shots.find((shot) => shot.id === item.ownerId) : null
     const tone = item.status === 'failed' ? 'red' : item.status === 'succeeded' ? 'green' : item.status === 'running' ? 'blue' : 'gray'
     const title = (() => {
-      if (item.kind === 'chapter_bound') return '章节绑定已更新'
-      if (item.kind === 'chapter_active') return '章节再次进入工作中'
-      if (item.kind === 'shot_generated') return `${matchedShot?.title || '镜头'} 已生成结果`
-      if (item.kind === 'shot_rework') return `${matchedShot?.title || '镜头'} 被标记为返工`
-      if (item.kind === 'shot_running') return `${matchedShot?.title || '镜头'} 正在生成`
-      if (item.kind === 'shot_planned') return `${matchedShot?.title || '镜头'} 已加入镜头板`
-      return isShot ? `${matchedShot?.title || '镜头'} 有新动作` : '章节信息已更新'
+      if (item.kind === 'chapter_bound') return $('章节绑定已更新')
+      if (item.kind === 'chapter_active') return $('章节再次进入工作中')
+      if (item.kind === 'shot_generated') return $t('{{value}} 已生成结果', { value: matchedShot?.title || $('镜头') })
+      if (item.kind === 'shot_rework') return $t('{{value}} 被标记为返工', { value: matchedShot?.title || $('镜头') })
+      if (item.kind === 'shot_running') return $t('{{value}} 正在生成', { value: matchedShot?.title || $('镜头') })
+      if (item.kind === 'shot_planned') return $t('{{value}} 已加入镜头板', { value: matchedShot?.title || $('镜头') })
+      return isShot ? $t('{{value}} 有新动作', { value: matchedShot?.title || $('镜头') }) : $('章节信息已更新')
     })()
     const detail = isShot
-      ? `${matchedShot ? `Shot ${matchedShot.shotIndex + 1}` : '镜头'} · ${formatShotProductionStatus(matchedShot?.status || item.status)}`
+      ? `${matchedShot ? `Shot ${matchedShot.shotIndex + 1}` : $('镜头')} · ${formatShotProductionStatus(matchedShot?.status || item.status)}`
       : `${chapterTitle} · ${formatChapterProductionStatus(workbench?.chapter.status || 'draft')}`
     return {
       ...item,
@@ -4287,49 +4288,49 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
   const productionTimeline = workbench ? [
     {
       key: 'project-text',
-      title: projectMemorySummary.sourceReady ? '项目原文已接入' : '项目原文尚未接入',
+      title: projectMemorySummary.sourceReady ? $('项目原文已接入') : $('项目原文尚未接入'),
       detail: projectBooks[0]
-        ? `已拆书 ${projectBooks[0].chapterCount} 章，后续按章节推进。`
+        ? $t('已拆书 {{chapterCount}} 章，后续按章节推进。', { chapterCount: projectBooks[0].chapterCount })
         : projectTextAsset
-          ? '文本已上传到项目，等待继续进入章节推进。'
-          : '当前还没有生产底稿，后续章节与资产无法稳定收口。',
+          ? $('文本已上传到项目，等待继续进入章节推进。')
+          : $('当前还没有生产底稿，后续章节与资产无法稳定收口。'),
       time: projectBooks[0]?.updatedAt || projectTextAsset?.updatedAt || '',
       tone: projectMemorySummary.sourceReady ? 'blue' : 'gray',
     },
     {
       key: 'chapter-bind',
-      title: workbench.chapter.sourceBookChapter ? `章节已绑定原文第 ${workbench.chapter.sourceBookChapter} 章` : '章节尚未绑定原文',
+      title: workbench.chapter.sourceBookChapter ? $t('章节已绑定原文第 {{sourceBookChapter}} 章', { sourceBookChapter: workbench.chapter.sourceBookChapter }) : $('章节尚未绑定原文'),
       detail: workbench.chapter.sourceBookChapter
-        ? '本章后续的镜头 prompt、角色和场景上下文都以这一章为准。'
-        : '先完成章节绑定，再继续镜头生产，避免拿错上下文。',
+        ? $('本章后续的镜头 prompt、角色和场景上下文都以这一章为准。')
+        : $('先完成章节绑定，再继续镜头生产，避免拿错上下文。'),
       time: workbench.chapter.lastWorkedAt || workbench.chapter.updatedAt,
       tone: workbench.chapter.sourceBookChapter ? 'blue' : 'gray',
     },
     {
       key: 'shot-progress',
-      title: `镜头推进到 ${workbenchStats.totalShots} 个执行单元`,
+      title: $t('镜头推进到 {{totalShots}} 个执行单元', { totalShots: workbenchStats.totalShots }),
       detail:
         workbenchStats.totalShots > 0
-          ? `已生成 ${workbenchStats.generatedShots} 个，待返工 ${workbenchStats.reworkShots} 个。`
-          : '当前还没有镜头，说明这一章还没拆成可执行的最小单元。',
+          ? $t('已生成 {{generatedShots}} 个，待返工 {{reworkShots}} 个。', { generatedShots: workbenchStats.generatedShots, reworkShots: workbenchStats.reworkShots })
+          : $('当前还没有镜头，说明这一章还没拆成可执行的最小单元。'),
       time: activeShot?.updatedAt || workbench.chapter.updatedAt,
       tone: workbenchStats.totalShots > 0 ? 'blue' : 'gray',
     },
     {
       key: 'render-result',
-      title: currentShotRender?.data.images?.length ? '当前镜头已有可回看的生成结果' : '当前镜头还没有稳定生成结果',
+      title: currentShotRender?.data.images?.length ? $('当前镜头已有可回看的生成结果') : $('当前镜头还没有稳定生成结果'),
       detail: currentShotRender?.data.images?.length
-        ? `最近一轮结果 ${currentShotRender.data.images.length} 张，可继续选图、返工或提升为共享资产。`
-        : '需要先完成一轮出图，才能进入资产沉淀与审阅。',
+        ? $t('最近一轮结果 {{count}} 张，可继续选图、返工或提升为共享资产。', { count: currentShotRender.data.images.length })
+        : $('需要先完成一轮出图，才能进入资产沉淀与审阅。'),
       time: currentShotRender?.asset.updatedAt || '',
       tone: currentShotRender?.data.images?.length ? 'blue' : 'gray',
     },
     {
       key: 'scene-memory',
-      title: currentSceneAsset ? '当前镜头结果已沉淀为项目共享记忆' : '当前镜头还没有进入项目共享记忆',
+      title: currentSceneAsset ? $('当前镜头结果已沉淀为项目共享记忆') : $('当前镜头还没有进入项目共享记忆'),
       detail: currentSceneAsset
-        ? `共享资源 ${currentSceneAsset.name} 当前版本 v${currentSceneAsset.currentVersion}，影响镜头 ${impactedShotCount} 个。`
-        : '把当前结果提升为场景物料后，后续章节才能稳定复用。',
+        ? $t('共享资源 {{name}} 当前版本 v{{currentVersion}}，影响镜头 {{impactedShotCount}} 个。', { name: currentSceneAsset.name, currentVersion: currentSceneAsset.currentVersion, impactedShotCount: impactedShotCount })
+        : $('把当前结果提升为场景物料后，后续章节才能稳定复用。'),
       time: currentSceneVersions[0]?.createdAt || currentSceneAsset?.updatedAt || '',
       tone: currentSceneAsset ? 'green' : 'gray',
     },
@@ -4345,13 +4346,13 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
               variant="subtle"
               color="gray"
               onClick={() => spaNavigate(buildProjectDirectoryUrl(projectId))}
-              aria-label="返回项目页"
+              aria-label={$('返回项目页')}
             >
               <IconArrowLeft size={18} />
             </ActionIcon>
             <Box>
-              <Title order={4} className="tc-pm__title">{workbench?.project.name || '项目'}</Title>
-              <Text size="xs" c="dimmed">按章节推进的漫剧制作页</Text>
+              <Title order={4} className="tc-pm__title">{workbench?.project.name || $('项目')}</Title>
+              <Text size="xs" c="dimmed">{ $('按章节推进的漫剧制作页') }</Text>
             </Box>
           </Group>
           <Group gap="xs">
@@ -4367,7 +4368,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             <ActionIcon
               variant="subtle"
               color="gray"
-              aria-label="查看当前章节指引"
+              aria-label={$('查看当前章节指引')}
               onClick={() => setChapterTourOpen(true)}
             >
               <IconHelpCircle size={18} />
@@ -4382,20 +4383,19 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
             <Box className="tc-pm__sidebar-top">
               <Stack gap="sm">
                 <Group justify="space-between">
-                  <Text fw={700}>章节</Text>
+                  <Text fw={700}>{ $('章节') }</Text>
                   <Badge variant="dot">{chapters.length}</Badge>
                 </Group>
                 <Group gap="xs">
                   <TextInput
                     value={nameDraft}
                     onChange={(event) => setNameDraft(event.currentTarget.value)}
-                    placeholder="新建章节名称"
+                    placeholder={$('新建章节名称')}
                     size="xs"
                     style={{ flex: 1 }}
                   />
                   <Button size="xs" leftSection={<IconFilePlus size={14} />} loading={creating} onClick={handleCreateChapter}>
-                    新建
-                  </Button>
+                    { $('新建') }</Button>
                 </Group>
               </Stack>
             </Box>
@@ -4417,10 +4417,10 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     >
                       <Group justify="space-between" align="flex-start" wrap="nowrap">
                         <Box style={{ minWidth: 0 }}>
-                          <Text fw={700} size="sm">{`第 ${chapter.index} 章`}</Text>
+                          <Text fw={700} size="sm">{$t('第 {{index}} 章', { index: chapter.index })}</Text>
                           <Text size="sm" truncate>{chapter.title}</Text>
                           {chapter.sourceBookChapter ? (
-                            <Text size="xs" c="blue">{`绑定原文第 ${chapter.sourceBookChapter} 章`}</Text>
+                            <Text size="xs" c="blue">{$t('绑定原文第 {{sourceBookChapter}} 章', { sourceBookChapter: chapter.sourceBookChapter })}</Text>
                           ) : null}
                           {chapter.summary ? <Text size="xs" c="dimmed" lineClamp={2}>{chapter.summary}</Text> : null}
                         </Box>
@@ -4437,7 +4437,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                   event.stopPropagation()
                                   void handleMoveChapter('up')
                                 }}
-                                aria-label="上移章节"
+                                aria-label={$('上移章节')}
                               >
                                 <IconArrowUp size={14} />
                               </ActionIcon>
@@ -4451,7 +4451,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                   event.stopPropagation()
                                   void handleMoveChapter('down')
                                 }}
-                                aria-label="下移章节"
+                                aria-label={$('下移章节')}
                               >
                                 <IconArrowDown size={14} />
                               </ActionIcon>
@@ -4488,21 +4488,21 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     >
                       <Group justify="space-between" align="center" gap="sm">
                         <Box style={{ flex: 1, minWidth: 0 }}>
-                          <Text size="xs" c="dimmed">下一步</Text>
+                          <Text size="xs" c="dimmed">{ $('下一步') }</Text>
                           <Text fw={700} mt={4}>
-                            {nextChapter ? `本章已收口，直接进入 ${nextChapter.title || `第 ${nextChapter.index} 章`}` : '本章已收口'}
+                            {nextChapter ? $t('本章已收口，直接进入 {{index}}', { index: nextChapter.title || $t('第 {{index}} 章', { index: nextChapter.index }) }) : $('本章已收口')}
                           </Text>
                           <Text size="xs" c="dimmed" mt={4}>
                             {nextChapter
-                              ? '当前镜头和共享场景已经稳定，可直接接力下一章继续生产。'
-                              : '当前没有下一章，可继续补齐章节或进入整章深化。'}
+                              ? $('当前镜头和共享场景已经稳定，可直接接力下一章继续生产。')
+                              : $('当前没有下一章，可继续补齐章节或进入整章深化。')}
                           </Text>
                         </Box>
                         <Button
                           loading={advancingChapter}
                           onClick={() => void handleAdvanceToNextChapter()}
                         >
-                          {nextChapter ? '完成本章并进入下一章' : '完成本章'}
+                          {nextChapter ? $('完成本章并进入下一章') : $('完成本章')}
                         </Button>
                       </Group>
                     </PanelCard>
@@ -4512,7 +4512,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <Group justify="space-between" align="flex-start" gap="sm">
                       <Box>
                         <Title order={3}>{workbench.chapter.title}</Title>
-                        <Text size="sm" c="dimmed">{workbench.chapter.summary || '当前章节尚未填写摘要。'}</Text>
+                        <Text size="sm" c="dimmed">{workbench.chapter.summary || $('当前章节尚未填写摘要。')}</Text>
                       </Box>
                       <Group gap="xs" align="center">
                         <Badge variant="light" color={getChapterProductionStatusTone(workbench.chapter.status)}>
@@ -4524,7 +4524,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           color={workbench.chapter.status === 'archived' ? 'gray' : 'yellow'}
                           onClick={() => void handleArchiveChapter()}
                         >
-                          {workbench.chapter.status === 'archived' ? '取消归档' : '归档章节'}
+                          {workbench.chapter.status === 'archived' ? $('取消归档') : $('归档章节')}
                         </Button>
                         {showAdvancedPanels ? (
                           <Button
@@ -4535,8 +4535,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             loading={deletingChapter}
                             onClick={() => void handleDeleteChapter()}
                           >
-                            删除章节
-                          </Button>
+                            { $('删除章节') }</Button>
                         ) : null}
                       </Group>
                     </Group>
@@ -4546,7 +4545,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <PanelCard className="tc-pm__chapter-stage-card">
                       <Group justify="space-between" align="center" gap="sm">
                         <Box style={{ flex: 1, minWidth: 0 }}>
-                          <Text size="xs" c="dimmed">自动接力中</Text>
+                          <Text size="xs" c="dimmed">{ $('自动接力中') }</Text>
                           <Text size="sm" fw={700} mt={4}>{chapterAutoRelayMessage}</Text>
                         </Box>
                         <Loader size="sm" color="blue" />
@@ -4559,54 +4558,53 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <Group className="tc-pm__chapter-stage-layout" justify="space-between" align="flex-start" gap="lg">
                       <Box className="tc-pm__chapter-stage-main" style={{ flex: 1, minWidth: 280 }}>
                         <Badge variant="light" color="blue">{currentStage.badge}</Badge>
-                        <Title order={3} mt={10}>本章现在该做什么</Title>
+                        <Title order={3} mt={10}>{ $('本章现在该做什么') }</Title>
                         <Text size="sm" mt={6}>{currentStage.title}</Text>
                         <Text size="sm" c="dimmed" mt={6}>{currentStage.description}</Text>
                         <Group mt="md" gap="xs">
                           <Button loading={chapterReadyToAdvance && advancingChapter} onClick={currentStage.onAction}>{currentStage.actionLabel}</Button>
                           <Button variant="light" onClick={() => shotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                            看镜头板
-                          </Button>
+                            { $('看镜头板') }</Button>
                         </Group>
                       </Box>
                       <SimpleGrid className="tc-pm__chapter-stage-side" cols={{ base: 1, md: 1 }} spacing="sm" style={{ minWidth: 280, maxWidth: 320 }}>
                         <InlinePanel className="tc-pm__chapter-stage-panel">
-                          <Text size="xs" c="dimmed">当前章节</Text>
+                          <Text size="xs" c="dimmed">{ $('当前章节') }</Text>
                           <Text fw={700} mt={4}>
                             {workbench.chapter.sourceBookChapter
-                              ? `已锁定原文第 ${workbench.chapter.sourceBookChapter} 章`
+                              ? $t('已锁定原文第 {{sourceBookChapter}} 章', { sourceBookChapter: workbench.chapter.sourceBookChapter })
                               : chapterResumeStatus.continuable
-                                ? '检测到可续接的历史章节结果'
-                                : '还未锁定原文章节'}
+                                ? $('检测到可续接的历史章节结果')
+                                : $('还未锁定原文章节')}
                           </Text>
                           <Text size="xs" c="dimmed" mt={4}>
                             {chapterResumeStatus.continuable && !workbench.chapter.sourceBookChapter
-                              ? chapterResumeStatus.details[0] || '可先从旧数据续接，再补齐原文绑定'
+                              ? chapterResumeStatus.details[0] || $('可先从旧数据续接，再补齐原文绑定')
                               : workbenchStats.totalShots > 0
-                              ? `已建立 ${workbenchStats.totalShots} 个镜头执行单元`
-                              : '下一步建议先生成第一版镜头板'}
+                              ? $t('已建立 {{totalShots}} 个镜头执行单元', { totalShots: workbenchStats.totalShots })
+                              : $('下一步建议先生成第一版镜头板')}
                           </Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-stage-panel">
-                          <Text size="xs" c="dimmed">本章节奏</Text>
+                          <Text size="xs" c="dimmed">{ $('本章节奏') }</Text>
                           <Text fw={700} mt={4}>{formatChapterProductionStatus(workbench.chapter.status)}</Text>
                           <Text size="xs" c="dimmed" mt={4}>
                             {workbenchStats.reworkShots > 0
-                              ? `当前有 ${workbenchStats.reworkShots} 个镜头待返工`
+                              ? $t('当前有 {{reworkShots}} 个镜头待返工', { reworkShots: workbenchStats.reworkShots })
                               : chapterReadyToAdvance
-                                ? '本章已收口，可切到下一章'
+                                ? $('本章已收口，可切到下一章')
                                 : remainingChapterShotsToFinish > 0
-                                  ? `本章还剩 ${remainingChapterShotsToFinish} 个镜头待收口`
+                                  ? $t('本章还剩 {{remainingChapterShotsToFinish}} 个镜头待收口', { remainingChapterShotsToFinish: remainingChapterShotsToFinish })
                                   : currentShotRender?.data.images?.length
-                                    ? '当前已有结果图，可继续确认并推进'
-                                    : '还没有稳定结果，先做关键镜头'}
+                                    ? $('当前已有结果图，可继续确认并推进')
+                                    : $('还没有稳定结果，先做关键镜头')}
                           </Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-stage-panel">
                           <Group justify="space-between" align="center" gap="xs">
-                            <Text size="xs" c="dimmed">前置资产</Text>
+                            <Text size="xs" c="dimmed">{ $('前置资产') }</Text>
                             <Badge variant="light" color={chapterPrerequisiteStatus.ready ? 'green' : 'yellow'}>
-                              {chapterPrerequisiteStatus.ready ? '已完备' : chapterResumeStatus.continuable ? '可续接' : '待补齐'}
+                              {chapterPrerequisiteStatus.ready ? $('已完备') : chapterResumeStatus.continuable ? $('可续接') : $('待补齐')}
                             </Badge>
                           </Group>
                           <Stack className="tc-pm__chapter-prerequisite-list" gap={6} mt={8}>
@@ -4623,7 +4621,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                 >
                                   <Box className="tc-pm__chapter-prerequisite-copy" style={{ flex: 1, minWidth: 0 }}>
                                     <Text size="xs" fw={600} c={item.ready ? 'white' : 'yellow'}>
-                                      {item.label}：{item.ready ? 'OK' : '缺失'}
+                                      {item.label}：{item.ready ? 'OK' : $('缺失')}
                                     </Text>
                                     <Text size="xs" c="dimmed" lineClamp={1}>{item.detail}</Text>
                                   </Box>
@@ -4648,7 +4646,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       </SimpleGrid>
                     </Group>
                     <Stack className="tc-pm__chapter-stage-step-list" gap={8} mt="md">
-                      <Text size="sm" fw={700}>推荐路径</Text>
+                      <Text size="sm" fw={700}>{ $('推荐路径') }</Text>
                       {nextStepItems.slice(0, 3).map((item, index) => (
                         <InlinePanel key={item} className="tc-pm__chapter-stage-step">
                           <Text size="xs" c="dimmed">{`Step ${index + 1}`}</Text>
@@ -4661,21 +4659,17 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <InlinePanel className="tc-pm__chapter-stage-callout">
                         <Group justify="space-between" align="center" gap="sm">
                           <Box style={{ flex: 1, minWidth: 0 }}>
-                            <Text size="sm" fw={700}>后续章节正在补齐</Text>
+                            <Text size="sm" fw={700}>{ $('后续章节正在补齐') }</Text>
                             <Text size="xs" c="dimmed" mt={4}>
-                              当前项目已创建 {importedProjectChapterCount} / {totalSourceChapterCount} 章。
-                              原文目录已经拿到了，剩余章节会自动同步到左侧列表。
-                              {showAdvancedPanels ? ' 如自动同步异常，也可手动补齐一次。' : ''}
+                              { $('当前项目已创建') }{importedProjectChapterCount} / {totalSourceChapterCount} { $('章。 原文目录已经拿到了，剩余章节会自动同步到左侧列表。') }{showAdvancedPanels ? $(' 如自动同步异常，也可手动补齐一次。') : ''}
                             </Text>
                           </Box>
                           {showAdvancedPanels ? (
                             <Group gap="xs">
                               <Button size="xs" variant="light" loading={importingChapters} onClick={() => void handleImportChaptersFromBook({ limit: 20 })}>
-                                补齐后 20 章
-                              </Button>
+                                { $('补齐后 20 章') }</Button>
                               <Button size="xs" loading={importingChapters} onClick={() => void handleImportChaptersFromBook()}>
-                                一次补齐全部
-                              </Button>
+                                { $('一次补齐全部') }</Button>
                             </Group>
                           ) : null}
                         </Group>
@@ -4685,16 +4679,15 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <InlinePanel className="tc-pm__chapter-stage-callout">
                         <Group justify="space-between" align="center" gap="sm">
                           <Box style={{ flex: 1, minWidth: 0 }}>
-                            <Text size="sm" fw={700}>本章已达到可交付状态</Text>
+                            <Text size="sm" fw={700}>{ $('本章已达到可交付状态') }</Text>
                             <Text size="xs" c="dimmed" mt={4}>
-                              所有镜头都已收口，且没有返工项。
-                              {nextChapter
-                                ? ` 现在可以直接切到 ${nextChapter.title || `第 ${nextChapter.index} 章`} 继续生产。`
-                                : ' 当前没有下一章，可继续补齐章节。'}
+                              { $('所有镜头都已收口，且没有返工项。') }{nextChapter
+                                ? $t(' 现在可以直接切到 {{index}} 继续生产。', { index: nextChapter.title || $t('第 {{index}} 章', { index: nextChapter.index }) })
+                                : $(' 当前没有下一章，可继续补齐章节。')}
                             </Text>
                           </Box>
                           <Button size="xs" loading={advancingChapter} onClick={() => void handleAdvanceToNextChapter()}>
-                            {nextChapter ? '完成本章并进入下一章' : '完成本章'}
+                            {nextChapter ? $('完成本章并进入下一章') : $('完成本章')}
                           </Button>
                         </Group>
                       </InlinePanel>
@@ -4703,14 +4696,14 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <InlinePanel className="tc-pm__chapter-stage-callout">
                         <Group justify="space-between" align="center" gap="sm">
                           <Box style={{ flex: 1, minWidth: 0 }}>
-                            <Text size="sm" fw={700}>章节连续生产</Text>
+                            <Text size="sm" fw={700}>{ $('章节连续生产') }</Text>
                             <Text size="xs" c="dimmed" mt={4}>
                               {previousChapter
-                                ? `上一章：${previousChapter.title || `第 ${previousChapter.index} 章`}`
-                                : '当前是第一章。'}
+                                ? $t('上一章：{{index}}', { index: previousChapter.title || $t('第 {{index}} 章', { index: previousChapter.index }) })
+                                : $('当前是第一章。')}
                               {nextChapter
-                                ? ` 下一章：${nextChapter.title || `第 ${nextChapter.index} 章`}`
-                                : ' 当前已经是最后一章。'}
+                                ? $t(' 下一章：{{index}}', { index: nextChapter.title || $t('第 {{index}} 章', { index: nextChapter.index }) })
+                                : $(' 当前已经是最后一章。')}
                             </Text>
                           </Box>
                           <Group gap="xs">
@@ -4720,8 +4713,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                 variant="light"
                                 onClick={() => spaNavigate(buildProjectChapterUrl(projectId, previousChapter.id))}
                               >
-                                返回上一章
-                              </Button>
+                                { $('返回上一章') }</Button>
                             ) : null}
                             {nextChapter ? (
                               <Button
@@ -4729,8 +4721,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                 variant="light"
                                 onClick={() => spaNavigate(buildProjectChapterUrl(projectId, nextChapter.id))}
                               >
-                                预览下一章
-                              </Button>
+                                { $('预览下一章') }</Button>
                             ) : null}
                           </Group>
                         </Group>
@@ -4785,11 +4776,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <Group justify="space-between" align="center">
                     <Text size="sm" c="dimmed">
                       {showAdvancedPanels
-                        ? '当前正在查看改绑、共享记忆、项目级设定和诊断信息。'
-                        : '默认只保留当前章节推进主链。改绑、共享资源、诊断和项目级补充都收进补充设置。'}
+                        ? $('当前正在查看改绑、共享记忆、项目级设定和诊断信息。')
+                        : $('默认只保留当前章节推进主链。改绑、共享资源、诊断和项目级补充都收进补充设置。')}
                     </Text>
                     <Button size="xs" variant={showAdvancedPanels ? 'filled' : 'light'} onClick={() => setShowAdvancedPanels((prev) => !prev)}>
-                      {showAdvancedPanels ? '收起补充设置' : '打开补充设置'}
+                      {showAdvancedPanels ? $('收起补充设置') : $('打开补充设置')}
                     </Button>
                   </Group>
 
@@ -4797,13 +4788,12 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <InlinePanel>
                       <Group justify="space-between" align="center" gap="sm">
                         <Box style={{ flex: 1, minWidth: 0 }}>
-                          <Text size="sm" fw={700}>诊断与库存</Text>
+                          <Text size="sm" fw={700}>{ $('诊断与库存') }</Text>
                           <Text size="xs" c="dimmed" mt={4}>
-                            这里放连续性诊断、推进记录、共享库存和返工定位。只有排查问题或做项目级检查时才需要展开。
-                          </Text>
+                            { $('这里放连续性诊断、推进记录、共享库存和返工定位。只有排查问题或做项目级检查时才需要展开。') }</Text>
                         </Box>
                         <Button size="xs" variant={showAdvancedDiagnostics ? 'filled' : 'light'} onClick={() => setShowAdvancedDiagnostics((prev) => !prev)}>
-                          {showAdvancedDiagnostics ? '收起诊断与库存' : '查看诊断与库存'}
+                          {showAdvancedDiagnostics ? $('收起诊断与库存') : $('查看诊断与库存')}
                         </Button>
                       </Group>
                     </InlinePanel>
@@ -4813,8 +4803,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <PanelCard className="tc-pm__chapter-onboarding-card" data-tour="chapter-onboarding">
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>本章操作路径</Text>
-                        <Text size="xs" c="dimmed">这里汇总当前章节的主要操作步骤。</Text>
+                        <Text fw={700}>{ $('本章操作路径') }</Text>
+                        <Text size="xs" c="dimmed">{ $('这里汇总当前章节的主要操作步骤。') }</Text>
                       </Box>
                       <Badge variant="light" color={getChapterProductionStatusTone(workbench.chapter.status)}>
                         {formatChapterProductionStatus(workbench.chapter.status)}
@@ -4823,23 +4813,23 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <SimpleGrid cols={{ base: 1, md: 4 }}>
                       <InlinePanel className="tc-pm__chapter-onboarding-step">
                         <Text size="xs" c="dimmed">Step 1</Text>
-                        <Text size="sm" fw={700} mt={4}>绑定原文章节</Text>
-                        <Text size="xs" c="dimmed" mt={4}>通常会自动对位；只有章节错位或需要改绑时才手动处理。</Text>
+                        <Text size="sm" fw={700} mt={4}>{ $('绑定原文章节') }</Text>
+                        <Text size="xs" c="dimmed" mt={4}>{ $('通常会自动对位；只有章节错位或需要改绑时才手动处理。') }</Text>
                       </InlinePanel>
                       <InlinePanel className="tc-pm__chapter-onboarding-step">
                         <Text size="xs" c="dimmed">Step 2</Text>
-                        <Text size="sm" fw={700} mt={4}>建立镜头板</Text>
-                        <Text size="xs" c="dimmed" mt={4}>补镜头标题、摘要和状态，必要时筛选或批量整理。</Text>
+                        <Text size="sm" fw={700} mt={4}>{ $('建立镜头板') }</Text>
+                        <Text size="xs" c="dimmed" mt={4}>{ $('补镜头标题、摘要和状态，必要时筛选或批量整理。') }</Text>
                       </InlinePanel>
                       <InlinePanel className="tc-pm__chapter-onboarding-step">
                         <Text size="xs" c="dimmed">Step 3</Text>
-                        <Text size="sm" fw={700} mt={4}>生成当前镜头</Text>
-                        <Text size="xs" c="dimmed" mt={4}>检查 Prompt，出图并选择当前最佳结果。</Text>
+                        <Text size="sm" fw={700} mt={4}>{ $('生成当前镜头') }</Text>
+                        <Text size="xs" c="dimmed" mt={4}>{ $('检查 Prompt，出图并选择当前最佳结果。') }</Text>
                       </InlinePanel>
                       <InlinePanel className="tc-pm__chapter-onboarding-step">
                         <Text size="xs" c="dimmed">Step 4</Text>
-                        <Text size="sm" fw={700} mt={4}>提升与审阅</Text>
-                        <Text size="xs" c="dimmed" mt={4}>可提升为场景物料并查看影响范围。</Text>
+                        <Text size="sm" fw={700} mt={4}>{ $('提升与审阅') }</Text>
+                        <Text size="xs" c="dimmed" mt={4}>{ $('可提升为场景物料并查看影响范围。') }</Text>
                       </InlinePanel>
                     </SimpleGrid>
                   </PanelCard>
@@ -4849,8 +4839,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <Box ref={bindingSectionRef} />
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>本章文本窗口</Text>
-                        <Text size="xs" c="dimmed">默认只展示当前章会直接喂给镜头生产的文本上下文。</Text>
+                        <Text fw={700}>{ $('本章文本窗口') }</Text>
+                        <Text size="xs" c="dimmed">{ $('默认只展示当前章会直接喂给镜头生产的文本上下文。') }</Text>
                       </Box>
                       <Group gap="xs">
                         <Button
@@ -4859,17 +4849,15 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           loading={syncingChapterMemory}
                           onClick={() => void handleSyncChapterMemory()}
                         >
-                          更新项目共享线索
-                        </Button>
+                          { $('更新项目共享线索') }</Button>
                         {showBindingEditor ? null : (
                           <Button size="xs" variant="subtle" onClick={() => setShowAdvancedPanels(true)}>
-                            改绑本章
-                          </Button>
+                            { $('改绑本章') }</Button>
                         )}
                         {workbench.chapter.sourceBookChapter ? (
-                          <Badge variant="light">{`原文第 ${workbench.chapter.sourceBookChapter} 章`}</Badge>
+                          <Badge variant="light">{$t('原文第 {{sourceBookChapter}} 章', { sourceBookChapter: workbench.chapter.sourceBookChapter })}</Badge>
                         ) : (
-                          <Badge color="gray" variant="light">未绑定</Badge>
+                          <Badge color="gray" variant="light">{ $('未绑定') }</Badge>
                         )}
                       </Group>
                     </Group>
@@ -4882,17 +4870,16 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         <InlinePanel>
                           <Group justify="space-between" align="flex-start" gap="sm">
                             <Box style={{ flex: 1, minWidth: 0 }}>
-                              <Text size="sm" fw={700}>{boundSourceChapterDetail.title || `第 ${boundSourceChapterDetail.chapter} 章`}</Text>
+                              <Text size="sm" fw={700}>{boundSourceChapterDetail.title || $t('第 {{chapter}} 章', { chapter: boundSourceChapterDetail.chapter })}</Text>
                               <Text size="sm" c="dimmed" mt={4}>
-                                {boundSourceChapterDetail.summary || boundSourceChapterDetail.coreConflict || '当前原文章节还没有摘要。'}
+                                {boundSourceChapterDetail.summary || boundSourceChapterDetail.coreConflict || $('当前原文章节还没有摘要。')}
                               </Text>
                               <Text size="xs" c="dimmed" mt={6}>
-                                行号 {boundSourceChapterDetail.startLine}-{boundSourceChapterDetail.endLine}
+                                { $('行号') }{boundSourceChapterDetail.startLine}-{boundSourceChapterDetail.endLine}
                               </Text>
                               {totalSourceChapterCount > 0 && showAdvancedPanels ? (
                                 <Text size="xs" c="dimmed" mt={6}>
-                                  当前原文共 {totalSourceChapterCount} 章，项目内已创建 {importedProjectChapterCount} 章。
-                                </Text>
+                                  { $('当前原文共') }{totalSourceChapterCount} { $(' 章，项目内已创建 ') }{importedProjectChapterCount} { $('章。') }</Text>
                               ) : null}
                             </Box>
                             <Button
@@ -4900,47 +4887,47 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               variant="subtle"
                               onClick={() => setShowChapterContentPreview((prev) => !prev)}
                             >
-                              {showChapterContentPreview ? '收起正文' : '展开正文'}
+                              {showChapterContentPreview ? $('收起正文') : $('展开正文')}
                             </Button>
                           </Group>
                         </InlinePanel>
                         <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
                           <InlinePanel>
-                            <Text size="sm" fw={600}>人物</Text>
+                            <Text size="sm" fw={600}>{ $('人物') }</Text>
                             <Text size="sm" c="dimmed" mt={4}>
-                              {(boundSourceChapterDetail.characters || []).slice(0, 6).map((item) => item.name).filter(Boolean).join('、') || '暂无'}
+                              {(boundSourceChapterDetail.characters || []).slice(0, 6).map((item) => item.name).filter(Boolean).join('、') || $('暂无')}
                             </Text>
                           </InlinePanel>
                           <InlinePanel>
-                            <Text size="sm" fw={600}>场景</Text>
+                            <Text size="sm" fw={600}>{ $('场景') }</Text>
                             <Text size="sm" c="dimmed" mt={4}>
-                              {(boundSourceChapterDetail.scenes || boundSourceChapterDetail.locations || []).slice(0, 6).map((item) => item.name).filter(Boolean).join('、') || '暂无'}
+                              {(boundSourceChapterDetail.scenes || boundSourceChapterDetail.locations || []).slice(0, 6).map((item) => item.name).filter(Boolean).join('、') || $('暂无')}
                             </Text>
                           </InlinePanel>
                           <InlinePanel>
-                            <Text size="sm" fw={600}>道具</Text>
+                            <Text size="sm" fw={600}>{ $('道具') }</Text>
                             <Text size="sm" c="dimmed" mt={4}>
-                              {(boundSourceChapterDetail.props || []).slice(0, 6).map((item) => item.name).filter(Boolean).join('、') || '暂无'}
+                              {(boundSourceChapterDetail.props || []).slice(0, 6).map((item) => item.name).filter(Boolean).join('、') || $('暂无')}
                             </Text>
                           </InlinePanel>
                           <InlinePanel>
-                            <Text size="sm" fw={600}>文本规模</Text>
+                            <Text size="sm" fw={600}>{ $('文本规模') }</Text>
                             <Text size="sm" c="dimmed" mt={4}>
-                              {`${Math.max(0, (boundSourceChapterDetail.endLine || 0) - (boundSourceChapterDetail.startLine || 0) + 1)} 行`}
+                              {$t('{{startLine}} 行', { startLine: Math.max(0, (boundSourceChapterDetail.endLine || 0) - (boundSourceChapterDetail.startLine || 0) + 1) })}
                             </Text>
                           </InlinePanel>
                         </SimpleGrid>
                         {showChapterContentPreview ? (
                           <InlinePanel>
-                            <Text size="sm" fw={600}>正文预览</Text>
+                            <Text size="sm" fw={600}>{ $('正文预览') }</Text>
                             <Text size="sm" c="dimmed" mt={4} lineClamp={10}>
-                              {boundSourceChapterDetail.content || '当前章节正文为空。'}
+                              {boundSourceChapterDetail.content || $('当前章节正文为空。')}
                             </Text>
                           </InlinePanel>
                         ) : null}
                       </Stack>
                     ) : (
-                      <Text size="sm" c="dimmed">当前章节还没有绑定源文本窗口。这里会先自动对位；如果没对上，再在下方改绑本章。</Text>
+                      <Text size="sm" c="dimmed">{ $('当前章节还没有绑定源文本窗口。这里会先自动对位；如果没对上，再在下方改绑本章。') }</Text>
                     )}
                   </PanelCard>
 
@@ -4948,38 +4935,36 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <PanelCard className="tc-pm__chapter-memory-card" data-tour="chapter-shared-memory">
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>本章可复用资源</Text>
-                        <Text size="xs" c="dimmed">先看这一章能直接继承什么，再决定哪些内容要在本章新沉淀。</Text>
+                        <Text fw={700}>{ $('本章可复用资源') }</Text>
+                        <Text size="xs" c="dimmed">{ $('先看这一章能直接继承什么，再决定哪些内容要在本章新沉淀。') }</Text>
                       </Box>
                       <Group gap="xs">
                         <Button size="xs" variant="light" loading={syncingChapterMemory} onClick={() => void handleSyncChapterMemory()}>
-                          更新共享线索
-                        </Button>
+                          { $('更新共享线索') }</Button>
                         <Button size="xs" variant="subtle" onClick={() => setAssetsViewerOpen(true)}>
-                          打开记忆库
-                        </Button>
+                          { $('打开记忆库') }</Button>
                       </Group>
                     </Group>
                     <InlinePanel className="tc-pm__chapter-memory-block" style={{ marginBottom: '12px' }}>
-                      <Text size="sm" fw={700}>当前判断</Text>
+                      <Text size="sm" fw={700}>{ $('当前判断') }</Text>
                       <Text size="sm" c="dimmed" mt={4}>{chapterMemoryReadinessSummary}</Text>
                     </InlinePanel>
                     <InlinePanel className="tc-pm__chapter-memory-block" style={{ marginBottom: '12px' }}>
-                      <Text size="sm" fw={700}>章节接力</Text>
+                      <Text size="sm" fw={700}>{ $('章节接力') }</Text>
                       <Text size="sm" c="dimmed" mt={4}>{chapterRelaySummary}</Text>
                       {carryoverCharacterAssets.length > 0 ? (
                         <Text size="xs" c="dimmed" mt={6}>
-                          连续角色会优先带入当前章：{carryoverCharacterAssets.map((item) => item.name).join('、')}
+                          { $('连续角色会优先带入当前章：') }{carryoverCharacterAssets.map((item) => item.name).join('、')}
                         </Text>
                       ) : null}
                       {carryoverSceneAssets.length > 0 ? (
                         <Text size="xs" c="dimmed" mt={6}>
-                          会优先把上一章沉淀的连续场景带入当前镜头：{carryoverSceneAssets.map((item) => item.name).join('、')}
+                          { $('会优先把上一章沉淀的连续场景带入当前镜头：') }{carryoverSceneAssets.map((item) => item.name).join('、')}
                         </Text>
                       ) : null}
                       {carryoverPropAssets.length > 0 ? (
                         <Text size="xs" c="dimmed" mt={6}>
-                          连续道具会优先带入当前章：{carryoverPropAssets.map((item) => item.name).join('、')}
+                          { $('连续道具会优先带入当前章：') }{carryoverPropAssets.map((item) => item.name).join('、')}
                         </Text>
                       ) : null}
                     </InlinePanel>
@@ -4989,7 +4974,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           <Group justify="space-between" align="center" mb={6}>
                             <Text size="sm" fw={700}>{group.label}</Text>
                             <Badge variant="light" color={group.ready ? 'green' : 'gray'}>
-                              {group.ready ? '可复用' : '待沉淀'}
+                              {group.ready ? $('可复用') : $('待沉淀')}
                             </Badge>
                           </Group>
                           <Text size="sm" c="dimmed">
@@ -5000,27 +4985,27 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     </SimpleGrid>
                     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm" mt="sm">
                       <InlinePanel className="tc-pm__chapter-memory-stat">
-                        <Text size="xs" c="dimmed">项目画风</Text>
+                        <Text size="xs" c="dimmed">{ $('项目画风') }</Text>
                         <Text size="sm" fw={700} mt={4}>
-                          {projectSetup.artStyleName.trim() || (styleAssets.length > 0 ? '已有风格锚点' : '还未配置')}
+                          {projectSetup.artStyleName.trim() || (styleAssets.length > 0 ? $('已有风格锚点') : $('还未配置'))}
                         </Text>
                         <Text size="xs" c="dimmed" mt={4}>
                           {projectSetup.artStyleName.trim()
-                            ? '当前章节会直接继承项目画风规则。'
+                            ? $('当前章节会直接继承项目画风规则。')
                             : styleAssets.length > 0
-                              ? `项目层已有 ${styleAssets.length} 个风格资产可参考。`
-                              : '建议先确定画风后再大批量生成镜头。'}
+                              ? $t('项目层已有 {{count}} 个风格资产可参考。', { count: styleAssets.length })
+                              : $('建议先确定画风后再大批量生成镜头。')}
                         </Text>
                       </InlinePanel>
                       <InlinePanel className="tc-pm__chapter-memory-stat">
-                        <Text size="xs" c="dimmed">共享进度</Text>
+                        <Text size="xs" c="dimmed">{ $('共享进度') }</Text>
                         <Text size="sm" fw={700} mt={4}>
-                          {currentSceneAsset ? '当前镜头已进入共享场景' : '当前镜头还未沉淀进共享场景'}
+                          {currentSceneAsset ? $('当前镜头已进入共享场景') : $('当前镜头还未沉淀进共享场景')}
                         </Text>
                         <Text size="xs" c="dimmed" mt={4}>
                           {currentSceneAsset
-                            ? `${currentSceneAsset.name} 已影响 ${impactedShotCount} 个镜头。`
-                            : '确认结果后会自动写入项目共享场景，供后续章节复用。'}
+                            ? $t('{{name}} 已影响 {{impactedShotCount}} 个镜头。', { name: currentSceneAsset.name, impactedShotCount: impactedShotCount })
+                            : $('确认结果后会自动写入项目共享场景，供后续章节复用。')}
                         </Text>
                       </InlinePanel>
                     </SimpleGrid>
@@ -5031,8 +5016,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <PanelCard>
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>章节绑定</Text>
-                        <Text size="xs" c="dimmed">这里只在自动绑定失准、章节错位或需要批量修正时使用。</Text>
+                        <Text fw={700}>{ $('章节绑定') }</Text>
+                        <Text size="xs" c="dimmed">{ $('这里只在自动绑定失准、章节错位或需要批量修正时使用。') }</Text>
                       </Box>
                       <Group gap="xs">
                         <Button
@@ -5042,8 +5027,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           loading={autoBindingChapter}
                           onClick={() => void handleAutoBindChapter()}
                         >
-                          智能绑定本章
-                        </Button>
+                          { $('智能绑定本章') }</Button>
                         <Button
                           size="xs"
                           variant="default"
@@ -5051,8 +5035,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           loading={autoBindingAllChapters}
                           onClick={() => void handleAutoBindAllProjectChapters()}
                         >
-                          自动绑定未映射章节
-                        </Button>
+                          { $('自动绑定未映射章节') }</Button>
                         <Button
                           size="xs"
                           variant="light"
@@ -5060,36 +5043,34 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           loading={importingChapters}
                           onClick={() => void handleImportChaptersFromBook()}
                         >
-                          按原文导入章节
-                        </Button>
+                          { $('按原文导入章节') }</Button>
                         <Button size="xs" loading={savingChapterMeta} onClick={() => void handleSaveChapterMeta()}>
-                          保存章节
-                        </Button>
+                          { $('保存章节') }</Button>
                       </Group>
                     </Group>
                     <Stack gap="sm">
                       <TextInput
-                        label="章节标题"
+                        label={$('章节标题')}
                         value={chapterMetaDraft.title}
                         onChange={(event) => setChapterMetaDraft((prev) => ({ ...prev, title: event.currentTarget.value }))}
                       />
                       <Textarea
-                        label="章节摘要"
+                        label={$('章节摘要')}
                         minRows={2}
                         maxRows={4}
                         value={chapterMetaDraft.summary}
                         onChange={(event) => setChapterMetaDraft((prev) => ({ ...prev, summary: event.currentTarget.value }))}
                       />
                       <Select
-                        label="章节状态"
+                        label={$('章节状态')}
                         data={[
-                          { value: 'draft', label: '草稿' },
-                          { value: 'planning', label: '策划中' },
-                          { value: 'producing', label: '生产中' },
-                          { value: 'review', label: '待审阅' },
-                          { value: 'approved', label: '已确认' },
-                          { value: 'locked', label: '已锁定' },
-                          { value: 'archived', label: '已归档' },
+                          { value: 'draft', label: $('草稿') },
+                          { value: 'planning', label: $('策划中') },
+                          { value: 'producing', label: $('生产中') },
+                          { value: 'review', label: $('待审阅') },
+                          { value: 'approved', label: $('已确认') },
+                          { value: 'locked', label: $('已锁定') },
+                          { value: 'archived', label: $('已归档') },
                         ]}
                         value={workbench.chapter.status}
                         onChange={(value) => {
@@ -5104,8 +5085,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         }}
                       />
                       <Select
-                        label="绑定原文章节"
-                        placeholder={sourceChapterOptions.length ? '选择原文章节' : '当前还没有可绑定的原文目录'}
+                        label={$('绑定原文章节')}
+                        placeholder={sourceChapterOptions.length ? $('选择原文章节') : $('当前还没有可绑定的原文目录')}
                         data={sourceChapterOptions}
                         value={chapterMetaDraft.sourceBookChapter}
                         onChange={(value) => {
@@ -5121,16 +5102,16 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       />
                       {mappedSourceChapterMeta ? (
                         <InlinePanel>
-                          <Text size="sm" fw={600}>{`原文第 ${mappedSourceChapterMeta.chapter} 章 · ${mappedSourceChapterMeta.title || '未命名章节'}`}</Text>
+                          <Text size="sm" fw={600}>{$t('原文第 {{chapter}} 章 · {{value}}', { chapter: mappedSourceChapterMeta.chapter, value: mappedSourceChapterMeta.title || $('未命名章节') })}</Text>
                           <Text size="sm" c="dimmed" mt={4}>
-                            {mappedSourceChapterMeta.summary || mappedSourceChapterMeta.coreConflict || '当前原文章节还没有摘要。'}
+                            {mappedSourceChapterMeta.summary || mappedSourceChapterMeta.coreConflict || $('当前原文章节还没有摘要。')}
                           </Text>
                           <Text size="xs" c="dimmed" mt={6}>
-                            人物 {mappedSourceChapterMeta.characters?.length || 0} · 场景 {mappedSourceChapterMeta.scenes?.length || 0} · 道具 {mappedSourceChapterMeta.props?.length || 0}
+                            { $('人物') }{mappedSourceChapterMeta.characters?.length || 0} { $(' · 场景 ') }{mappedSourceChapterMeta.scenes?.length || 0} { $(' · 道具 ') }{mappedSourceChapterMeta.props?.length || 0}
                           </Text>
                         </InlinePanel>
                       ) : (
-                      <Text size="sm" c="dimmed">当前章节还没有绑定到原文目录。</Text>
+                      <Text size="sm" c="dimmed">{ $('当前章节还没有绑定到原文目录。') }</Text>
                       )}
                     </Stack>
                   </PanelCard>
@@ -5139,60 +5120,58 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   {showAdvancedPanels && showAdvancedDiagnostics ? (
                   <Group grow align="stretch">
                     <PanelCard className="tc-pm__chapter-project-memory-card" data-tour="chapter-shared-memory">
-                      <Text fw={700} mb="xs">章节指标</Text>
+                      <Text fw={700} mb="xs">{ $('章节指标') }</Text>
                       <Stack gap={6}>
-                        <Text size="sm">总镜头: {workbenchStats.totalShots}</Text>
-                        <Text size="sm">已生成: {workbenchStats.generatedShots}</Text>
-                        <Text size="sm">待审阅: {workbenchStats.reviewShots}</Text>
-                        <Text size="sm">待返工: {workbenchStats.reworkShots}</Text>
+                        <Text size="sm">{ $('总镜头: ') }{workbenchStats.totalShots}</Text>
+                        <Text size="sm">{ $('已生成: ') }{workbenchStats.generatedShots}</Text>
+                        <Text size="sm">{ $('待审阅: ') }{workbenchStats.reviewShots}</Text>
+                        <Text size="sm">{ $('待返工: ') }{workbenchStats.reworkShots}</Text>
                       </Stack>
                     </PanelCard>
                     <PanelCard className="tc-pm__chapter-project-memory-card" data-tour="chapter-shared-memory">
                       <Group justify="space-between" align="flex-start" mb="xs">
                         <Box>
-                          <Text fw={700}>项目共享库存</Text>
-                          <Text size="sm" c="dimmed">这里看项目层的总量和库存状态，不处理当前章的生产动作。</Text>
+                          <Text fw={700}>{ $('项目共享库存') }</Text>
+                          <Text size="sm" c="dimmed">{ $('这里看项目层的总量和库存状态，不处理当前章的生产动作。') }</Text>
                         </Box>
                         <Group gap="xs">
                           <Button size="xs" variant="light" loading={syncingChapterMemory} onClick={() => void handleSyncChapterMemory()}>
-                            同步本章线索
-                          </Button>
+                            { $('同步本章线索') }</Button>
                           <Button size="xs" variant="light" onClick={() => setAssetsViewerOpen(true)}>
-                            打开记忆库
-                          </Button>
+                            { $('打开记忆库') }</Button>
                         </Group>
                       </Group>
                       <SimpleGrid cols={2} spacing="sm">
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">项目原文</Text>
-                          <Text size="sm" fw={700} mt={4}>{projectMemorySummary.sourceReady ? '已接入' : '未接入'}</Text>
+                          <Text size="xs" c="dimmed">{ $('项目原文') }</Text>
+                          <Text size="sm" fw={700} mt={4}>{projectMemorySummary.sourceReady ? $('已接入') : $('未接入')}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">项目章节</Text>
+                          <Text size="xs" c="dimmed">{ $('项目章节') }</Text>
                           <Text size="sm" fw={700} mt={4}>{projectMemorySummary.chapterCount}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">场景共享资产</Text>
+                          <Text size="xs" c="dimmed">{ $('场景共享资产') }</Text>
                           <Text size="sm" fw={700} mt={4}>{projectMemorySummary.sceneAssetCount}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">本章识别角色</Text>
+                          <Text size="xs" c="dimmed">{ $('本章识别角色') }</Text>
                           <Text size="sm" fw={700} mt={4}>{projectMemorySummary.roleHintCount}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">角色共享资产</Text>
+                          <Text size="xs" c="dimmed">{ $('角色共享资产') }</Text>
                           <Text size="sm" fw={700} mt={4}>{projectMemorySummary.characterAssetCount}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">道具共享资产</Text>
+                          <Text size="xs" c="dimmed">{ $('道具共享资产') }</Text>
                           <Text size="sm" fw={700} mt={4}>{projectMemorySummary.propAssetCount}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">风格锚点</Text>
+                          <Text size="xs" c="dimmed">{ $('风格锚点') }</Text>
                           <Text size="sm" fw={700} mt={4}>{projectMemorySummary.styleAssetCount}</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-project-memory-stat">
-                          <Text size="xs" c="dimmed">文本道具线索</Text>
+                          <Text size="xs" c="dimmed">{ $('文本道具线索') }</Text>
                           <Text size="sm" fw={700} mt={4}>{(boundSourceChapterDetail?.props || mappedSourceChapterMeta?.props || []).length}</Text>
                         </InlinePanel>
                       </SimpleGrid>
@@ -5205,16 +5184,15 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       </Stack>
                     </PanelCard>
                     <PanelCard>
-                      <Text fw={700} mb="xs">章节裁剪</Text>
+                      <Text fw={700} mb="xs">{ $('章节裁剪') }</Text>
                       <Text size="sm" c="dimmed">
-                        本页只渲染当前章节相关内容，不默认拉取整项目全量镜头、任务与历史。
-                      </Text>
+                        { $('本页只渲染当前章节相关内容，不默认拉取整项目全量镜头、任务与历史。') }</Text>
                     </PanelCard>
                     <PanelCard>
                       <Group justify="space-between" align="flex-start" mb="xs">
                         <Box>
-                          <Text fw={700}>流程入口</Text>
-                          <Text size="sm" c="dimmed">章节和镜头拥有各自的 Studio 流程，项目继续保留共享资源。</Text>
+                          <Text fw={700}>{ $('流程入口') }</Text>
+                          <Text size="sm" c="dimmed">{ $('章节和镜头拥有各自的 Studio 流程，项目继续保留共享资源。') }</Text>
                         </Box>
                         {flowMetaLoading ? <Loader size="xs" /> : null}
                       </Group>
@@ -5222,8 +5200,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         <InlinePanel>
                           <Group justify="space-between" align="flex-start">
                             <Box>
-                              <Text size="sm" fw={600}>章节流程</Text>
-                              <Text size="xs" c="dimmed">当前章节可维护自己的工作流、节点和运行记录。</Text>
+                              <Text size="sm" fw={600}>{ $('章节流程') }</Text>
+                              <Text size="xs" c="dimmed">{ $('当前章节可维护自己的工作流、节点和运行记录。') }</Text>
                             </Box>
                             <Badge variant="light">{chapterFlowCount}</Badge>
                           </Group>
@@ -5235,16 +5213,15 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             loading={openingChapterStudio}
                             onClick={() => { void handleOpenChapterStudio() }}
                           >
-                            进入章节流程
-                          </Button>
+                            { $('进入章节流程') }</Button>
                         </InlinePanel>
                         <InlinePanel>
                           <Group justify="space-between" align="flex-start">
                             <Box>
-                              <Text size="sm" fw={600}>镜头流程</Text>
+                              <Text size="sm" fw={600}>{ $('镜头流程') }</Text>
                               <Text size="xs" c="dimmed">
-                                {shotDraft?.shotId ? '为当前镜头单独维护生成链路、返工链路和实验流。'
-                                  : '先选中一个镜头，再进入镜头级流程。'}
+                                {shotDraft?.shotId ? $('为当前镜头单独维护生成链路、返工链路和实验流。')
+                                  : $('先选中一个镜头，再进入镜头级流程。')}
                               </Text>
                             </Box>
                             <Badge variant="light">{shotDraft?.shotId ? shotFlowCount : 0}</Badge>
@@ -5257,8 +5234,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             loading={openingShotStudio}
                             onClick={() => { void handleOpenShotStudio() }}
                           >
-                            进入镜头流程
-                          </Button>
+                            { $('进入镜头流程') }</Button>
                         </InlinePanel>
                         <Button
                           variant="subtle"
@@ -5269,8 +5245,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               .catch(() => spaNavigate(buildStudioUrl()))
                           }}
                         >
-                          回到最近章节入口
-                        </Button>
+                          { $('回到最近章节入口') }</Button>
                       </Stack>
                     </PanelCard>
                   </Group>
@@ -5281,8 +5256,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <PanelCard>
                       <Group justify="space-between" align="flex-start" mb="xs">
                         <Box>
-                          <Text fw={700}>连续性总览</Text>
-                          <Text size="xs" c="dimmed">查看当前章节的连续性和状态。</Text>
+                          <Text fw={700}>{ $('连续性总览') }</Text>
+                          <Text size="xs" c="dimmed">{ $('查看当前章节的连续性和状态。') }</Text>
                         </Box>
                         <Badge variant="light" color={continuityChecks.every((item) => item.status === 'ready') ? 'green' : 'yellow'}>
                           {continuityChecks.filter((item) => item.status === 'ready').length}/{continuityChecks.length}
@@ -5300,7 +5275,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                 variant="light"
                                 color={item.status === 'ready' ? 'green' : item.status === 'warning' ? 'yellow' : 'gray'}
                               >
-                                {item.status === 'ready' ? '稳定' : item.status === 'warning' ? '需盯紧' : '未就绪'}
+                                {item.status === 'ready' ? $('稳定') : item.status === 'warning' ? $('需盯紧') : $('未就绪')}
                               </Badge>
                             </Group>
                           </InlinePanel>
@@ -5311,29 +5286,29 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <PanelCard>
                       <Group justify="space-between" align="flex-start" mb="xs">
                         <Box>
-                          <Text fw={700}>章节推进闭环</Text>
-                          <Text size="xs" c="dimmed">查看本章当前阶段和进度。</Text>
+                          <Text fw={700}>{ $('章节推进闭环') }</Text>
+                          <Text size="xs" c="dimmed">{ $('查看本章当前阶段和进度。') }</Text>
                         </Box>
                         <Badge variant="light" color={chapterProgressSummary.memoryReady ? 'green' : chapterProgressSummary.renderReady ? 'blue' : 'gray'}>
-                          {chapterProgressSummary.memoryReady ? '可复用' : chapterProgressSummary.renderReady ? '已出结果' : '推进中'}
+                          {chapterProgressSummary.memoryReady ? $('可复用') : chapterProgressSummary.renderReady ? $('已出结果') : $('推进中')}
                         </Badge>
                       </Group>
                       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                         <InlinePanel>
-                          <Text size="xs" c="dimmed">原文绑定</Text>
-                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.planningReady ? '已锁定' : '未锁定'}</Text>
+                          <Text size="xs" c="dimmed">{ $('原文绑定') }</Text>
+                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.planningReady ? $('已锁定') : $('未锁定')}</Text>
                         </InlinePanel>
                         <InlinePanel>
-                          <Text size="xs" c="dimmed">镜头执行单元</Text>
-                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.storyboardReady ? `${workbenchStats.totalShots} 个镜头` : '未建立'}</Text>
+                          <Text size="xs" c="dimmed">{ $('镜头执行单元') }</Text>
+                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.storyboardReady ? $t('{{totalShots}} 个镜头', { totalShots: workbenchStats.totalShots }) : $('未建立')}</Text>
                         </InlinePanel>
                         <InlinePanel>
-                          <Text size="xs" c="dimmed">可审阅结果</Text>
-                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.renderReady ? '已有结果图' : '尚未出图'}</Text>
+                          <Text size="xs" c="dimmed">{ $('可审阅结果') }</Text>
+                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.renderReady ? $('已有结果图') : $('尚未出图')}</Text>
                         </InlinePanel>
                         <InlinePanel>
-                          <Text size="xs" c="dimmed">场景资源</Text>
-                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.memoryReady ? '已加入项目' : '未加入项目'}</Text>
+                          <Text size="xs" c="dimmed">{ $('场景资源') }</Text>
+                          <Text size="sm" fw={700} mt={4}>{chapterProgressSummary.memoryReady ? $('已加入项目') : $('未加入项目')}</Text>
                         </InlinePanel>
                       </SimpleGrid>
                     </PanelCard>
@@ -5344,8 +5319,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <PanelCard className="tc-pm__chapter-timeline-card" data-tour="chapter-rework-diagnosis">
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>本章推进记录</Text>
-                        <Text size="xs" c="dimmed">查看本章的关键动作和时间线。</Text>
+                        <Text fw={700}>{ $('本章推进记录') }</Text>
+                        <Text size="xs" c="dimmed">{ $('查看本章的关键动作和时间线。') }</Text>
                       </Box>
                       <Badge variant="light">{productionTimeline.filter((item) => item.tone !== 'gray').length}/5</Badge>
                     </Group>
@@ -5359,7 +5334,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                   variant="light"
                                   color={item.tone === 'green' ? 'green' : item.tone === 'blue' ? 'blue' : 'gray'}
                                 >
-                                  {item.tone === 'green' ? '已记录' : item.tone === 'blue' ? '处理中' : '待完成'}
+                                  {item.tone === 'green' ? $('已记录') : item.tone === 'blue' ? $('处理中') : $('待完成')}
                                 </Badge>
                                 <Text size="sm" fw={700}>{item.title}</Text>
                               </Group>
@@ -5377,8 +5352,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <PanelCard className="tc-pm__chapter-recent-actions-card">
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>最近生产动作</Text>
-                        <Text size="xs" c="dimmed">查看最近动作记录。</Text>
+                        <Text fw={700}>{ $('最近生产动作') }</Text>
+                        <Text size="xs" c="dimmed">{ $('查看最近动作记录。') }</Text>
                       </Box>
                       <Badge variant="light">{recentTaskItems.length}</Badge>
                     </Group>
@@ -5390,7 +5365,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               <Box style={{ flex: 1, minWidth: 0 }}>
                                 <Group gap={8}>
                                   <Badge variant="light" color={item.tone}>
-                                    {item.ownerType === 'shot' ? '镜头动作' : '章节动作'}
+                                    {item.ownerType === 'shot' ? $('镜头动作') : $('章节动作')}
                                   </Badge>
                                   <Text size="sm" fw={700}>{item.title}</Text>
                                 </Group>
@@ -5402,7 +5377,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         ))}
                       </Stack>
                     ) : (
-                      <Text size="sm" c="dimmed">当前章节还没有足够的生产动作记录。</Text>
+                      <Text size="sm" c="dimmed">{ $('当前章节还没有足够的生产动作记录。') }</Text>
                     )}
                   </PanelCard>
                   ) : null}
@@ -5411,11 +5386,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                   <PanelCard className="tc-pm__chapter-rework-card">
                     <Group justify="space-between" align="flex-start" mb="sm">
                       <Box>
-                        <Text fw={700}>返工原因定位</Text>
-                        <Text size="xs" c="dimmed">查看当前返工相关信息。</Text>
+                        <Text fw={700}>{ $('返工原因定位') }</Text>
+                        <Text size="xs" c="dimmed">{ $('查看当前返工相关信息。') }</Text>
                       </Box>
                       <Badge variant="light" color={reworkDiagnosisItems.some((item) => item.tone === 'red') ? 'red' : reworkDiagnosisItems.some((item) => item.tone === 'yellow') ? 'yellow' : 'gray'}>
-                        {workbenchStats.reworkShots > 0 ? '待处理' : '当前稳定'}
+                        {workbenchStats.reworkShots > 0 ? $('待处理') : $('当前稳定')}
                       </Badge>
                     </Group>
                     <Stack gap="sm">
@@ -5427,7 +5402,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               <Text size="xs" c="dimmed" mt={4}>{item.detail}</Text>
                             </Box>
                             <Badge variant="light" color={item.tone}>
-                              {item.tone === 'red' ? '阻塞' : item.tone === 'yellow' ? '风险' : '提示'}
+                              {item.tone === 'red' ? $('阻塞') : item.tone === 'yellow' ? $('风险') : $('提示')}
                             </Badge>
                           </Group>
                         </InlinePanel>
@@ -5441,19 +5416,19 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <PanelCard className="tc-pm__chapter-render-overview-card" data-tour="chapter-render-panel">
                         <Group justify="space-between" align="flex-start" mb="sm">
                           <Box>
-                            <Text fw={700}>共享资源总览</Text>
-                            <Text size="xs" c="dimmed">查看当前项目的共享资源。</Text>
+                            <Text fw={700}>{ $('共享资源总览') }</Text>
+                            <Text size="xs" c="dimmed">{ $('查看当前项目的共享资源。') }</Text>
                           </Box>
                           {resourceLoading ? <Loader size="xs" /> : null}
                         </Group>
                         <SimpleGrid cols={2}>
                           <InlinePanel className="tc-pm__chapter-render-overview-stat">
-                            <Text size="sm" fw={600}>场景资产</Text>
-                            <Text size="xs" c="dimmed" mt={4}>项目共享 {sceneAssets.length} 个</Text>
+                            <Text size="sm" fw={600}>{ $('场景资产') }</Text>
+                            <Text size="xs" c="dimmed" mt={4}>{ $('项目共享 ') }{sceneAssets.length} { $(' 个') }</Text>
                           </InlinePanel>
                           <InlinePanel className="tc-pm__chapter-render-overview-stat">
-                            <Text size="sm" fw={600}>风格资产</Text>
-                            <Text size="xs" c="dimmed" mt={4}>项目共享 {styleAssets.length} 个</Text>
+                            <Text size="sm" fw={600}>{ $('风格资产') }</Text>
+                            <Text size="xs" c="dimmed" mt={4}>{ $('项目共享 ') }{styleAssets.length} { $(' 个') }</Text>
                           </InlinePanel>
                         </SimpleGrid>
                       </PanelCard>
@@ -5461,13 +5436,13 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <PanelCard className="tc-pm__chapter-current-resource-card">
                         <Group justify="space-between" align="flex-start" mb="sm">
                           <Box>
-                            <Text fw={700}>当前镜头资源</Text>
-                            <Text size="xs" c="dimmed">查看当前镜头绑定的场景资源和影响范围。</Text>
+                            <Text fw={700}>{ $('当前镜头资源') }</Text>
+                            <Text size="xs" c="dimmed">{ $('查看当前镜头绑定的场景资源和影响范围。') }</Text>
                           </Box>
                           {currentSceneAsset ? (
                             <Badge variant="light">{currentSceneAsset.currentVersion} versions</Badge>
                           ) : (
-                            <Badge variant="light" color="gray">未绑定场景</Badge>
+                            <Badge variant="light" color="gray">{ $('未绑定场景') }</Badge>
                           )}
                         </Group>
                         {currentSceneAsset ? (
@@ -5477,20 +5452,19 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               <Text size="xs" c="dimmed" mt={4}>
                                 {currentSceneOriginChapterId
                                   ? currentSceneOriginChapterId === chapterId
-                                    ? '来源：当前章节产出，可视作章节内刚沉淀到项目共享层的资源'
-                                    : `来源：其他章节产出（${currentSceneOriginChapterId}）`
-                                  : '来源：项目共享资源'}
+                                    ? $('来源：当前章节产出，可视作章节内刚沉淀到项目共享层的资源')
+                                    : $t('来源：其他章节产出（{{currentSceneOriginChapterId}}）', { currentSceneOriginChapterId: currentSceneOriginChapterId })
+                                  : $('来源：项目共享资源')}
                               </Text>
                             </InlinePanel>
                             <InlinePanel className="tc-pm__chapter-current-resource-block">
-                              <Text size="sm" fw={600}>影响面</Text>
+                              <Text size="sm" fw={600}>{ $('影响面') }</Text>
                               <Text size="xs" c="dimmed" mt={4}>
-                                已绑定镜头 {impactedShotCount} 个 · 过期引用 {outdatedShotCount} 个
-                              </Text>
+                                { $('已绑定镜头') }{impactedShotCount} { $(' 个 · 过期引用 ') }{outdatedShotCount} { $('个') }</Text>
                             </InlinePanel>
                           </Stack>
                         ) : (
-                          <Text size="sm" c="dimmed">当前镜头还没有绑定场景物料。</Text>
+                          <Text size="sm" c="dimmed">{ $('当前镜头还没有绑定场景物料。') }</Text>
                         )}
                       </PanelCard>
                     </Group>
@@ -5500,11 +5474,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <PanelCard className="tc-pm__chapter-impact-card">
                       <Group justify="space-between" align="flex-start" mb="sm">
                         <Box>
-                          <Text fw={700}>资源影响范围</Text>
-                          <Text size="xs" c="dimmed">当共享资源升级版本后，这里会告诉你哪些镜头仍绑定旧版本。</Text>
+                          <Text fw={700}>{ $('资源影响范围') }</Text>
+                          <Text size="xs" c="dimmed">{ $('当共享资源升级版本后，这里会告诉你哪些镜头仍绑定旧版本。') }</Text>
                         </Box>
                         <Badge variant="light" color={outdatedShotCount > 0 ? 'orange' : 'green'}>
-                          {outdatedShotCount > 0 ? `${outdatedShotCount} 个需同步` : '引用已同步'}
+                          {outdatedShotCount > 0 ? $t('{{outdatedShotCount}} 个需同步', { outdatedShotCount: outdatedShotCount }) : $('引用已同步')}
                         </Badge>
                       </Group>
                       <Stack gap="sm">
@@ -5517,20 +5491,20 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                 <Box>
                                   <Text size="sm" fw={600}>
                                     {impactedShot?.title || `Shot ${(impactedShot?.shotIndex ?? 0) + 1}`}
-                                    {isCurrentShot ? ' · 当前镜头' : ''}
+                                    {isCurrentShot ? $(' · 当前镜头') : ''}
                                   </Text>
                                   <Text size="xs" c="dimmed" mt={4}>
-                                    绑定版本 v{item.boundVersion} · 当前版本 v{item.currentVersion}
+                                    { $('绑定版本 v') }{item.boundVersion} { $(' · 当前版本 v') }{item.currentVersion}
                                   </Text>
                                 </Box>
                                 <Badge variant="light" color={item.isOutdated ? 'orange' : 'green'}>
-                                  {item.isOutdated ? '待同步' : '已同步'}
+                                  {item.isOutdated ? $('待同步') : $('已同步')}
                                 </Badge>
                               </Group>
                             </InlinePanel>
                           )
                         }) : (
-                          <Text size="sm" c="dimmed">当前资源还没有关联到其他镜头，影响面为空。</Text>
+                          <Text size="sm" c="dimmed">{ $('当前资源还没有关联到其他镜头，影响面为空。') }</Text>
                         )}
                       </Stack>
                     </PanelCard>
@@ -5541,27 +5515,26 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                     <PanelCard className="tc-pm__chapter-project-setup-card">
                       <Group justify="space-between" align="flex-start" mb="sm">
                         <Box>
-                          <Text fw={700}>项目设定</Text>
-                          <Text size="xs" c="dimmed">章节页只处理当前章，公共资源仍在项目层统一维护。</Text>
+                          <Text fw={700}>{ $('项目设定') }</Text>
+                          <Text size="xs" c="dimmed">{ $('章节页只处理当前章，公共资源仍在项目层统一维护。') }</Text>
                         </Box>
                         <Button size="xs" loading={savingSetup} onClick={() => void handleSaveProjectSetup()}>
-                          保存设定
-                        </Button>
+                          { $('保存设定') }</Button>
                       </Group>
                       <Stack gap="sm">
                         <Select
-                          label="项目类型"
+                          label={$('项目类型')}
                           data={[
-                            { value: 'nano-comic', label: '漫剧工作台' },
-                            { value: 'storyboard', label: '分镜项目' },
-                            { value: 'novel-adaptation', label: '小说改编' },
-                            { value: 'serialized', label: '连载项目' },
+                            { value: 'nano-comic', label: $('漫剧工作台') },
+                            { value: 'storyboard', label: $('分镜项目') },
+                            { value: 'novel-adaptation', label: $('小说改编') },
+                            { value: 'serialized', label: $('连载项目') },
                           ]}
                           value={projectSetup.projectType}
                           onChange={(value) => setProjectSetup((prev) => ({ ...prev, projectType: (value as ProjectSetupProfile['projectType']) || 'nano-comic' }))}
                         />
                         <Textarea
-                          label="项目简介"
+                          label={$('项目简介')}
                           minRows={2}
                           maxRows={4}
                           value={projectSetup.intro}
@@ -5569,7 +5542,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         />
                         <ProjectArtStylePresetPicker
                           value={projectSetup.artStylePresetId}
-                          description="项目画风要让人一眼能选，不该只看文字。选中后仍可继续微调规则。"
+                          description={$('项目画风要让人一眼能选，不该只看文字。选中后仍可继续微调规则。')}
                           onChange={(value) => {
                             const preset = getArtStylePresetById(value)
                             if (!preset) {
@@ -5580,7 +5553,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           }}
                         />
                         <TextInput
-                          label="画风 / 风格名"
+                          label={$('画风 / 风格名')}
                           value={projectSetup.artStyleName}
                           onChange={(event) => setProjectSetup((prev) => ({
                             ...prev,
@@ -5589,7 +5562,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           }))}
                         />
                         <Textarea
-                          label="视觉规则"
+                          label={$('视觉规则')}
                           minRows={2}
                           maxRows={4}
                           value={projectSetup.styleDirectives}
@@ -5600,8 +5573,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           }))}
                         />
                         <Select
-                          label="导演手册预设"
-                          description="继承 Toonflow 的叙事技能包，用于章节节奏和镜头语言的共识。"
+                          label={$('导演手册预设')}
+                          description={$('继承 Toonflow 的叙事技能包，用于章节节奏和镜头语言的共识。')}
                           data={PROJECT_DIRECTOR_MANUAL_PRESETS.map((item) => ({
                             value: item.id,
                             label: `${item.name} · ${item.tags.join(' / ')}`,
@@ -5617,7 +5590,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           }}
                           clearable
                           searchable
-                          nothingFoundMessage="没有匹配的导演预设"
+                          nothingFoundMessage={$('没有匹配的导演预设')}
                         />
                         {selectedDirectorManualPreset ? (
                           <InlinePanel className="tc-pm__chapter-project-setup-highlight">
@@ -5632,7 +5605,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           </InlinePanel>
                         ) : null}
                         <Textarea
-                          label="导演手册"
+                          label={$('导演手册')}
                           minRows={3}
                           maxRows={5}
                           value={projectSetup.directorManual}
@@ -5644,22 +5617,22 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         />
                         <Group grow>
                           <Select
-                            label="画幅比例"
+                            label={$('画幅比例')}
                             data={[
-                              { value: '9:16', label: '9:16 竖屏' },
-                              { value: '16:9', label: '16:9 横屏' },
-                              { value: '1:1', label: '1:1 方图' },
-                              { value: '4:3', label: '4:3 传统' },
+                              { value: '9:16', label: $('9:16 竖屏') },
+                              { value: '16:9', label: $('16:9 横屏') },
+                              { value: '1:1', label: $('1:1 方图') },
+                              { value: '4:3', label: $('4:3 传统') },
                             ]}
                             value={projectSetup.videoRatio}
                             onChange={(value) => setProjectSetup((prev) => ({ ...prev, videoRatio: (value as ProjectSetupProfile['videoRatio']) || '9:16' }))}
                           />
                           <Select
-                            label="图片质量"
+                            label={$('图片质量')}
                             data={[
-                              { value: 'draft', label: '草稿' },
-                              { value: 'standard', label: '标准' },
-                              { value: 'high', label: '高质量' },
+                              { value: 'draft', label: $('草稿') },
+                              { value: 'standard', label: $('标准') },
+                              { value: 'high', label: $('高质量') },
                             ]}
                             value={projectSetup.imageQuality}
                             onChange={(value) => setProjectSetup((prev) => ({ ...prev, imageQuality: (value as ProjectSetupProfile['imageQuality']) || 'standard' }))}
@@ -5670,54 +5643,52 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
 
                     {showSourceUploadPanel ? (
                     <PanelCard className="tc-pm__chapter-text-card">
-                      <Text fw={700} mb="xs">文本与共享资源</Text>
+                      <Text fw={700} mb="xs">{ $('文本与共享资源') }</Text>
                       <Stack gap="sm">
                         <InlinePanel className="tc-pm__chapter-text-block" ref={textSectionRef}>
-                          <Text size="sm" fw={700}>文本导入区</Text>
-                          <Text size="xs" c="dimmed" mt={4}>如果你刚创建项目，先在这里上传原文。后面的章节绑定和镜头生产都会围绕这份文本展开。</Text>
+                          <Text size="sm" fw={700}>{ $('文本导入区') }</Text>
+                          <Text size="xs" c="dimmed" mt={4}>{ $('如果你刚创建项目，先在这里上传原文。后面的章节绑定和镜头生产都会围绕这份文本展开。') }</Text>
                         </InlinePanel>
                         <InlinePanel className="tc-pm__chapter-text-block">
-                          <Text size="sm" fw={600}>导入状态</Text>
+                          <Text size="sm" fw={600}>{ $('导入状态') }</Text>
                           {projectBooks[0] ? (
                             <>
                               <Text size="sm" mt={4}>{projectBooks[0].title}</Text>
                               <Text size="xs" c="dimmed">
-                                已拆书 {projectBooks[0].chapterCount} 章 · 更新时间 {new Date(projectBooks[0].updatedAt).toLocaleString()}
+                                { $('已拆书') }{projectBooks[0].chapterCount} { $(' 章 · 更新时间 ') }{new Date(projectBooks[0].updatedAt).toLocaleString()}
                               </Text>
                             </>
                           ) : projectTextAsset ? (
                             <>
-                              <Text size="sm" mt={4}>已上传项目文本</Text>
+                              <Text size="sm" mt={4}>{ $('已上传项目文本') }</Text>
                               <Text size="xs" c="dimmed">
-                                当前模式 {textAssetKind || '文本资产'}{projectSetup.lastTextUploadName ? ` · ${projectSetup.lastTextUploadName}` : ''}
+                                { $('当前模式') }{textAssetKind || $('文本资产')}{projectSetup.lastTextUploadName ? ` · ${projectSetup.lastTextUploadName}` : ''}
                               </Text>
                             </>
                           ) : (
-                            <Text size="sm" c="dimmed" mt={4}>当前项目还没有导入原文。</Text>
+                            <Text size="sm" c="dimmed" mt={4}>{ $('当前项目还没有导入原文。') }</Text>
                           )}
                         </InlinePanel>
 
                         {styleBible ? (
                           <InlinePanel className="tc-pm__chapter-text-block">
                             <Text size="sm" fw={600}>Style Bible</Text>
-                            <Text size="sm" mt={4}>{styleBible.styleName || '未命名风格'}</Text>
+                            <Text size="sm" mt={4}>{styleBible.styleName || $('未命名风格')}</Text>
                             <Text size="xs" c="dimmed" mt={4}>
-                              视觉规则 {styleBible.visualDirectives.length} 条 · 一致性规则 {styleBible.consistencyRules.length} 条
-                            </Text>
+                              { $('视觉规则') }{styleBible.visualDirectives.length} { $(' 条 · 一致性规则 ') }{styleBible.consistencyRules.length} { $('条') }</Text>
                           </InlinePanel>
                         ) : null}
 
                         <FileInput
-                          label="补充 / 替换原文"
-                          description="上传小说会进入现有拆书链路，也可用于替换当前项目文本。"
+                          label={$('补充 / 替换原文')}
+                          description={$('上传小说会进入现有拆书链路，也可用于替换当前项目文本。')}
                           value={projectTextFile}
                           onChange={setProjectTextFile}
-                          placeholder="选择文本文件"
+                          placeholder={$('选择文本文件')}
                           clearable
                         />
                         <Button loading={uploadingText} disabled={!projectTextFile} onClick={() => void handleUploadProjectText()}>
-                          上传文本
-                        </Button>
+                          { $('上传文本') }</Button>
                       </Stack>
                     </PanelCard>
                     ) : null}
@@ -5730,16 +5701,15 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <Group justify="space-between" align="flex-start" gap="md">
                         <Box style={{ flex: 1, minWidth: 260 }}>
                           <Group gap="xs" mb={6}>
-                            <Text fw={700}>镜头板</Text>
-                            <Badge variant="light">{workbench.shots.length} 个镜头</Badge>
+                            <Text fw={700}>{ $('镜头板') }</Text>
+                            <Badge variant="light">{workbench.shots.length} { $(' 个镜头') }</Badge>
                           </Group>
                           <Text size="sm">{shotControlSummary}</Text>
                           <Text size="xs" c="dimmed" mt={6}>
-                            默认只保留当前阶段最有用的动作，搜索、筛选和批量整理都收进“整理镜头”。
-                          </Text>
+                            { $('默认只保留当前阶段最有用的动作，搜索、筛选和批量整理都收进“整理镜头”。') }</Text>
                           {recommendedShots.length ? (
                             <Text size="xs" mt={6}>
-                              建议先做：{recommendedShotLabel}
+                              { $('建议先做：') }{recommendedShotLabel}
                             </Text>
                           ) : null}
                         </Box>
@@ -5750,17 +5720,16 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             disabled={!canDraftShotsFromChapter}
                             onClick={() => void handleDraftShotsFromChapter({ autoOpenPreferredShot: true, autoKickoffPreferredShot: workbench.shots.length === 0 })}
                           >
-                            {workbench.shots.length === 0 ? '一键生成镜头板' : '继续补镜头'}
+                            {workbench.shots.length === 0 ? $('一键生成镜头板') : $('继续补镜头')}
                           </Button>
                           <Button size="xs" variant="subtle" leftSection={<IconPlus size={14} />} loading={creatingShot} onClick={() => void handleCreateShot()}>
-                            新建镜头
-                          </Button>
+                            { $('新建镜头') }</Button>
                           <Button
                             size="xs"
                             variant={shotControlDirty ? 'filled' : 'default'}
                             onClick={() => setShotControlExpanded((prev) => !prev)}
                           >
-                            {shotControlExpanded ? '收起整理区' : '整理镜头'}
+                            {shotControlExpanded ? $('收起整理区') : $('整理镜头')}
                           </Button>
                         </Group>
                       </Group>
@@ -5773,14 +5742,14 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                   <Box
                                     component="img"
                                     src={currentShotPreviewUrl}
-                                    alt={shotDraft.title || '当前镜头预览'}
+                                    alt={shotDraft.title || $('当前镜头预览')}
                                     className="tc-pm__shot-preview-image"
                                   />
                                 ) : (
                                   <InlinePanel className="tc-pm__shot-preview-placeholder">
                                     <Stack gap={6}>
-                                      <Text size="sm" fw={700}>当前镜头还没有结果图</Text>
-                                      <Text size="xs" c="dimmed">先补齐 Prompt 和命中资产，再启动第一次生成。</Text>
+                                      <Text size="sm" fw={700}>{ $('当前镜头还没有结果图') }</Text>
+                                      <Text size="xs" c="dimmed">{ $('先补齐 Prompt 和命中资产，再启动第一次生成。') }</Text>
                                     </Stack>
                                   </InlinePanel>
                                 )}
@@ -5789,20 +5758,19 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                 <Box>
                                   <Group gap="xs" mb={6}>
                                     <Badge variant="light" color={shotHasRenderResult ? 'green' : 'blue'}>
-                                      {shotHasRenderResult ? '可确认' : '待出图'}
+                                      {shotHasRenderResult ? $('可确认') : $('待出图')}
                                     </Badge>
                                     <Badge variant="light" color={getShotProductionStatusTone(shotDraft.status)}>
                                       {formatShotProductionStatus(shotDraft.status)}
                                     </Badge>
-                                    {currentSceneAsset ? <Badge variant="light" color="teal">已入共享场景</Badge> : null}
+                                    {currentSceneAsset ? <Badge variant="light" color="teal">{ $('已入共享场景') }</Badge> : null}
                                   </Group>
-                                  <Text fw={700}>{shotDraft.title || '未命名镜头'}</Text>
+                                  <Text fw={700}>{shotDraft.title || $('未命名镜头')}</Text>
                                   <Text size="sm" c="dimmed" mt={4}>
-                                    {shotDraft.summary || '当前镜头还没有摘要，建议先补一句明确动作和构图。'}
+                                    {shotDraft.summary || $('当前镜头还没有摘要，建议先补一句明确动作和构图。')}
                                   </Text>
                                   <Text size="xs" c="dimmed" mt={6}>
-                                    这里只保留当前镜头概览；编辑、绑定、选图和推进都放到镜头工作区里处理。
-                                  </Text>
+                                    { $('这里只保留当前镜头概览；编辑、绑定、选图和推进都放到镜头工作区里处理。') }</Text>
                                 </Box>
                                 <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
                                   {currentShotChecklistItems.map((item) => (
@@ -5810,11 +5778,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                       <Group justify="space-between" align="flex-start" gap="sm">
                                         <Box style={{ flex: 1, minWidth: 0 }}>
                                           <Text size="xs" c="dimmed">{item.label}</Text>
-                                          <Text size="sm" fw={700} mt={4}>{item.ready ? '已就绪' : '待处理'}</Text>
+                                          <Text size="sm" fw={700} mt={4}>{item.ready ? $('已就绪') : $('待处理')}</Text>
                                           <Text size="xs" c="dimmed" mt={4}>{item.detail}</Text>
                                         </Box>
                                         <Badge variant="light" color={item.ready ? 'green' : 'yellow'}>
-                                          {item.ready ? 'OK' : '缺失'}
+                                          {item.ready ? 'OK' : $('缺失')}
                                         </Badge>
                                       </Group>
                                     </InlinePanel>
@@ -5824,8 +5792,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             </Group>
                             <Stack gap="xs" align="flex-end">
                               <Button size="sm" variant="light" leftSection={<IconPhoto size={14} />} onClick={() => setShotWorkspaceModalOpen(true)}>
-                                进入镜头工作区
-                              </Button>
+                                { $('进入镜头工作区') }</Button>
                               <Text size="xs" c="dimmed" ta="right">
                                 {shotWorkspacePrimaryActionHint}
                               </Text>
@@ -5838,21 +5805,21 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           <Group grow align="end">
                             <TextInput
                               leftSection={<IconSearch size={14} />}
-                              label="搜索镜头"
-                              placeholder="标题 / 摘要 / 状态"
+                              label={$('搜索镜头')}
+                              placeholder={$('标题 / 摘要 / 状态')}
                               value={shotQuery}
                               onChange={(event) => setShotQuery(event.currentTarget.value)}
                             />
                             <Select
-                              label="状态筛选"
+                              label={$('状态筛选')}
                               value={shotStatusFilter}
                               onChange={(value) => setShotStatusFilter(((value as typeof shotStatusFilter) || 'all'))}
                               data={[
-                                { value: 'all', label: '全部状态' },
-                                { value: 'queued', label: '待处理' },
-                                { value: 'running', label: '处理中' },
-                                { value: 'succeeded', label: '已完成' },
-                                { value: 'failed', label: '需返工' },
+                                { value: 'all', label: $('全部状态') },
+                                { value: 'queued', label: $('待处理') },
+                                { value: 'running', label: $('处理中') },
+                                { value: 'succeeded', label: $('已完成') },
+                                { value: 'failed', label: $('需返工') },
                               ]}
                             />
                           </Group>
@@ -5872,9 +5839,9 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                   })
                                 }}
                               >
-                                {filteredShots.length > 0 && filteredShots.every((item) => selectedShotIds.includes(item.id)) ? '取消全选' : '全选当前结果'}
+                                {filteredShots.length > 0 && filteredShots.every((item) => selectedShotIds.includes(item.id)) ? $('取消全选') : $('全选当前结果')}
                               </Button>
-                              <Text size="xs" c="dimmed">已选 {selectedShotIds.length} 个</Text>
+                              <Text size="xs" c="dimmed">{ $('已选 ') }{selectedShotIds.length} { $(' 个') }</Text>
                               {(shotStatusFilter !== 'all' || shotQuery.trim()) ? (
                                 <Button
                                   size="xs"
@@ -5885,29 +5852,25 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                     setSelectedShotIds([])
                                   }}
                                 >
-                                  清空筛选
-                                </Button>
+                                  { $('清空筛选') }</Button>
                               ) : null}
                             </Group>
                             <Group gap="xs">
                               <Button size="xs" variant="light" loading={batchUpdatingShots} onClick={() => void handleBatchUpdateShots('queued')}>
-                                批量待处理
-                              </Button>
+                                { $('批量待处理') }</Button>
                               <Button size="xs" variant="light" loading={batchUpdatingShots} onClick={() => void handleBatchUpdateShots('running')}>
-                                批量处理中
-                              </Button>
+                                { $('批量处理中') }</Button>
                               <Button size="xs" variant="light" loading={batchUpdatingShots} onClick={() => void handleBatchUpdateShots('failed')}>
-                                批量返工
-                              </Button>
+                                { $('批量返工') }</Button>
                             </Group>
                           </Group>
                         </Stack>
                       ) : null}
                     </InlinePanel>
                     {workbench.shots.length === 0 ? (
-                      <Text size="sm" c="dimmed">当前章节还没有镜头数据。可点击“按本章文本起稿”生成第一版镜头板，或手动新建镜头。</Text>
+                      <Text size="sm" c="dimmed">{ $('当前章节还没有镜头数据。可点击“按本章文本起稿”生成第一版镜头板，或手动新建镜头。') }</Text>
                     ) : filteredShots.length === 0 ? (
-                      <Text size="sm" c="dimmed">没有匹配当前筛选条件的镜头。</Text>
+                      <Text size="sm" c="dimmed">{ $('没有匹配当前筛选条件的镜头。') }</Text>
                     ) : (
                       <Stack gap="sm">
                         {filteredShots.map((shot, filteredIndex) => {
@@ -5948,21 +5911,21 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                       <Box
                                         component="img"
                                         src={shotPreviewUrl}
-                                        alt={shot.title || '镜头预览'}
+                                        alt={shot.title || $('镜头预览')}
                                         className="tc-pm__shot-list-preview-image"
                                       />
                                     </Box>
                                   ) : (
                                     <Box className="tc-pm__shot-list-preview-media tc-pm__shot-list-preview-media--empty">
-                                      <Text className="tc-pm__shot-list-preview-empty" size="xs">无预览</Text>
+                                      <Text className="tc-pm__shot-list-preview-empty" size="xs">{ $('无预览') }</Text>
                                     </Box>
                                   )}
                                   <Box className="tc-pm__shot-list-copy" style={{ minWidth: 0, flex: 1 }}>
                                     <Group className="tc-pm__shot-list-title-row" gap={6} wrap="wrap">
                                       <Text className="tc-pm__shot-list-index" fw={700} size="sm">{`Shot ${shot.shotIndex + 1}`}</Text>
-                                      <Text className="tc-pm__shot-list-title" size="sm">{shot.title || '未命名镜头'}</Text>
+                                      <Text className="tc-pm__shot-list-title" size="sm">{shot.title || $('未命名镜头')}</Text>
                                       {recommendedShotIds.includes(shot.id) ? (
-                                        <Badge size="xs" color="orange" variant="light">建议优先</Badge>
+                                        <Badge size="xs" color="orange" variant="light">{ $('建议优先') }</Badge>
                                       ) : null}
                                     </Group>
                                     {shot.summary ? <Text className="tc-pm__shot-list-summary" size="xs" c="dimmed" lineClamp={3}>{shot.summary}</Text> : null}
@@ -5981,7 +5944,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                           event.stopPropagation()
                                           void handleMoveShot(shot.id, 'up')
                                         }}
-                                        aria-label="上移镜头"
+                                        aria-label={$('上移镜头')}
                                       >
                                         <IconArrowUp size={14} />
                                       </ActionIcon>
@@ -5995,7 +5958,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                           event.stopPropagation()
                                           void handleMoveShot(shot.id, 'down')
                                         }}
-                                        aria-label="下移镜头"
+                                        aria-label={$('下移镜头')}
                                       >
                                         <IconArrowDown size={14} />
                                       </ActionIcon>
@@ -6018,7 +5981,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <Modal
                         opened={shotWorkspaceModalOpen}
                         onClose={() => setShotWorkspaceModalOpen(false)}
-                        title="镜头工作区"
+                        title={$('镜头工作区')}
                         size="min(1180px, 96vw)"
                         centered
                         classNames={{
@@ -6030,9 +5993,9 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                       <Box ref={renderSectionRef} />
                       <Group justify="space-between" align="flex-start" mb="sm">
                         <Box>
-                          <Text fw={700}>镜头工作区</Text>
+                          <Text fw={700}>{ $('镜头工作区') }</Text>
                           <Text size="xs" c="dimmed">
-                            {shotHasRenderResult ? '当前镜头已有结果，重点做选图、沉淀资产和审阅。' : '当前镜头还没出图，先整理信息并完成第一次生成。'}
+                            {shotHasRenderResult ? $('当前镜头已有结果，重点做选图、沉淀资产和审阅。') : $('当前镜头还没出图，先整理信息并完成第一次生成。')}
                           </Text>
                         </Box>
                         <Stack gap={6} align="flex-end">
@@ -6067,7 +6030,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             color="gray"
                             onClick={() => setShowShotAdvancedActions((prev) => !prev)}
                           >
-                            {showShotAdvancedActions ? '收起次要操作' : '展开次要操作'}
+                            {showShotAdvancedActions ? $('收起次要操作') : $('展开次要操作')}
                           </Button>
                         </Stack>
                       </Group>
@@ -6086,8 +6049,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               }))
                             }}
                           >
-                            重建 Prompt
-                          </Button>
+                            { $('重建 Prompt') }</Button>
                           {!shotHasRenderResult ? null : (
                             <Button
                               size="xs"
@@ -6097,74 +6059,69 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               disabled={!currentShotRender?.data.selectedImageUrl}
                               onClick={() => void handlePromoteShotResultToSceneAsset()}
                             >
-                              仅同步为场景物料
-                            </Button>
+                              { $('仅同步为场景物料') }</Button>
                           )}
                           {shotHasRenderResult ? (
                             <Button size="xs" variant="light" color="orange" loading={savingShot} onClick={() => void handleReviewDecision('rework')}>
-                              打回返工
-                            </Button>
+                              { $('打回返工') }</Button>
                           ) : null}
                           <Button size="xs" color="red" variant="light" leftSection={<IconTrash size={14} />} loading={deletingShot} onClick={() => void handleDeleteShot()}>
-                            删除镜头
-                          </Button>
+                            { $('删除镜头') }</Button>
                         </Group>
                       ) : null}
                       <Stack gap="sm">
                         <InlinePanel className="tc-pm__shot-workspace-step">
                           <Group justify="space-between" align="flex-start" mb="xs">
                             <Box>
-                              <Text size="sm" fw={700}>Step 1 · 整理当前镜头</Text>
+                              <Text size="sm" fw={700}>{ $('Step 1 · 整理当前镜头') }</Text>
                               <Text size="xs" c="dimmed">
-                                {shotHasRenderResult ? '当前镜头已经出图，默认收起编辑表单，只保留关键信息。' : '先把标题、摘要和状态收准，再执行生成。'}
+                                {shotHasRenderResult ? $('当前镜头已经出图，默认收起编辑表单，只保留关键信息。') : $('先把标题、摘要和状态收准，再执行生成。')}
                               </Text>
                             </Box>
                             {shotHasRenderResult && !showShotAdvancedActions ? (
                               <Button size="xs" variant="light" onClick={() => setShowShotAdvancedActions(true)}>
-                                调整镜头信息
-                              </Button>
+                                { $('调整镜头信息') }</Button>
                             ) : (
                               <Button size="xs" loading={savingShot} onClick={() => void handleSaveShot()}>
-                                保存镜头
-                              </Button>
+                                { $('保存镜头') }</Button>
                             )}
                           </Group>
                           {shotHasRenderResult && !showShotAdvancedActions ? (
                             <Stack gap="xs">
                               <InlinePanel className="tc-pm__shot-workspace-subblock">
-                                <Text size="xs" c="dimmed">镜头标题</Text>
-                                <Text size="sm" fw={600} mt={4}>{shotDraft.title || '未命名镜头'}</Text>
+                                <Text size="xs" c="dimmed">{ $('镜头标题') }</Text>
+                                <Text size="sm" fw={600} mt={4}>{shotDraft.title || $('未命名镜头')}</Text>
                               </InlinePanel>
                               <InlinePanel className="tc-pm__shot-workspace-subblock">
-                                <Text size="xs" c="dimmed">镜头摘要</Text>
-                                <Text size="sm" mt={4}>{shotDraft.summary || '当前镜头还没有摘要。'}</Text>
+                                <Text size="xs" c="dimmed">{ $('镜头摘要') }</Text>
+                                <Text size="sm" mt={4}>{shotDraft.summary || $('当前镜头还没有摘要。')}</Text>
                               </InlinePanel>
                               <InlinePanel className="tc-pm__shot-workspace-subblock">
-                                <Text size="xs" c="dimmed">镜头状态</Text>
-                                <Text size="sm" mt={4}>{shotDraft.status === 'failed' ? '需返工' : shotDraft.status === 'running' ? '处理中' : shotDraft.status === 'succeeded' ? '已完成' : '待处理'}</Text>
+                                <Text size="xs" c="dimmed">{ $('镜头状态') }</Text>
+                                <Text size="sm" mt={4}>{shotDraft.status === 'failed' ? $('需返工') : shotDraft.status === 'running' ? $('处理中') : shotDraft.status === 'succeeded' ? $('已完成') : $('待处理')}</Text>
                               </InlinePanel>
                             </Stack>
                           ) : (
                             <Stack gap="sm">
                               <TextInput
-                                label="镜头标题"
+                                label={$('镜头标题')}
                                 value={shotDraft.title}
                                 onChange={(event) => setShotDraft((prev) => prev ? { ...prev, title: event.currentTarget.value } : prev)}
                               />
                               <Textarea
-                                label="镜头摘要"
+                                label={$('镜头摘要')}
                                 minRows={2}
                                 maxRows={4}
                                 value={shotDraft.summary}
                                 onChange={(event) => setShotDraft((prev) => prev ? { ...prev, summary: event.currentTarget.value } : prev)}
                               />
                               <Select
-                                label="镜头状态"
+                                label={$('镜头状态')}
                                 data={[
-                                  { value: 'queued', label: '待处理' },
-                                  { value: 'running', label: '处理中' },
-                                  { value: 'succeeded', label: '已完成' },
-                                  { value: 'failed', label: '需返工' },
+                                  { value: 'queued', label: $('待处理') },
+                                  { value: 'running', label: $('处理中') },
+                                  { value: 'succeeded', label: $('已完成') },
+                                  { value: 'failed', label: $('需返工') },
                                 ]}
                                 value={shotDraft.status}
                                 onChange={(value) => setShotDraft((prev) => prev ? { ...prev, status: value || 'queued' } : prev)}
@@ -6177,12 +6134,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             <InlinePanel className="tc-pm__shot-workspace-step">
                               <Group justify="space-between" align="flex-start" mb="xs">
                                 <Box>
-                                  <Text size="sm" fw={700}>Step 2 · 绑定项目记忆</Text>
-                                  <Text size="xs" c="dimmed">让镜头和项目资产之间的关系可见，而不是只存在于 Prompt 里。</Text>
+                                  <Text size="sm" fw={700}>{ $('Step 2 · 绑定项目记忆') }</Text>
+                                  <Text size="xs" c="dimmed">{ $('让镜头和项目资产之间的关系可见，而不是只存在于 Prompt 里。') }</Text>
                                 </Box>
                                 <Button size="xs" variant="light" loading={bindingShotMemory} onClick={() => void handleBindShotMemory()}>
-                                  绑定本章命中资产
-                                </Button>
+                                  { $('绑定本章命中资产') }</Button>
                               </Group>
                               <Stack gap="xs">
                                 {currentShotBoundAssetCards.length ? currentShotBoundAssetCards.map((item) => (
@@ -6191,32 +6147,32 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                       <Box style={{ flex: 1, minWidth: 0 }}>
                                         <Text size="sm" fw={700}>{item.asset.name}</Text>
                                         <Text size="xs" c="dimmed" mt={4}>
-                                          {item.asset.kind === 'character' ? '角色资产' : item.asset.kind === 'scene' ? '场景资产' : item.asset.kind === 'prop' ? '道具资产' : '风格资产'}
-                                          {` · 绑定版本 v${item.ref.assetVersion}`}
+                                          {item.asset.kind === 'character' ? $('角色资产') : item.asset.kind === 'scene' ? $('场景资产') : item.asset.kind === 'prop' ? $('道具资产') : $('风格资产')}
+                                          {$t(' · 绑定版本 v{{assetVersion}}', { assetVersion: item.ref.assetVersion })}
                                         </Text>
                                         {item.previewImageUrl ? (
                                           <Box className="tc-pm__shot-list-preview-media" mt={8}>
                                             <Box
                                               component="img"
                                               src={item.previewImageUrl}
-                                              alt={`${item.asset.name} 预览`}
+                                              alt={$t('{{name}} 预览', { name: item.asset.name })}
                                               className="tc-pm__shot-list-preview-image"
                                             />
                                           </Box>
                                         ) : null}
                                       </Box>
                                       <Badge variant="light" color={item.ref.assetVersion < item.asset.currentVersion ? 'yellow' : 'green'}>
-                                        {item.ref.assetVersion < item.asset.currentVersion ? `当前 v${item.asset.currentVersion}` : '已同步'}
+                                        {item.ref.assetVersion < item.asset.currentVersion ? $t('当前 v{{currentVersion}}', { currentVersion: item.asset.currentVersion }) : $('已同步')}
                                       </Badge>
                                     </Group>
                                   </InlinePanel>
                                 )) : (
-                                  <Text size="sm" c="dimmed">当前镜头还没有绑定项目记忆资产。</Text>
+                                  <Text size="sm" c="dimmed">{ $('当前镜头还没有绑定项目记忆资产。') }</Text>
                                 )}
                                 {suggestedShotMemoryAssets.length ? (
                                   <InlinePanel className="tc-pm__shot-workspace-subblock">
                                     <Group justify="space-between" align="center" gap="xs">
-                                      <Text size="sm" fw={700}>可用项目资源</Text>
+                                      <Text size="sm" fw={700}>{ $('可用项目资源') }</Text>
                                       <Badge variant="light">{suggestedShotMemoryAssets.length}</Badge>
                                     </Group>
                                     <SimpleGrid cols={{ base: 2, md: 3 }} spacing="xs" mt={6}>
@@ -6227,13 +6183,13 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                               <Box
                                                 component="img"
                                                 src={item.previewImageUrl}
-                                                alt={`${item.asset.name} 资源预览`}
+                                                alt={$t('{{name}} 资源预览', { name: item.asset.name })}
                                                 className="tc-pm__shot-list-preview-image"
                                               />
                                             </Box>
                                           ) : (
                                             <Box className="tc-pm__shot-list-preview-media tc-pm__shot-list-preview-media--empty">
-                                              <Text className="tc-pm__shot-list-preview-empty" size="xs">无图</Text>
+                                              <Text className="tc-pm__shot-list-preview-empty" size="xs">{ $('无图') }</Text>
                                             </Box>
                                           )}
                                           <Text size="xs" mt={6} lineClamp={2}>{item.asset.name}</Text>
@@ -6247,12 +6203,11 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                             <InlinePanel className="tc-pm__shot-workspace-step">
                               <Group justify="space-between" align="flex-start" mb="xs">
                                 <Box>
-                                  <Text size="sm" fw={700}>Step 3 · 检查本次生成参考</Text>
-                                  <Text size="xs" c="dimmed">这里展示当前镜头可用的项目信息。</Text>
+                                  <Text size="sm" fw={700}>{ $('Step 3 · 检查本次生成参考') }</Text>
+                                  <Text size="xs" c="dimmed">{ $('这里展示当前镜头可用的项目信息。') }</Text>
                                 </Box>
                                 <Button size="xs" variant="subtle" loading={syncingChapterMemory} onClick={() => void handleSyncChapterMemory()}>
-                                  同步本章线索
-                                </Button>
+                                  { $('同步本章线索') }</Button>
                               </Group>
                               <Stack gap="xs">
                                 {promptConstraintItems.map((item) => (
@@ -6263,24 +6218,24 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                               </Stack>
                             </InlinePanel>
                             <Textarea
-                              label="Step 4 · 执行 Prompt"
+                              label={$('Step 4 · 执行 Prompt')}
                               minRows={8}
                               maxRows={16}
                               value={shotRenderPrompt}
                               onChange={(event) => setShotRenderPrompt(event.currentTarget.value)}
-                              placeholder="这里会自动拼出当前镜头的执行 prompt，也支持手工改写。"
+                              placeholder={$('这里会自动拼出当前镜头的执行 prompt，也支持手工改写。')}
                             />
                           </>
                         ) : (
                           <>
                             <InlinePanel className="tc-pm__shot-workspace-step">
-                              <Text size="sm" fw={700}>Step 2 · 选图后直接确认并继续</Text>
-                              <Text size="xs" c="dimmed" mt={4}>选中当前最佳结果后，直接点右上角主按钮即可同步项目场景并推进到下一个优先镜头。</Text>
+                              <Text size="sm" fw={700}>{ $('Step 2 · 选图后直接确认并继续') }</Text>
+                              <Text size="xs" c="dimmed" mt={4}>{ $('选中当前最佳结果后，直接点右上角主按钮即可同步项目场景并推进到下一个优先镜头。') }</Text>
                             </InlinePanel>
                             {currentShotBoundAssetCards.length ? (
                               <InlinePanel className="tc-pm__shot-workspace-step">
                                 <Group justify="space-between" align="center" gap="xs">
-                                  <Text size="sm" fw={700}>当前镜头已绑定的项目记忆</Text>
+                                  <Text size="sm" fw={700}>{ $('当前镜头已绑定的项目记忆') }</Text>
                                   <Badge variant="light">{currentShotBoundAssetCards.length}</Badge>
                                 </Group>
                                 <Text size="xs" c="dimmed" mt={4}>
@@ -6292,7 +6247,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         )}
                         {currentShotRender?.data.errorMessage ? (
                           <InlinePanel className="tc-pm__shot-workspace-step">
-                            <Text size="sm" c="red">最近一次失败：{currentShotRender.data.errorMessage}</Text>
+                            <Text size="sm" c="red">{ $('最近一次失败：') }{currentShotRender.data.errorMessage}</Text>
                             <Group gap="xs" mt="xs">
                               <Badge variant="light" color={shotFailureDiagnosis.tone === 'red' ? 'red' : shotFailureDiagnosis.tone === 'yellow' ? 'yellow' : 'gray'}>
                                 {shotFailureDiagnosis.title}
@@ -6304,7 +6259,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                         {currentShotRender?.data.images?.length ? (
                           <Stack gap="xs">
                             <Group justify="space-between">
-                              <Text size="sm" fw={600}>Step 5 · 最近结果</Text>
+                              <Text size="sm" fw={600}>{ $('Step 5 · 最近结果') }</Text>
                               <Text size="xs" c="dimmed">
                                 {currentShotRender.data.vendor || 'auto'}{currentShotRender.data.model ? ` · ${currentShotRender.data.model}` : ''}
                               </Text>
@@ -6339,8 +6294,8 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                                         }}
                                       />
                                       <Group justify="space-between" wrap="nowrap">
-                                        <Text size="xs">{active ? '当前选中' : `候选 ${index + 1}`}</Text>
-                                        <ActionIcon variant="subtle" color={active ? 'blue' : 'gray'} loading={savingShotSelection} aria-label="选择结果">
+                                        <Text size="xs">{active ? $('当前选中') : $t('候选 {{index}}', { index: index + 1 })}</Text>
+                                        <ActionIcon variant="subtle" color={active ? 'blue' : 'gray'} loading={savingShotSelection} aria-label={$('选择结果')}>
                                           <IconPhoto size={14} />
                                         </ActionIcon>
                                       </Group>
@@ -6352,7 +6307,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           </Stack>
                         ) : (
                           <InlinePanel className="tc-pm__shot-workspace-step">
-                            <Text size="sm" c="dimmed">当前镜头还没有生成结果。</Text>
+                            <Text size="sm" c="dimmed">{ $('当前镜头还没有生成结果。') }</Text>
                           </InlinePanel>
                         )}
                       </Stack>
@@ -6365,18 +6320,17 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                 <PanelCard className="tc-pm__load-error-card">
                   <Stack gap="sm">
                     <Badge variant="light" color={chapterMissing ? 'yellow' : 'red'} className="tc-pm__load-error-badge">
-                      {chapterMissing ? '章节不存在' : '加载失败'}
+                      {chapterMissing ? $('章节不存在') : $('加载失败')}
                     </Badge>
                     <Title order={3} className="tc-pm__load-error-title">
-                      {chapterMissing ? '当前章节或项目已不存在' : '这一页暂时无法加载'}
+                      {chapterMissing ? $('当前章节或项目已不存在') : $('这一页暂时无法加载')}
                     </Title>
                     <Text size="sm" c="dimmed" className="tc-pm__load-error-text">
-                      {loadError?.message || '当前无法获取这一页的数据。'}
+                      {loadError?.message || $('当前无法获取这一页的数据。')}
                     </Text>
                     <Group gap="xs" className="tc-pm__load-error-actions">
                       <Button variant="default" onClick={() => spaNavigate(buildProjectDirectoryUrl(projectId))}>
-                        返回项目页
-                      </Button>
+                        { $('返回项目页') }</Button>
                       <Button
                         color="blue"
                         leftSection={<IconRefresh size={14} />}
@@ -6384,8 +6338,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
                           window.location.reload()
                         }}
                       >
-                        重新加载
-                      </Button>
+                        { $('重新加载') }</Button>
                     </Group>
                   </Stack>
                 </PanelCard>
@@ -6397,7 +6350,7 @@ export default function ProjectChapterWorkbenchPage(): JSX.Element {
       <ProjectAssetsViewer
         opened={assetsViewerOpen}
         projectId={projectId}
-        projectName={workbench?.project.name || '项目'}
+        projectName={workbench?.project.name || $('项目')}
         onClose={() => setAssetsViewerOpen(false)}
       />
     </AppShell>

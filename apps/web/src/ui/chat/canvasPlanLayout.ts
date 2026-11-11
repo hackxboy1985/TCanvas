@@ -5,6 +5,7 @@ import {
   normalizeProductionLayer,
   type ProductionLayer,
 } from '../../canvas/productionMeta'
+import { $t } from '../../canvas/i18n'
 
 export type LayoutPlanPosition = { x: number; y: number }
 
@@ -433,7 +434,7 @@ function buildWeaklyConnectedGroups(plan: LayoutPlan): LayoutPlanGroup[] {
     }
     groups.push({
       key: ids[0] || node.clientId,
-      label: ids.length > 1 ? `${node.label} 工作流` : node.label,
+      label: ids.length > 1 ? $t('{{label}} 工作流', { label: node.label }) : node.label,
       nodeClientIds: ids,
     })
   }

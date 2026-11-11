@@ -1,5 +1,6 @@
 import React from 'react'
 import { Text } from '@mantine/core'
+import { $, $t } from '../../canvas/i18n'
 
 type CharacterGraphNode3D = {
   id: string
@@ -141,20 +142,20 @@ function rotate(v: Vec3, rx: number, ry: number): Vec3 {
 
 function relationLabel(relation: string): string {
   switch (relation) {
-    case 'family': return '亲属'
-    case 'parent_child': return '父子/母子'
-    case 'siblings': return '兄弟姐妹'
-    case 'mentor_disciple': return '师徒/同门'
-    case 'alliance': return '盟友'
-    case 'friend': return '朋友'
-    case 'lover': return '恋人'
-    case 'rival': return '竞争'
-    case 'enemy': return '仇敌'
-    case 'colleague': return '同事/战友'
-    case 'master_servant': return '主仆'
-    case 'betrayal': return '背叛'
-    case 'conflict': return '冲突'
-    default: return '共现'
+    case 'family': return $('亲属')
+    case 'parent_child': return $('父子/母子')
+    case 'siblings': return $('兄弟姐妹')
+    case 'mentor_disciple': return $('师徒/同门')
+    case 'alliance': return $('盟友')
+    case 'friend': return $('朋友')
+    case 'lover': return $('恋人')
+    case 'rival': return $('竞争')
+    case 'enemy': return $('仇敌')
+    case 'colleague': return $('同事/战友')
+    case 'master_servant': return $('主仆')
+    case 'betrayal': return $('背叛')
+    case 'conflict': return $('冲突')
+    default: return $('共现')
   }
 }
 
@@ -176,7 +177,7 @@ export function CharacterGraph3D(props: {
     return (
       <div className="character-graph-3d-empty" style={{ minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Text className="character-graph-3d-empty-text" size="sm" c="dimmed">
-          暂无角色节点，请先执行 AI 全书深度重建
+          {$('暂无角色节点，请先执行 AI 全书深度重建')}
         </Text>
       </div>
     )
@@ -228,11 +229,11 @@ export function CharacterGraph3D(props: {
   }, [chapterNo])
 
   const stageLabel = React.useCallback((stage: 'past' | 'new' | 'future' | 'current' | 'unknown'): string => {
-    if (stage === 'past') return '已出场'
-    if (stage === 'new') return '新出场'
-    if (stage === 'future') return '未出场'
-    if (stage === 'current') return '当前章节出场'
-    return '未指定'
+    if (stage === 'past') return $('已出场')
+    if (stage === 'new') return $('新出场')
+    if (stage === 'future') return $('未出场')
+    if (stage === 'current') return $('当前章节出场')
+    return $('未指定')
   }, [])
 
   const isNodeMatched = React.useCallback((node: CharacterGraphNode3D): boolean => {
@@ -489,7 +490,7 @@ export function CharacterGraph3D(props: {
         style={{ width: '100%', height: '100%', borderRadius: 12, cursor: 'grab', border: isDark ? '1px solid rgba(148,163,184,0.2)' : '1px solid rgba(148,163,184,0.3)' }}
       />
       <Text className="character-graph-3d-help" size="xs" c="dimmed" style={{ position: 'absolute', left: 10, bottom: 8 }}>
-        拖拽旋转 · 滚轮缩放 · 悬浮查看角色
+        {$('拖拽旋转 · 滚轮缩放 · 悬浮查看角色')}
       </Text>
       <div
         className="character-graph-3d-zoom-controls"
@@ -510,7 +511,7 @@ export function CharacterGraph3D(props: {
         <button type="button" onClick={zoomOut} style={{ borderRadius: 6, border: '1px solid rgba(148,163,184,.45)', background: 'transparent', color: 'inherit', width: 24, height: 22, cursor: 'pointer' }}>-</button>
         <Text size="xs" c="dimmed" style={{ minWidth: 42, textAlign: 'center' }}>{`${zoomLevel.toFixed(2)}x`}</Text>
         <button type="button" onClick={zoomIn} style={{ borderRadius: 6, border: '1px solid rgba(148,163,184,.45)', background: 'transparent', color: 'inherit', width: 24, height: 22, cursor: 'pointer' }}>+</button>
-        <button type="button" onClick={zoomReset} style={{ borderRadius: 6, border: '1px solid rgba(148,163,184,.45)', background: 'transparent', color: 'inherit', padding: '0 6px', height: 22, cursor: 'pointer', fontSize: 11 }}>重置</button>
+        <button type="button" onClick={zoomReset} style={{ borderRadius: 6, border: '1px solid rgba(148,163,184,.45)', background: 'transparent', color: 'inherit', padding: '0 6px', height: 22, cursor: 'pointer', fontSize: 11 }}>{$('重置')}</button>
       </div>
       <div
         className="character-graph-3d-legend"
@@ -547,7 +548,7 @@ export function CharacterGraph3D(props: {
               cursor: 'pointer',
             }}
           >
-            置灰模式
+            {$('置灰模式')}
           </button>
           <button
             className="character-graph-3d-focus-mode-hide"
@@ -563,14 +564,14 @@ export function CharacterGraph3D(props: {
               cursor: 'pointer',
             }}
           >
-            隐藏模式
+            {$('隐藏模式')}
           </button>
         </div>
         {[
-          { label: '已出场', color: isDark ? '#60a5fa' : '#2563eb' },
-          { label: '新出场', color: isDark ? '#f59e0b' : '#d97706' },
-          { label: '未出场', color: isDark ? '#64748b' : '#94a3b8' },
-          { label: '当前章节出场', color: isDark ? '#22c55e' : '#16a34a' },
+          { label: $('已出场'), color: isDark ? '#60a5fa' : '#2563eb' },
+          { label: $('新出场'), color: isDark ? '#f59e0b' : '#d97706' },
+          { label: $('未出场'), color: isDark ? '#64748b' : '#94a3b8' },
+          { label: $('当前章节出场'), color: isDark ? '#22c55e' : '#16a34a' },
         ].map((item, idx) => {
           const stageKey = (['past', 'new', 'future', 'current'] as const)[idx]
           const active = stageFocus === stageKey
@@ -615,7 +616,7 @@ export function CharacterGraph3D(props: {
             cursor: 'pointer',
           }}
         >
-          查看全部
+          {$('查看全部')}
         </button>
       </div>
       {!!hover && (
@@ -637,9 +638,9 @@ export function CharacterGraph3D(props: {
         >
           <Text size="xs" fw={700} lineClamp={1}>{hover.node.name}</Text>
           <Text size="xs" c="dimmed">id: {hover.node.id}</Text>
-          <Text size="xs" c="dimmed">状态: {stageLabel(resolveNodeStage(hover.node))}</Text>
-          {!!hover.node.importance && <Text size="xs" c="dimmed">级别: {hover.node.importance}</Text>}
-          {typeof hover.node.unlockChapter === 'number' && <Text size="xs" c="dimmed">解锁: 第{hover.node.unlockChapter}章</Text>}
+          <Text size="xs" c="dimmed">{$('状态: ')}{stageLabel(resolveNodeStage(hover.node))}</Text>
+          {!!hover.node.importance && <Text size="xs" c="dimmed">{$('级别: ')}{hover.node.importance}</Text>}
+          {typeof hover.node.unlockChapter === 'number' && <Text size="xs" c="dimmed">{$t('解锁: 第 {{chapter}} 章', { chapter: hover.node.unlockChapter })}</Text>}
         </div>
       )}
     </div>

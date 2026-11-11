@@ -1,4 +1,5 @@
 import type { ModelCatalogImportPackageDto, ModelCatalogMappingDto, ModelCatalogModelDto, ModelCatalogVendorDto } from './deps'
+import { $ } from '../../../../canvas/i18n'
 
 export type JsonParseResult = { ok: true; value: any } | { ok: false; error: string }
 
@@ -15,7 +16,7 @@ export function safeParseJson(input: string): JsonParseResult {
   try {
     return { ok: true, value: JSON.parse(raw) }
   } catch (err: any) {
-    return { ok: false, error: err?.message || 'JSON 解析失败' }
+    return { ok: false, error: err?.message || $('JSON 解析失败') }
   }
 }
 
@@ -51,7 +52,7 @@ export async function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
-    reader.onerror = () => reject(new Error('读取文件失败'))
+    reader.onerror = () => reject(new Error($('读取文件失败')))
     reader.readAsText(file)
   })
 }
@@ -169,9 +170,9 @@ export function formatVendor(vendorKey: string | undefined | null): string {
 export function formatKind(kind: string | undefined | null): string {
   const k = String(kind || '').trim()
   if (!k) return '—'
-  if (k === 'text') return '文本'
-  if (k === 'image') return '图片'
-  if (k === 'video') return '视频'
+  if (k === 'text') return $('文本')
+  if (k === 'image') return $('图片')
+  if (k === 'video') return $('视频')
   return k
 }
 
@@ -179,13 +180,13 @@ export function formatTaskKind(kind: string | undefined | null): string {
   const k = String(kind || '').trim()
   if (!k) return '—'
   const map: Record<string, string> = {
-    chat: 'chat（文本）',
-    prompt_refine: 'prompt_refine（指令优化）',
-    text_to_image: 'text_to_image（图片）',
-    image_edit: 'image_edit（图像编辑）',
-    image_to_prompt: 'image_to_prompt（图像理解）',
-    text_to_video: 'text_to_video（视频）',
-    image_to_video: 'image_to_video（图像转视频）',
+    chat: $('chat（文本）'),
+    prompt_refine: $('prompt_refine（指令优化）'),
+    text_to_image: $('text_to_image（图片）'),
+    image_edit: $('image_edit（图像编辑）'),
+    image_to_prompt: $('image_to_prompt（图像理解）'),
+    text_to_video: $('text_to_video（视频）'),
+    image_to_video: $('image_to_video（图像转视频）'),
   }
   return map[k] || k
 }

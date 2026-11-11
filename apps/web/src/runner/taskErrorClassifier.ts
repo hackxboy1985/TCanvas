@@ -1,3 +1,5 @@
+import { $ } from '../canvas/i18n'
+
 export type TaskErrorDisplay = {
   enhancedMsg: string
 }
@@ -21,7 +23,7 @@ export function isSafetyBlockedError(err: any): boolean {
 }
 
 export function resolveTaskErrorDisplay(err: any, fallbackMsg: string): TaskErrorDisplay {
-  const msg = String(err?.message || fallbackMsg || '图像模型调用失败')
+  const msg = String(err?.message || fallbackMsg || $('图像模型调用失败'))
   return {
     enhancedMsg: msg,
   }

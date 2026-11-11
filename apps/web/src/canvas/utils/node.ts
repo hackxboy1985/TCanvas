@@ -6,6 +6,7 @@
 import { NODE_TYPES, NODE_KINDS, DEFAULTS, VALIDATION } from './constants';
 import { generateId } from './canvas';
 import type { Node } from '@xyflow/react';
+import { $ } from '../i18n';
 
 /**
  * 节点数据接口
@@ -524,12 +525,12 @@ export function getNodeWithDerivatives(
  */
 export function getEditTypeLabel(editType?: string): string {
   const labels: Record<string, string> = {
-    angle: '角度修改',
-    lighting: '打光调整',
-    custom: '自定义编辑',
-    sketch: '转线稿',
-    depthmap: '转深度图',
-    clay: '转白模',
+    angle: $('角度修改'),
+    lighting: $('打光调整'),
+    custom: $('自定义编辑'),
+    sketch: $('转线稿'),
+    depthmap: $('转深度图'),
+    clay: $('转白模'),
   };
   return labels[editType || ''] || editType || '';
 }

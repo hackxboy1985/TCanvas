@@ -10,6 +10,7 @@ import {
   type ProjectBookUploadJobDto,
   type ServerAssetDto,
 } from '../api/server'
+import { $, $t } from '../canvas/i18n'
 
 export const TEXT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
 export const TEXT_UPLOAD_MAX_LABEL = '50MB'
@@ -135,17 +136,17 @@ export async function uploadProjectText(input: UploadProjectTextInput): Promise<
     ? Math.max(0, Math.trunc(input.file.size))
     : 0
   if (fileBytes > TEXT_UPLOAD_MAX_BYTES) {
-    throw new Error(`文本文件超过 ${TEXT_UPLOAD_MAX_LABEL} 上传上限`)
+    throw new Error($t('文本文件超过 {{limit}} 上传上限', { limit: TEXT_UPLOAD_MAX_LABEL }))
   }
 
   const contentRaw = await decodeUploadText(input.file)
   const content = String(contentRaw || '').trim()
   if (!content) {
-    throw new Error('上传文件为空，未写入素材')
+    throw new Error($('上传文件为空，未写入素材'))
   }
   const contentBytes = getUtf8TextByteLength(content)
   if (contentBytes > TEXT_UPLOAD_MAX_BYTES) {
-    throw new Error(`文本内容超过 ${TEXT_UPLOAD_MAX_LABEL} 上传上限`)
+    throw new Error($t('文本内容超过 {{limit}} 上传上限', { limit: TEXT_UPLOAD_MAX_LABEL }))
   }
 
   const normalizedKind = input.uploadMode === 'book-only'
@@ -154,7 +155,7 @@ export async function uploadProjectText(input: UploadProjectTextInput): Promise<
 
   if (normalizedKind === 'novelDoc') {
     if (input.isBookUploadLocked) {
-      throw new Error('当前项目有小说上传任务进行中，请等待完成后再上传')
+      throw new Error($('当前项目有小说上传任务进行中，请等待完成后再上传'))
     }
     const uploadTitle = input.file.name.replace(/\.[^.]+$/, '').trim()
       || String(input.projectName || '').trim()
@@ -166,7 +167,7 @@ export async function uploadProjectText(input: UploadProjectTextInput): Promise<
     })
     const uploadId = String(session.uploadId || '').trim()
     if (!uploadId) {
-      throw new Error('分块上传初始化失败：缺少 uploadId')
+      throw new Error($('分块上传初始化失败：缺少 uploadId'))
     }
     const totalChunks = Math.max(1, Math.ceil(content.length / PROJECT_BOOK_UPLOAD_CHUNK_CHARS))
     for (let index = 0; index < totalChunks; index += 1) {
@@ -187,7 +188,7 @@ export async function uploadProjectText(input: UploadProjectTextInput): Promise<
       strictAgents: true,
     })
     if (!finished?.job?.id) {
-      throw new Error('创建异步任务失败：缺少 jobId')
+      throw new Error($('创建异步任务失败：缺少 jobId'))
     }
     return {
       mode: 'book',

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Group, Switch, Text, Tooltip } from '@mantine/core'
+import { $ } from '../../../i18n'
 
 type PromptEditorActionsProps = {
   isAdmin: boolean
@@ -16,11 +17,11 @@ type PromptEditorActionsProps = {
 export function PromptEditorActions(props: PromptEditorActionsProps) {
   return (
     <Group className="tc-task-node__prompt-actions" justify="space-between" gap={8}>
-      <Text className="tc-task-node__prompt-mode-switch-label" size="xs">提示词编辑模式</Text>
+      <Text className="tc-task-node__prompt-mode-switch-label" size="xs">{$('提示词编辑模式')}</Text>
       <Group className="tc-task-node__prompt-actions-right" gap={8}>
       {props.actions}
       {props.isAdmin ? (
-        <Tooltip className="tc-task-node__prompt-json-help" label="仅切换展示，不调用 AI；请先润色以生成结构化内容">
+        <Tooltip className="tc-task-node__prompt-json-help" label={$("仅切换展示，不调用 AI；请先润色以生成结构化内容")}>
           <Switch
             className="tc-task-node__prompt-mode-switch-input"
             size="xs"

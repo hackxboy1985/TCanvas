@@ -49,6 +49,7 @@ import {
   STORYBOARD_MAX_TOTAL_DURATION,
 } from '../canvas/nodes/storyboardUtils'
 import { resolveTaskErrorDisplay } from './taskErrorClassifier'
+import { $, $t } from '../canvas/i18n'
 import { mergeExecutionPromptSequence } from './promptAssembly'
 import {
   collectNodeReferenceImageUrls,
@@ -170,7 +171,7 @@ function sanitizeTaskFailureMessage(raw: string | null | undefined): string {
   const message = String(raw || '').trim()
   if (!message) return ''
   const technical = /###\s|\.xml\b|mapper\.xml|Deadlock|Caused by:|jdbc:|stackTrace|GetConnectionTimeout/i
-  if (technical.test(message)) return '生成服务暂时繁忙，系统已自动重试仍未成功，请稍后重试'
+  if (technical.test(message)) return $('生成服务暂时繁忙，系统已自动重试仍未成功，请稍后重试')
   return message
 }
 const NON_EXECUTABLE_REMOTE_NODE_KINDS = new Set(['text'])
@@ -844,7 +845,7 @@ async function persistSemanticAssetMetadata(input: {
     }
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : 'unknown error'
-    throw new Error(`通用语义资产已解析，但同步书籍 semanticAssets 失败（book=${sourceBookId}）：${message}`)
+    throw new Error($t('通用语义资产已解析，但同步书籍 semanticAssets 失败（book={{book}}）：{{message}}', { book: sourceBookId, message }))
   }
 }
 
@@ -942,7 +943,7 @@ async function persistRoleCardImageBinding(input: {
       metadataSynced = true
     } catch (error) {
       const message = error instanceof Error && error.message ? error.message : 'unknown error'
-      throw new Error(`角色卡已写入 project 资产，但同步书籍 roleCards 失败（book=${resolvedSourceBookId}）：${message}`)
+      throw new Error($t('角色卡已写入 project 资产，但同步书籍 roleCards 失败（book={{book}}）：{{message}}', { book: resolvedSourceBookId, message }))
     }
   }
 
@@ -1119,7 +1120,7 @@ function requirePublicApiRuntime(): { apiKey: string } {
   const apiKey = typeof ui?.publicApiKey === 'string' ? ui.publicApiKey.trim() : ''
   const token = getAuthToken()
   if (!apiKey && !token) {
-    throw new Error('未登录：请先登录后再试')
+    throw new Error($('未登录：请先登录后再试'))
   }
   return { apiKey }
 }
@@ -1407,13 +1408,13 @@ function isOssTransferredUrl(url: string): boolean {
 async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Promise<TaskResultDto> {
   const numericTaskId = Number(taskId)
   if (!Number.isFinite(numericTaskId) || numericTaskId <= 0) {
-    throw new Error(`lens 任务轮询失败：非法 taskId ${taskId}`)
+    throw new Error($t('lens 任务轮询失败：非法 taskId {{taskId}}', { taskId }))
   }
   const status = await getCanvasTaskStatus(numericTaskId)
   // 失败终态有三种：FAILED（渠道失败）、ERROR（多次重试后的最终失败）、CANCEL（已取消）。
   // 都必须转成 failed 显式终止轮询：漏判会被当成「排队中」无限轮询到超时。
   if (status.status === 'FAILED' || status.status === 'ERROR' || status.status === 'CANCEL') {
-    const fallback = status.status === 'CANCEL' ? 'lens 任务已取消' : 'lens 任务失败'
+    const fallback = status.status === 'CANCEL' ? $('lens 任务已取消') : $('lens 任务失败')
     const message = sanitizeTaskFailureMessage(status.resMsg?.trim() || status.remark?.trim() || fallback)
     return { id: taskId, kind: taskKind, status: 'failed', assets: [], raw: { ...status, failureReason: message } }
   }
@@ -1430,7 +1431,7 @@ async function fetchLensCanvasTaskResult(taskId: string, taskKind: TaskKind): Pr
   const fileUrl = typeof status.fileUrl === 'string' ? status.fileUrl.trim() : ''
   if (!fileUrl) {
     // SUCCESS 但无产出 URL：属于后端契约违约，显式失败，不静默兜底
-    throw new Error(`lens 任务已完成但未返回产出地址（taskId=${taskId}）`)
+    throw new Error($t('lens 任务已完成但未返回产出地址（taskId={{taskId}}）', { taskId }))
   }
   // 产出媒体类型必须按任务类型归一：视频任务若标成 image，视频节点的成功回写会拿不到视频资产
   const assetType = taskKind === 'text_to_video' ? 'video' : 'image'
@@ -1518,7 +1519,7 @@ async function runLensCanvasVideoTask(
   const modelRaw = data.videoModel ?? data.model
   const model = typeof modelRaw === 'string' || typeof modelRaw === 'number' ? String(modelRaw).trim() : ''
   if (!model) {
-    throw new Error('lens 视频任务提交失败：视频节点未选择模型（videoModel 为空）')
+    throw new Error($('lens 视频任务提交失败：视频节点未选择模型（videoModel 为空）'))
   }
   const ratio = typeof data.videoSize === 'string' && data.videoSize.trim() ? data.videoSize.trim() : undefined
   const resolution = typeof data.videoResolution === 'string' && data.videoResolution.trim() ? data.videoResolution.trim() : undefined
@@ -1741,7 +1742,7 @@ function extractTaskFailureMessage(snapshot: TaskResultDto): string {
     (typeof raw?.response?.message === 'string' && raw.response.message.trim()) ||
     (typeof raw?.error === 'string' && raw.error.trim()) ||
     (typeof raw?.message === 'string' && raw.message.trim()) ||
-    '任务失败'
+    $('任务失败')
   )
 }
 
@@ -1797,13 +1798,13 @@ async function pollTaskResultUntilDone(
   const startedAt = Date.now()
 
   while (Date.now() - startedAt < pollTimeoutMs) {
-    if (isCanceled(id)) throw new Error('任务已取消')
+    if (isCanceled(id)) throw new Error($('任务已取消'))
 
     let snapshot: TaskResultDto
     try {
       snapshot = await fetchTaskResultByRuntime(options.taskId, options.taskKind, options.prompt, lensEnabled)
     } catch (err: any) {
-      const msg = err?.message || '查询任务进度失败'
+      const msg = err?.message || $('查询任务进度失败')
       // lens 模式：任务查询失败多为确定性错误（任务不属于当前用户、契约违约、状态未知），
       // 继续重试只会把错误拖到轮询超时才暴露，因此显式失败、如实上报
       if (lensEnabled) throw new Error(msg)
@@ -1833,7 +1834,7 @@ async function pollTaskResultUntilDone(
     return snapshot
   }
 
-  throw new Error('任务轮询超时，服务端任务可能仍在继续，请稍后在历史或资产中确认结果')
+  throw new Error($('任务轮询超时，服务端任务可能仍在继续，请稍后在历史或资产中确认结果'))
 }
 
 type StoryboardImageStyle = 'realistic' | 'comic' | 'sketch' | 'strip'
@@ -1871,13 +1872,13 @@ function toAbsoluteHttpUrl(raw: string): string | null {
 
 async function fetchBlob(url: string, init?: RequestInit): Promise<Blob> {
   const resp = await fetch(url, init)
-  if (!resp.ok) throw new Error(`下载失败（${resp.status}）`)
+  if (!resp.ok) throw new Error($t('下载失败（{{status}}）', { status: resp.status }))
   return await resp.blob()
 }
 
 async function fetchImageBlob(url: string): Promise<Blob> {
   const trimmed = (url || '').trim()
-  if (!trimmed) throw new Error('缺少图片 URL')
+  if (!trimmed) throw new Error($('缺少图片 URL'))
   return await fetchBlob(trimmed)
 }
 
@@ -1894,7 +1895,7 @@ async function splitGridToBlobs(options: {
   const h = bitmap.height
   if (!w || !h) {
     bitmap.close()
-    throw new Error('图片尺寸异常')
+    throw new Error($('图片尺寸异常'))
   }
 
   const out: Blob[] = []
@@ -1915,12 +1916,12 @@ async function splitGridToBlobs(options: {
     const ctx = canvas.getContext('2d')
     if (!ctx) {
       bitmap.close()
-      throw new Error('Canvas 初始化失败')
+      throw new Error($('Canvas 初始化失败'))
     }
     ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh)
     // eslint-disable-next-line no-await-in-loop
     const part = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('导出图片失败'))), 'image/png')
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error($('导出图片失败')))), 'image/png')
     })
     out.push(part)
   }
@@ -2302,7 +2303,7 @@ async function composeStoryboardReferenceSheetBlob(frameUrls: string[]): Promise
     return await canvas.convertToBlob({ type: 'image/png' })
   }
   return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('生成分镜参考网格失败'))), 'image/png')
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error($('生成分镜参考网格失败')))), 'image/png')
   })
 }
 
@@ -2918,7 +2919,7 @@ function ensurePrompt(ctx: RunnerContext): boolean {
   ctx.appendLog(ctx.id, `[${nowLabel()}] 缺少提示词，已终止`)
   ctx.setNodeStatus(ctx.id, 'error', {
     progress: 0,
-    lastError: '缺少提示词',
+    lastError: $('缺少提示词'),
     imageTaskId: '',
     videoTaskId: '',
   })
@@ -2966,7 +2967,7 @@ export async function runNodeRemote(id: string, get: Getter, set: Setter) {
     const message =
       error instanceof Error && error.message
         ? error.message
-        : '执行前解析图片提示词失败'
+        : $('执行前解析图片提示词失败')
     state.setNodeStatus?.(id, 'error', { progress: 0, lastError: message })
     state.appendLog?.(id, `[${nowLabel()}] error: ${message}`)
     if (!state.isCanceled?.(id)) {
@@ -2985,7 +2986,7 @@ export async function runNodeRemote(id: string, get: Getter, set: Setter) {
     const message =
       error instanceof Error && error.message
         ? error.message
-        : '执行前解析图片模型失败'
+        : $('执行前解析图片模型失败')
     ctx.setNodeStatus(ctx.id, 'error', { progress: 0, lastError: message })
     ctx.appendLog(ctx.id, `[${nowLabel()}] error: ${message}`)
     if (!ctx.isCanceled(ctx.id)) {
@@ -3106,7 +3107,7 @@ type PreparedVideoTaskInput = {
 function assertVideoModelConfigured(input: { data: any; videoModelValue?: string }): void {
   const model = String(input.videoModelValue || (input.data as any)?.videoModel || '').trim().toLowerCase()
   if (!model) {
-    throw new Error('视频模型未配置：请先在「系统管理 → 模型管理（Model Catalog）→ 模型（video）」启用至少 1 个视频模型，并在节点中选择。')
+    throw new Error($('视频模型未配置：请先在「系统管理 → 模型管理（Model Catalog）→ 模型（video）」启用至少 1 个视频模型，并在节点中选择。'))
   }
 }
 
@@ -3273,14 +3274,14 @@ function isTaskRunningSnapshot(snapshot: TaskResultDto): boolean {
 }
 
 function resolveGenericVideoFailureMessage(snapshot: TaskResultDto, vendor: string): string {
-  const fallbackVendor = vendor.trim() || '视频'
+  const fallbackVendor = vendor.trim() || $('视频')
   return (
     (typeof (snapshot.raw as any)?.failureReason === 'string' && (snapshot.raw as any).failureReason.trim()) ||
     (typeof (snapshot.raw as any)?.response?.error === 'string' && (snapshot.raw as any).response.error.trim()) ||
     (typeof (snapshot.raw as any)?.response?.message === 'string' && (snapshot.raw as any).response.message.trim()) ||
     (typeof (snapshot.raw as any)?.error === 'string' && (snapshot.raw as any).error.trim()) ||
     (typeof (snapshot.raw as any)?.message === 'string' && (snapshot.raw as any).message.trim()) ||
-    `${fallbackVendor} 视频任务失败`
+    $t('{{vendor}} 视频任务失败', { vendor: fallbackVendor })
   )
 }
 
@@ -3319,7 +3320,7 @@ async function finalizeGenericVideoSuccess(input: {
   const { id, data, kind, setNodeStatus, appendLog, isCanceled } = ctx
   const resolvedAsset = resolveGenericVideoAsset(snapshot)
   if (!resolvedAsset?.url) {
-    const msg = '视频任务执行失败：未返回有效视频地址'
+    const msg = $('视频任务执行失败：未返回有效视频地址')
     setNodeStatus(id, 'error', { progress: 0, lastError: msg })
     appendLog(id, `[${nowLabel()}] error: ${msg}`)
     return
@@ -3390,7 +3391,7 @@ async function finalizeGenericVideoSuccess(input: {
       )
     }
   } catch (error: unknown) {
-    const message = error instanceof Error && error.message ? error.message : '视频语义资产回填失败'
+    const message = error instanceof Error && error.message ? error.message : $('视频语义资产回填失败')
     appendLog(id, `[${nowLabel()}] ${message}`)
     if (!isCanceled(id)) {
       toast(message, 'warning')
@@ -3502,7 +3503,7 @@ async function pollGenericVideoResultClient(ctx: RunnerContext, options: {
 
   while (Date.now() - startedAt < pollTimeoutMs) {
     if (isCanceled(id)) {
-      setNodeStatus(id, 'error', { progress: 0, lastError: '任务已取消' })
+      setNodeStatus(id, 'error', { progress: 0, lastError: $('任务已取消') })
       appendLog(id, `[${nowLabel()}] 已取消视频任务`)
       return
     }
@@ -3511,7 +3512,7 @@ async function pollGenericVideoResultClient(ctx: RunnerContext, options: {
     try {
       snapshot = await fetchTaskResult(options.taskId, 'text_to_video', options.prompt)
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : '查询视频任务进度失败'
+      const message = error instanceof Error && error.message ? error.message : $('查询视频任务进度失败')
       appendLog(id, `[${nowLabel()}] error: ${message}`)
       await sleep(pollIntervalMs)
       continue
@@ -3549,7 +3550,7 @@ async function pollGenericVideoResultClient(ctx: RunnerContext, options: {
     return
   }
 
-  const timeoutMsg = '视频任务查询超时，请稍后在控制台确认结果'
+  const timeoutMsg = $('视频任务查询超时，请稍后在控制台确认结果')
   setNodeStatus(id, 'error', { progress: 0, lastError: timeoutMsg })
   appendLog(id, `[${nowLabel()}] error: ${timeoutMsg}`)
 }
@@ -3589,7 +3590,7 @@ async function runVideoTask(ctx: RunnerContext) {
       referenceSheet: prepared.referenceSheet,
     })
   } catch (error: unknown) {
-    const msg = error instanceof Error && error.message ? error.message : '视频任务执行失败'
+    const msg = error instanceof Error && error.message ? error.message : $('视频任务执行失败')
     setNodeStatus(id, 'error', { progress: 0, lastError: msg })
     appendLog(id, `[${nowLabel()}] error: ${msg}`)
     ctx.endRunToken(id)
@@ -3659,7 +3660,7 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
     snapshot = await getCanvasTaskStatus(numericTaskId)
   } catch (error: unknown) {
     if (isAborted()) return
-    const message = error instanceof Error && error.message ? error.message : '查询图片任务状态失败'
+    const message = error instanceof Error && error.message ? error.message : $('查询图片任务状态失败')
     const failures = (retryState?.failures ?? 0) + 1
     const delay = Math.min(SYNC_RETRY_MAX_DELAY_MS, 4000 * 2 ** Math.min(failures - 1, 3))
     imageSyncRetryStates.set(retryKey, { failures, nextAt: Date.now() + delay })
@@ -3677,7 +3678,7 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
 
   // 失败终态：FAILED=渠道失败、ERROR=多次重试后最终失败、CANCEL=已取消
   if (statusUpper === 'FAILED' || statusUpper === 'ERROR' || statusUpper === 'CANCEL') {
-    const fallback = statusUpper === 'CANCEL' ? '图片任务已取消' : '图片任务执行失败'
+    const fallback = statusUpper === 'CANCEL' ? $('图片任务已取消') : $('图片任务执行失败')
     const message = sanitizeTaskFailureMessage(snapshot.resMsg?.trim() || snapshot.remark?.trim() || fallback)
     setNodeStatus(id, 'error', { progress: 0, lastError: message })
     appendLog(id, `[${nowLabel()}] error: ${message}`)
@@ -3697,7 +3698,7 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
   const fileUrls = fileUrlRaw.split(',').map((item) => item.trim()).filter(Boolean)
   const primaryUrl = fileUrls[0] || ''
   if (!primaryUrl) {
-    setNodeStatus(id, 'error', { progress: 0, lastError: '图片任务已完成但未返回图片地址' })
+    setNodeStatus(id, 'error', { progress: 0, lastError: $('图片任务已完成但未返回图片地址') })
     appendLog(id, `[${nowLabel()}] error: 任务已完成但未返回图片地址`)
     return
   }
@@ -3718,7 +3719,7 @@ export async function syncImageNodeOnce(id: string, get: Getter) {
   const existingUrls = new Set(
     existingResults.map((item) => String(item?.url || '').trim()).filter(Boolean),
   )
-  const nodeLabel = String(dataRecord.label || '图片').trim()
+  const nodeLabel = String(dataRecord.label || $('图片')).trim()
   const appendedResults = fileUrls
     .filter((url) => !existingUrls.has(url))
     .map((url, index) => {
@@ -3763,7 +3764,7 @@ async function runGenericVideoTask(ctx: RunnerContext, options: GenericVideoTask
   try {
     const modelKey = options.model.trim() || String((data as any)?.videoModel || '').trim()
     if (!modelKey) {
-      throw new Error('视频模型未配置')
+      throw new Error($('视频模型未配置'))
     }
 
     setNodeStatus(id, 'running', { progress: 5 })
@@ -3810,7 +3811,7 @@ async function runGenericVideoTask(ctx: RunnerContext, options: GenericVideoTask
     const pendingTaskId = resolvePendingTaskIdFromResult(res)
     if (res.status === 'queued' || res.status === 'running') {
       if (!pendingTaskId) {
-        throw new Error('视频任务创建失败：未返回任务 ID')
+        throw new Error($('视频任务创建失败：未返回任务 ID'))
       }
 
       setNodeStatus(id, res.status === 'queued' ? 'queued' : 'running', {
@@ -3822,7 +3823,7 @@ async function runGenericVideoTask(ctx: RunnerContext, options: GenericVideoTask
           id: pendingTaskId,
           at: Date.now(),
           kind,
-          preview: { type: 'text', value: `已创建视频任务（ID: ${pendingTaskId}）` },
+          preview: { type: 'text', value: $t('已创建视频任务（ID: {{id}}）', { id: pendingTaskId }) },
         },
       })
       trySilentSaveProject()
@@ -3844,7 +3845,7 @@ async function runGenericVideoTask(ctx: RunnerContext, options: GenericVideoTask
       modelKey,
     })
   } catch (error: unknown) {
-    const message = error instanceof Error && error.message ? error.message : '视频任务执行失败'
+    const message = error instanceof Error && error.message ? error.message : $('视频任务执行失败')
     setNodeStatus(id, 'error', { progress: 0, lastError: message })
     appendLog(id, `[${nowLabel()}] error: ${message}`)
   } finally {
@@ -3885,7 +3886,7 @@ export async function syncGenericVideoNodeOnce(id: string, get: Getter) {
   try {
     snapshot = await fetchTaskResultByRuntime(taskId, 'text_to_video', prompt, lensEnabled)
   } catch (error: unknown) {
-    const message = error instanceof Error && error.message ? error.message : '查询视频任务进度失败'
+    const message = error instanceof Error && error.message ? error.message : $('查询视频任务进度失败')
     appendLog(id, `[${nowLabel()}] error: ${message}`)
     return
   }
@@ -3953,7 +3954,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     const script = rawScript || fallback
 
     if (!script) {
-      const msg = '缺少分镜脚本：请先填写「分镜脚本」或在 Prompt 中描述剧情主题。'
+      const msg = $('缺少分镜脚本：请先填写「分镜脚本」或在 Prompt 中描述剧情主题。')
       setNodeStatus(id, 'error', { progress: 0, lastError: msg })
       appendLog(id, `[${nowLabel()}] error: ${msg}`)
       if (!isCanceled(id)) toast(msg, 'warning')
@@ -4074,21 +4075,21 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
 
     if (isNovelStoryboard) {
       if (!extracted.length) {
-        const msg = '小说分镜缺少可执行镜头：请先通过 agents-cli 生成章节分镜剧本并写入计划元数据'
+        const msg = $('小说分镜缺少可执行镜头：请先通过 agents-cli 生成章节分镜剧本并写入计划元数据')
         setNodeStatus(id, 'error', { progress: 0, lastError: msg })
         appendLog(id, `[${nowLabel()}] error: ${msg}`)
         if (!isCanceled(id)) toast(msg, 'warning')
         return
       }
       if (extracted.some((x) => isGenericShotPrompt(x))) {
-        const msg = '小说分镜镜头仍为模板文本：请先修复章节分镜剧本后重试'
+        const msg = $('小说分镜镜头仍为模板文本：请先修复章节分镜剧本后重试')
         setNodeStatus(id, 'error', { progress: 0, lastError: msg })
         appendLog(id, `[${nowLabel()}] error: ${msg}`)
         if (!isCanceled(id)) toast(msg, 'warning')
         return
       }
       if (extracted.length < storyboardCount) {
-        const msg = `小说分镜镜头数量不足：期望 ${storyboardCount} 镜，实际 ${extracted.length} 镜。请先修复章节分镜剧本后重试`
+        const msg = $t('小说分镜镜头数量不足：期望 {{expected}} 镜，实际 {{actual}} 镜。请先修复章节分镜剧本后重试', { expected: storyboardCount, actual: extracted.length })
         setNodeStatus(id, 'error', { progress: 0, lastError: msg })
         appendLog(id, `[${nowLabel()}] error: ${msg}`)
         if (!isCanceled(id)) toast(msg, 'warning')
@@ -4139,7 +4140,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
         if (changedCount < 2) violations.push(`${i}-${i + 1}`)
       }
       if (violations.length) {
-        const msg = `关键帧差异预检失败：相邻镜头 ${violations.join('、')} 变化不足（需在动作/景别/机位中至少变化两项）`
+        const msg = $t('关键帧差异预检失败：相邻镜头 {{shots}} 变化不足（需在动作/景别/机位中至少变化两项）', { shots: violations.join('、') })
         setNodeStatus(id, 'error', { progress: 0, lastError: msg })
         appendLog(id, `[${nowLabel()}] error: ${msg}`)
         if (!isCanceled(id)) toast(msg, 'warning')
@@ -4318,7 +4319,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
       ? [mergedRoleReferenceUrl, ...normalizedReferenceImages.filter((u) => u !== mergedRoleReferenceUrl).slice(0, 2)]
       : normalizedReferenceImages.slice(0, 3)
     if (isNovelStoryboard && referenceImages.length === 0) {
-      const msg = '小说分镜必须使用主角/角色参考图：请先生成并绑定主角角色卡（或在节点绑定角色图）'
+      const msg = $('小说分镜必须使用主角/角色参考图：请先生成并绑定主角角色卡（或在节点绑定角色图）')
       setNodeStatus(id, 'error', { progress: 0, lastError: msg })
       appendLog(id, `[${nowLabel()}] error: ${msg}`)
       if (!isCanceled(id)) toast(msg, 'warning')
@@ -4424,7 +4425,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     if (res.status === 'queued' || res.status === 'running') {
       const taskId = typeof res.id === 'string' ? res.id.trim() : String(res.id || '').trim()
       if (!taskId) {
-        throw new Error('分镜网格任务创建失败：未返回任务 ID')
+        throw new Error($('分镜网格任务创建失败：未返回任务 ID'))
       }
 
       setNodeStatus(id, res.status === 'queued' ? 'queued' : 'running', {
@@ -4437,7 +4438,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
           id: taskId,
           at: Date.now(),
           kind,
-          preview: { type: 'text', value: `已创建分镜网格任务（ID: ${taskId}）` },
+          preview: { type: 'text', value: $t('已创建分镜网格任务（ID: {{id}}）', { id: taskId }) },
         },
       })
       appendLog(id, `[${nowLabel()}] 已创建分镜网格任务（ID: ${taskId}），开始轮询进度…`)
@@ -4464,13 +4465,13 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
         })
       : null
     if (!gridUrl) {
-      throw new Error('分镜网格生成失败：未返回图片结果')
+      throw new Error($('分镜网格生成失败：未返回图片结果'))
     }
 
     const existing = Array.isArray((data as any)?.imageResults) ? (data as any).imageResults : []
     const gridItem = buildImageAssetResultItem({
       url: gridUrl,
-      title: `分镜网格 ${gridLayout.rows}x${gridLayout.cols}`,
+      title: $t('分镜网格 {{rows}}x{{cols}}', { rows: gridLayout.rows, cols: gridLayout.cols }),
       assetId: findTaskAssetIdByUrl(res, gridUrl),
     })
     const baseIndex = existing.length
@@ -4489,7 +4490,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     })
 
     if (isCanceled(id)) {
-      const msg = '任务已取消'
+      const msg = $('任务已取消')
       setNodeStatus(id, 'error', { progress: 0, lastError: msg })
       appendLog(id, `[${nowLabel()}] ${msg}`)
       return
@@ -4508,7 +4509,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     const now = Date.now()
     for (let i = 0; i < shotBlobs.length; i++) {
       if (isCanceled(id)) {
-        const msg = '任务已取消'
+        const msg = $('任务已取消')
         setNodeStatus(id, 'error', { progress: 0, lastError: msg })
         appendLog(id, `[${nowLabel()}] ${msg}`)
         return
@@ -4517,7 +4518,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
       const blob = shotBlobs[i]!
       const file = new File([blob], `storyboard-${id}-${now}-shot-${i + 1}.png`, { type: 'image/png' })
       // eslint-disable-next-line no-await-in-loop
-      const asset = await uploadServerAssetFile(file, `分镜图-镜头${i + 1}`, {
+      const asset = await uploadServerAssetFile(file, $t('分镜图-镜头{{index}}', { index: i + 1 }), {
         prompt: finalPromptForModel,
         vendor,
         modelKey: selectedModel,
@@ -4525,7 +4526,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
       })
       const uploadedUrl = typeof (asset?.data as any)?.url === 'string' ? String((asset.data as any).url).trim() : ''
       if (!uploadedUrl) {
-        throw new Error('镜头图上传失败：未返回 url')
+        throw new Error($('镜头图上传失败：未返回 url'))
       }
       shotUrls.push(uploadedUrl)
 
@@ -4536,7 +4537,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     const shotItems = shotUrls.map((url, idx) =>
       buildImageAssetResultItem({
         url,
-        title: `镜头 ${idx + 1}/${storyboardCount}`,
+        title: $t('镜头 {{index}}/{{total}}', { index: idx + 1, total: storyboardCount }),
       }),
     )
 
@@ -4592,7 +4593,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
         } catch (metaErr: any) {
           const metaMsg = metaErr?.message || 'unknown error'
           appendLog(id, `[${nowLabel()}] 写入章节分镜元数据失败：${metaMsg}`)
-          throw new Error(`分镜图生成成功，但本地元数据写入失败：${metaMsg}`)
+          throw new Error($t('分镜图生成成功，但本地元数据写入失败：{{message}}', { message: metaMsg }))
         }
       }
     }
@@ -4600,7 +4601,7 @@ async function runStoryboardImageTask(ctx: RunnerContext) {
     if (!isCanceled(id)) notifyAssetRefresh()
     appendLog(id, `[${nowLabel()}] 分镜图完成：网格 1 张 + 镜头 ${shotItems.length} 张。`)
   } catch (err: any) {
-    const msg = err?.message || '分镜图生成失败'
+    const msg = err?.message || $('分镜图生成失败')
     if (!isCanceled(id)) toast(msg, 'error')
     setNodeStatus(id, 'error', { progress: 0, lastError: msg })
     appendLog(id, `[${nowLabel()}] error: ${msg}`)
@@ -4757,7 +4758,7 @@ function failImageFissionTask(ctx: RunnerContext, message: string, level: 'warni
 
 function ensureImageFissionInputReady(ctx: RunnerContext, referenceImages: string[]): boolean {
   if (referenceImages.length === 0) {
-    failImageFissionTask(ctx, '图像裂变需要至少一张参考图：请连接一个上游图像节点，或先在本节点上传/选择一张图片。')
+    failImageFissionTask(ctx, $('图像裂变需要至少一张参考图：请连接一个上游图像节点，或先在本节点上传/选择一张图片。'))
     return false
   }
   return true
@@ -4779,7 +4780,7 @@ function buildImageFissionBaseResults(data: any): any[] {
   const existing = Array.isArray((data as any)?.imageResults) ? (data as any).imageResults : []
   if (existing.length) return existing
   if (typeof (data as any)?.imageUrl === 'string' && (data as any).imageUrl.trim()) {
-    return [{ url: String((data as any).imageUrl).trim(), title: '参考图' }]
+    return [{ url: String((data as any).imageUrl).trim(), title: $('参考图') }]
   }
   return []
 }
@@ -4848,7 +4849,7 @@ async function runSingleFissionGrid(input: {
 
   if (res.status === 'queued' || res.status === 'running') {
     const taskId = typeof res.id === 'string' ? res.id.trim() : String(res.id || '').trim()
-    if (!taskId) throw new Error('裂变任务创建失败：未返回任务 ID')
+    if (!taskId) throw new Error($('裂变任务创建失败：未返回任务 ID'))
     ctx.appendLog(id, `[${nowLabel()}] 已创建裂变任务（ID: ${taskId}），开始轮询进度…`)
     res = await pollTaskResultUntilDone(ctx, {
       taskId,
@@ -4871,25 +4872,25 @@ async function runSingleFissionGrid(input: {
         fileName: `fission-grid-${id}-${Date.now()}-${gridIdx + 1}.png`,
       })
     : null
-  if (!gridUrl) throw new Error('裂变失败：未返回网格图')
+  if (!gridUrl) throw new Error($('裂变失败：未返回网格图'))
 
   const quadrants = await splitGridToBlobs({ url: gridUrl, rows: 2, cols: 2, take: 4 })
   const items: { url: string; title?: string }[] = []
   const now = Date.now()
   for (let i = 0; i < quadrants.length; i++) {
-    if (ctx.isCanceled(id)) throw new Error('任务已取消')
+    if (ctx.isCanceled(id)) throw new Error($('任务已取消'))
     const blob = quadrants[i]!
     const file = new File([blob], `fission-${id}-${now}-${gridIdx + 1}-${i + 1}.png`, { type: 'image/png' })
     // eslint-disable-next-line no-await-in-loop
-    const asset = await uploadServerAssetFile(file, `裂变-${gridIdx + 1}-${i + 1}`, {
+    const asset = await uploadServerAssetFile(file, $t('裂变-{{grid}}-{{index}}', { grid: gridIdx + 1, index: i + 1 }), {
       prompt: promptForModel,
       vendor,
       modelKey: selectedModel,
       taskKind: 'image_edit',
     })
     const uploadedUrl = typeof (asset?.data as any)?.url === 'string' ? String((asset.data as any).url).trim() : ''
-    if (!uploadedUrl) throw new Error('裂变上传失败：未返回 url')
-    items.push({ url: uploadedUrl, title: `裂变 ${gridIdx + 1}-${i + 1}` })
+    if (!uploadedUrl) throw new Error($('裂变上传失败：未返回 url'))
+    items.push({ url: uploadedUrl, title: $t('裂变 {{grid}}-{{index}}', { grid: gridIdx + 1, index: i + 1 }) })
     const doneParts = gridIdx * 4 + (i + 1)
     const totalParts = desiredGrids * 4
     const p = 50 + Math.round((doneParts / Math.max(1, totalParts)) * 45)
@@ -4931,7 +4932,7 @@ async function runImageFissionTask(ctx: RunnerContext) {
     let primaryUrl = ''
     let lastRes: any = null
     for (let gridIdx = 0; gridIdx < settings.desiredGrids; gridIdx++) {
-      if (isCanceled(id)) throw new Error('任务已取消')
+      if (isCanceled(id)) throw new Error($('任务已取消'))
       // eslint-disable-next-line no-await-in-loop
       const one = await runSingleFissionGrid({
         ctx,
@@ -4947,7 +4948,7 @@ async function runImageFissionTask(ctx: RunnerContext) {
       lastRes = one.res
     }
 
-    if (!primaryUrl || newItems.length === 0) throw new Error('裂变失败：未产出候选图')
+    if (!primaryUrl || newItems.length === 0) throw new Error($('裂变失败：未产出候选图'))
     setNodeStatus(id, 'success', {
       progress: 100,
       imageUrl: primaryUrl,
@@ -4963,7 +4964,7 @@ async function runImageFissionTask(ctx: RunnerContext) {
     if (!isCanceled(id)) notifyAssetRefresh()
     appendLog(id, `[${nowLabel()}] 图像裂变完成：生成候选 ${newItems.length} 张。`)
   } catch (err: any) {
-    const msg = err?.message || '图像裂变失败'
+    const msg = err?.message || $('图像裂变失败')
     if (!isCanceled(id)) toast(msg, 'error')
     setNodeStatus(id, 'error', { progress: 0, lastError: msg })
     appendLog(id, `[${nowLabel()}] error: ${msg}`)
@@ -4991,7 +4992,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
         executionPrompt: typeof cell.prompt === 'string' ? cell.prompt.trim() : '',
         executionLabel:
           (typeof cell.label === 'string' && cell.label.trim()) ||
-          `镜头 ${typeof cell.shotNo === 'number' && cell.shotNo > 0 ? cell.shotNo : index + 1}`,
+          $t('镜头 {{index}}', { index: typeof cell.shotNo === 'number' && cell.shotNo > 0 ? cell.shotNo : index + 1 }),
         executionShotNo:
           typeof cell.shotNo === 'number' && cell.shotNo > 0
             ? cell.shotNo
@@ -5001,7 +5002,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
       .filter((cell) => cell.executionPrompt)
 
     if (executableCells.length === 0) {
-      const msg = '分镜编辑缺少可执行 prompt：请先为至少一个格子填写镜头提示词'
+      const msg = $('分镜编辑缺少可执行 prompt：请先为至少一个格子填写镜头提示词')
       setNodeStatus(id, 'error', { progress: 0, lastError: msg })
       appendLog(id, `[${nowLabel()}] error: ${msg}`)
       if (!isCanceled(id)) toast(msg, 'warning')
@@ -5125,7 +5126,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
 
     for (let index = 0; index < executableCells.length; index += 1) {
       const cell = executableCells[index]
-      if (isCanceled(id)) throw new Error('任务已取消')
+      if (isCanceled(id)) throw new Error($('任务已取消'))
 
       const progressStart = 5 + Math.round((index / executableCells.length) * 80)
       const progressEnd = 5 + Math.round(((index + 1) / executableCells.length) * 80)
@@ -5186,7 +5187,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
       if (res.status === 'queued' || res.status === 'running') {
         const taskId = typeof res.id === 'string' ? res.id.trim() : String(res.id || '').trim()
         if (!taskId) {
-          throw new Error(`${cell.executionLabel} 任务创建失败：未返回任务 ID`)
+          throw new Error($t('{{label}} 任务创建失败：未返回任务 ID', { label: cell.executionLabel }))
         }
 
         setNodeStatus(id, res.status === 'queued' ? 'queued' : 'running', {
@@ -5226,7 +5227,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
           })
         : null
       if (!hostedUrl) {
-        throw new Error(`${cell.executionLabel} 生成失败：未返回图片结果`)
+        throw new Error($t('{{label}} 生成失败：未返回图片结果', { label: cell.executionLabel }))
       }
 
       if (!firstGeneratedUrl) firstGeneratedUrl = hostedUrl
@@ -5290,7 +5291,7 @@ async function runStoryboardEditorTask(ctx: RunnerContext) {
     if (newShotItems.length && !isCanceled(id)) notifyAssetRefresh()
     appendLog(id, `[${nowLabel()}] 分镜编辑执行完成：新增 ${newShotItems.length} 张镜头图。`)
   } catch (err: unknown) {
-    const msg = err instanceof Error && err.message ? err.message : '分镜编辑执行失败'
+    const msg = err instanceof Error && err.message ? err.message : $('分镜编辑执行失败')
     if (!isCanceled(id)) toast(msg, 'error')
     setNodeStatus(id, 'error', { progress: 0, lastError: msg })
     appendLog(id, `[${nowLabel()}] error: ${msg}`)
@@ -5604,7 +5605,7 @@ async function runGenericTask(ctx: RunnerContext) {
 
     for (let i = 0; i < sampleCount; i++) {
       if (isCanceled(id)) {
-        setNodeStatus(id, 'error', { progress: 0, lastError: '任务已取消' })
+        setNodeStatus(id, 'error', { progress: 0, lastError: $('任务已取消') })
         appendLog(id, `[${nowLabel()}] 已取消`)
         ctx.endRunToken(id)
         return
@@ -5695,7 +5696,7 @@ async function runGenericTask(ctx: RunnerContext) {
       if (isImageTask && (res.status === 'queued' || res.status === 'running')) {
         const taskId = typeof res.id === 'string' ? res.id.trim() : String(res.id || '').trim()
         if (!taskId) {
-          throw new Error('图像任务创建失败：未返回任务 ID')
+          throw new Error($('图像任务创建失败：未返回任务 ID'))
         }
         const semanticBindingPatch = buildSemanticProjectTaskBindingPatch({
           nodeData: (data as Record<string, unknown>) || {},
@@ -5713,7 +5714,7 @@ async function runGenericTask(ctx: RunnerContext) {
             id: taskId,
             at: Date.now(),
             kind,
-            preview: { type: 'text', value: `已创建图像任务（ID: ${taskId}）` },
+            preview: { type: 'text', value: $t('已创建图像任务（ID: {{id}}）', { id: taskId }) },
           },
         })
         appendLog(id, `[${nowLabel()}] 已创建图像任务（ID: ${taskId}），开始轮询进度…`)
@@ -5733,7 +5734,7 @@ async function runGenericTask(ctx: RunnerContext) {
 
         while (Date.now() - startedAt < pollTimeoutMs) {
           if (isCanceled(id)) {
-            setNodeStatus(id, 'error', { progress: 0, lastError: '任务已取消' })
+            setNodeStatus(id, 'error', { progress: 0, lastError: $('任务已取消') })
             appendLog(id, `[${nowLabel()}] 已取消图像任务`)
             ctx.endRunToken(id)
             return
@@ -5743,7 +5744,7 @@ async function runGenericTask(ctx: RunnerContext) {
           try {
             snapshot = await fetchTaskResultByRuntime(taskId, effectiveTaskKind, effectivePromptForModel, Boolean(lensUrlParams))
           } catch (err: any) {
-            const msg = err?.message || '查询图像任务进度失败'
+            const msg = err?.message || $('查询图像任务进度失败')
             // lens 模式：查询失败多为确定性错误（越权/契约违约/未知状态），显式失败而非重试到超时
             if (lensUrlParams) throw new Error(msg)
             appendLog(id, `[${nowLabel()}] error: ${msg}`)
@@ -5779,7 +5780,7 @@ async function runGenericTask(ctx: RunnerContext) {
               (snapshot.raw && ((snapshot.raw as any)?.failureReason as string | undefined)) ||
               (snapshot.raw && ((snapshot.raw as any)?.response?.error as string | undefined)) ||
               (snapshot.raw && ((snapshot.raw as any)?.response?.message as string | undefined)) ||
-              '图像任务失败'
+              $('图像任务失败')
             throw new Error(msg)
           }
 
@@ -5791,8 +5792,8 @@ async function runGenericTask(ctx: RunnerContext) {
         if (res.status === 'queued' || res.status === 'running') {
           throw new Error(
             transferWaitLogged
-              ? '图像任务已产出，但产物迟迟未转存到本系统存储（转存可能失败），请稍后重试'
-              : '图像任务轮询超时，服务端任务可能仍在继续，请稍后在历史或资产中确认结果',
+              ? $('图像任务已产出，但产物迟迟未转存到本系统存储（转存可能失败），请稍后重试')
+              : $('图像任务轮询超时，服务端任务可能仍在继续，请稍后在历史或资产中确认结果'),
           )
         }
       }
@@ -5806,7 +5807,7 @@ async function runGenericTask(ctx: RunnerContext) {
           rawResponse?.error_message ||
           rawResponse?.message ||
           res.raw?.message ||
-          'Qwen 图像生成失败'
+          $('Qwen 图像生成失败')
         throw new Error(errMsg)
       }
 
@@ -5816,7 +5817,7 @@ async function runGenericTask(ctx: RunnerContext) {
           rawResponse?.failure_reason ||
           rawResponse?.error ||
           rawResponse?.message ||
-          'Banana 图像生成失败'
+          $('Banana 图像生成失败')
         throw new Error(errMsg)
       }
 
@@ -5832,7 +5833,7 @@ async function runGenericTask(ctx: RunnerContext) {
           const roleNameHint = String(resolveSemanticNodeRoleBinding(data).roleName || '').trim()
           const labelHint = String((data as Record<string, unknown>)?.label || '').trim()
           const fallbackName = roleNameHint || labelHint || `image_${ordinal}`
-          const fallbackTitle = labelHint ? `${labelHint} ${ordinal}` : `图像 ${ordinal}`
+          const fallbackTitle = labelHint ? `${labelHint} ${ordinal}` : $t('图像 {{ordinal}}', { ordinal })
           return buildImageAssetResultItem({
             url: String(asset.url).trim(),
             title:
@@ -5852,7 +5853,7 @@ async function runGenericTask(ctx: RunnerContext) {
       }
 
       if (isCanceled(id)) {
-        setNodeStatus(id, 'error', { progress: 0, lastError: '任务已取消' })
+        setNodeStatus(id, 'error', { progress: 0, lastError: $('任务已取消') })
         appendLog(id, `[${nowLabel()}] 已取消`)
         ctx.endRunToken(id)
         return
@@ -5868,7 +5869,7 @@ async function runGenericTask(ctx: RunnerContext) {
         ? { type: 'image', src: firstImage.url }
         : text.trim().length > 0
           ? { type: 'text', value: text }
-          : { type: 'text', value: 'AI 调用成功' }
+          : { type: 'text', value: $('AI 调用成功') }
 
     let patchExtra: any = {}
     const existingPrompt =
@@ -6020,7 +6021,7 @@ async function runGenericTask(ctx: RunnerContext) {
           roleBindingMetadataSynced: false,
         })
         if (!isCanceled(id)) {
-          toast(`角色绑定回填失败：${syncError}`, 'warning')
+          toast($t('角色绑定回填失败：{{error}}', { error: syncError }), 'warning')
         }
       }
 
@@ -6073,7 +6074,7 @@ async function runGenericTask(ctx: RunnerContext) {
         const syncError = String(err?.message || err || 'unknown')
         appendLog(id, `[${nowLabel()}] 场景/道具参考回填失败：${syncError}`)
         if (!isCanceled(id)) {
-          toast(`场景/道具参考回填失败：${syncError}`, 'warning')
+          toast($t('场景/道具参考回填失败：{{error}}', { error: syncError }), 'warning')
         }
       }
 
@@ -6101,7 +6102,7 @@ async function runGenericTask(ctx: RunnerContext) {
         const syncError = String(err?.message || err || 'unknown')
         appendLog(id, `[${nowLabel()}] 通用语义资产回填失败：${syncError}`)
         if (!isCanceled(id)) {
-          toast(`通用语义资产回填失败：${syncError}`, 'warning')
+          toast($t('通用语义资产回填失败：{{error}}', { error: syncError }), 'warning')
         }
       }
     }
@@ -6117,7 +6118,7 @@ async function runGenericTask(ctx: RunnerContext) {
     }
   } catch (err: any) {
     const status = (err as any)?.status || 'unknown'
-    const { enhancedMsg } = resolveTaskErrorDisplay(err, '图像模型调用失败')
+    const { enhancedMsg } = resolveTaskErrorDisplay(err, $('图像模型调用失败'))
 
     if (!isCanceled(id)) toast(enhancedMsg, 'error')
 

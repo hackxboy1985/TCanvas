@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useRFStore, persistToLocalStorage } from './canvas/store'
 import { useUIStore } from './ui/uiStore'
 import { extractCanvasGraph, type CanvasImportData } from './canvas/utils/serialization'
+import { $, $t } from './canvas/i18n'
 
 function isTextInputElement(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
@@ -71,13 +72,13 @@ function handleImportWorkflowShortcut(
         if (extracted?.nodes.length) {
           importWorkflow(data, { x: 100, y: 100 })
         } else {
-          alert('剪贴板中的内容不是有效的工作流格式')
+          alert($('剪贴板中的内容不是有效的工作流格式'))
         }
       } catch (err) {
-        alert('解析剪贴板 JSON 失败: ' + (err as Error).message)
+        alert($t('解析剪贴板 JSON 失败: {{message}}', { message: (err as Error).message }))
       }
     }).catch(() => {
-      alert('无法读取剪贴板内容')
+      alert($('无法读取剪贴板内容'))
     })
   }
 }

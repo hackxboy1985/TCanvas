@@ -1,5 +1,6 @@
 import React from 'react'
 import { Group, Loader, Progress, Text } from '@mantine/core'
+import { $ } from '../../../i18n'
 
 type GenerationOverlayProps = {
   visible: boolean
@@ -17,9 +18,9 @@ export function GenerationOverlay({ visible, status, progress }: GenerationOverl
   if (!visible) return null
   const pct = clampProgress(progress)
   const label =
-    status === 'queued' ? '排队中' :
-    status === 'running' ? '生成中' :
-    '处理中'
+    status === 'queued' ? $('排队中') :
+    status === 'running' ? $('生成中') :
+    $('处理中')
   const showProgressBar = pct !== null && status !== 'queued'
 
   return (

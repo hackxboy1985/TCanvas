@@ -29,6 +29,7 @@ import { InlinePanel } from '../ui/InlinePanel'
 import { PanelCard } from '../ui/PanelCard'
 import { toast } from '../ui/toast'
 
+import { $, $t } from '../canvas/i18n'
 type ViewerFilter = 'all' | 'roleCards' | 'docs'
 
 type ProjectDocAsset = {
@@ -95,7 +96,7 @@ function parseDocAsset(asset: ServerAssetDto): ProjectDocAsset | null {
         : ''
   return {
     id: asset.id,
-    name: String(asset.name || '').trim() || '未命名文档',
+    name: String(asset.name || '').trim() || $('未命名文档'),
     kind: kindRaw,
     content: String(content || '').trim(),
     source: typeof dataUnknown.source === 'string' ? dataUnknown.source.trim() : '',
@@ -183,8 +184,8 @@ function normalizeProjectRoleCardAsset(asset: ProjectRoleCardAssetDto): ProjectR
   const status = String(asset.data.status || '').trim() === 'draft' ? 'draft' : 'generated'
   return {
     id: String(asset.id || '').trim(),
-    name: String(asset.name || asset.data.roleName || '').trim() || '未命名角色',
-    roleName: String(asset.data.roleName || '').trim() || '未命名角色',
+    name: String(asset.name || asset.data.roleName || '').trim() || $('未命名角色'),
+    roleName: String(asset.data.roleName || '').trim() || $('未命名角色'),
     stateDescription: String((asset.data as Record<string, unknown>).stateDescription || '').trim(),
     prompt: String(asset.data.prompt || '').trim(),
     status,
@@ -201,7 +202,7 @@ function normalizeBookRoleCard(card: BookRoleCard): ProjectRoleCardView {
   const chapterRaw = Number(card.chapter)
   const chapter = Number.isFinite(chapterRaw) && chapterRaw > 0 ? Math.trunc(chapterRaw) : null
   const status = card.status === 'draft' ? 'draft' : 'generated'
-  const roleName = String(card.roleName || '').trim() || '未命名角色'
+  const roleName = String(card.roleName || '').trim() || $('未命名角色')
   const cardId = String(card.cardId || '').trim()
   return {
     id: cardId || `${roleName}:${String(card.updatedAt || '')}`,
@@ -248,11 +249,11 @@ function mergeRoleCards(
 }
 
 function toKindLabel(kind: ProjectMaterialKind): string {
-  if (kind === 'novelDoc') return '小说文档'
-  if (kind === 'scriptDoc') return '剧本文档'
-  if (kind === 'visualManualDoc') return '视觉手册'
-  if (kind === 'directorManualDoc') return '导演手册'
-  return '分镜脚本'
+  if (kind === 'novelDoc') return $('小说文档')
+  if (kind === 'scriptDoc') return $('剧本文档')
+  if (kind === 'visualManualDoc') return $('视觉手册')
+  if (kind === 'directorManualDoc') return $('导演手册')
+  return $('分镜脚本')
 }
 
 export default function ProjectAssetsViewer({
@@ -299,7 +300,7 @@ export default function ProjectAssetsViewer({
       setRoleCards(nextRoleCards)
       setDocs(nextDocs)
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : '加载项目素材失败'
+      const message = error instanceof Error && error.message ? error.message : $('加载项目素材失败')
       toast(message, 'error')
       setRoleCards([])
       setDocs([])
@@ -341,10 +342,10 @@ export default function ProjectAssetsViewer({
     [docs],
   )
   const reusableNowItems = [
-    currentTextDoc ? `项目原文：${currentTextDoc.name}` : '项目原文：未导入',
-    roleCards.length > 0 ? `角色卡：${roleCards.length}` : '角色卡：0',
-    storyboardDocs.length > 0 ? `分镜脚本：${storyboardDocs.length}` : '分镜脚本：0',
-    chapterBoundDocs.length > 0 ? `章节文档：${chapterBoundDocs.length}` : '章节文档：0',
+    currentTextDoc ? $t('项目原文：{{name}}', { name: currentTextDoc.name }) : $('项目原文：未导入'),
+    roleCards.length > 0 ? $t('角色卡：{{count}}', { count: roleCards.length }) : $('角色卡：0'),
+    storyboardDocs.length > 0 ? $t('分镜脚本：{{count}}', { count: storyboardDocs.length }) : $('分镜脚本：0'),
+    chapterBoundDocs.length > 0 ? $t('章节文档：{{count}}', { count: chapterBoundDocs.length }) : $('章节文档：0'),
   ]
 
   return (
@@ -353,7 +354,7 @@ export default function ProjectAssetsViewer({
         className="tc-pm-assets__modal"
         opened={opened}
         onClose={onClose}
-        title={`项目资料库 · ${projectName || projectId}`}
+        title={$t('项目资料库 · {{projectId}}', { projectId: projectName || projectId })}
         centered
         size="xl"
       >
@@ -361,33 +362,32 @@ export default function ProjectAssetsViewer({
           <PanelCard className="tc-pm-assets__overview-card" padding="compact">
             <Group justify="space-between" align="flex-start" gap="md">
               <Stack gap={4} style={{ flex: 1, minWidth: 240 }}>
-                <Text size="sm" fw={700}>项目资料概览</Text>
+                <Text size="sm" fw={700}>{ $('项目资料概览') }</Text>
                 <Text size="xs" c="dimmed">
-                  查看当前项目的原文、角色卡和文档脚本。
-                </Text>
+                  { $('查看当前项目的原文、角色卡和文档脚本。') }</Text>
               </Stack>
               <SimpleGrid cols={{ base: 2, md: 4 }} spacing="sm" style={{ minWidth: 320 }}>
                 <InlinePanel className="tc-pm-assets__overview-metric">
-                  <Text size="xs" c="dimmed">项目原文</Text>
-                  <Text size="sm" fw={700} mt={4} lineClamp={1}>{currentTextDoc?.name || '未导入'}</Text>
+                  <Text size="xs" c="dimmed">{ $('项目原文') }</Text>
+                  <Text size="sm" fw={700} mt={4} lineClamp={1}>{currentTextDoc?.name || $('未导入')}</Text>
                 </InlinePanel>
                 <InlinePanel className="tc-pm-assets__overview-metric">
-                  <Text size="xs" c="dimmed">角色记忆</Text>
+                  <Text size="xs" c="dimmed">{ $('角色记忆') }</Text>
                   <Text size="sm" fw={700} mt={4}>{roleCards.length}</Text>
                 </InlinePanel>
                 <InlinePanel className="tc-pm-assets__overview-metric">
-                  <Text size="xs" c="dimmed">文档脚本</Text>
+                  <Text size="xs" c="dimmed">{ $('文档脚本') }</Text>
                   <Text size="sm" fw={700} mt={4}>{docs.length}</Text>
                 </InlinePanel>
                 <InlinePanel className="tc-pm-assets__overview-metric">
-                  <Text size="xs" c="dimmed">最近更新</Text>
+                  <Text size="xs" c="dimmed">{ $('最近更新') }</Text>
                   <Text size="sm" fw={700} mt={4}>{formatTime((docs[0]?.updatedAt || roleCards[0]?.updatedAt || '').trim())}</Text>
                 </InlinePanel>
               </SimpleGrid>
             </Group>
             <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm" mt="sm">
               <InlinePanel className="tc-pm-assets__overview-section">
-                <Text size="sm" fw={700}>当前项目内容</Text>
+                <Text size="sm" fw={700}>{ $('当前项目内容') }</Text>
                 <Stack gap={8} mt="sm">
                   {reusableNowItems.map((item) => (
                     <Text key={item} size="xs" c="dimmed">{item}</Text>
@@ -395,22 +395,22 @@ export default function ProjectAssetsViewer({
                 </Stack>
               </InlinePanel>
               <InlinePanel className="tc-pm-assets__overview-section">
-                <Text size="sm" fw={700}>项目统计</Text>
+                <Text size="sm" fw={700}>{ $('项目统计') }</Text>
                 <SimpleGrid cols={2} spacing="sm" mt="sm">
                   <InlinePanel className="tc-pm-assets__overview-stat">
-                    <Text size="xs" c="dimmed">项目原文</Text>
-                    <Text size="sm" fw={700} mt={4}>{currentTextDoc ? '已导入' : '未导入'}</Text>
+                    <Text size="xs" c="dimmed">{ $('项目原文') }</Text>
+                    <Text size="sm" fw={700} mt={4}>{currentTextDoc ? $('已导入') : $('未导入')}</Text>
                   </InlinePanel>
                   <InlinePanel className="tc-pm-assets__overview-stat">
-                    <Text size="xs" c="dimmed">章节脚本</Text>
+                    <Text size="xs" c="dimmed">{ $('章节脚本') }</Text>
                     <Text size="sm" fw={700} mt={4}>{storyboardDocs.length}</Text>
                   </InlinePanel>
                   <InlinePanel className="tc-pm-assets__overview-stat">
-                    <Text size="xs" c="dimmed">章节可追溯文档</Text>
+                    <Text size="xs" c="dimmed">{ $('章节可追溯文档') }</Text>
                     <Text size="sm" fw={700} mt={4}>{chapterBoundDocs.length}</Text>
                   </InlinePanel>
                   <InlinePanel className="tc-pm-assets__overview-stat">
-                    <Text size="xs" c="dimmed">角色连续性记忆</Text>
+                    <Text size="xs" c="dimmed">{ $('角色连续性记忆') }</Text>
                     <Text size="sm" fw={700} mt={4}>{roleCards.length}</Text>
                   </InlinePanel>
                 </SimpleGrid>
@@ -423,9 +423,9 @@ export default function ProjectAssetsViewer({
               value={filter}
               onChange={(value) => setFilter(value === 'roleCards' || value === 'docs' ? value : 'all')}
               data={[
-                { value: 'all', label: '全部' },
-                { value: 'roleCards', label: '角色卡' },
-                { value: 'docs', label: '文档脚本' },
+                { value: 'all', label: $('全部') },
+                { value: 'roleCards', label: $('角色卡') },
+                { value: 'docs', label: $('文档脚本') },
               ]}
             />
             <Group className="tc-pm-assets__toolbar-right" gap="xs">
@@ -434,7 +434,7 @@ export default function ProjectAssetsViewer({
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 leftSection={<IconSearch className="tc-pm-assets__search-icon" size={14} />}
-                placeholder="搜索角色名 / 角色描述 / 提示词 / 分镜脚本内容"
+                placeholder={$('搜索角色名 / 角色描述 / 提示词 / 分镜脚本内容')}
                 w={320}
               />
               <Button
@@ -447,8 +447,7 @@ export default function ProjectAssetsViewer({
                   if (!loading) void loadAssets()
                 }}
               >
-                刷新
-              </Button>
+                { $('刷新') }</Button>
             </Group>
           </Group>
 
@@ -456,7 +455,7 @@ export default function ProjectAssetsViewer({
             <Center className="tc-pm-assets__loading" mih={180}>
               <Group className="tc-pm-assets__loading-group" gap="xs">
                 <Loader className="tc-pm-assets__loading-icon" size="sm" />
-                <Text className="tc-pm-assets__loading-text" size="sm" c="dimmed">加载中…</Text>
+                <Text className="tc-pm-assets__loading-text" size="sm" c="dimmed">{ $('加载中…') }</Text>
               </Group>
             </Center>
           ) : (
@@ -464,11 +463,11 @@ export default function ProjectAssetsViewer({
               {(filter === 'all' || filter === 'roleCards') && (
                 <Stack className="tc-pm-assets__section" gap="xs">
                   <Group className="tc-pm-assets__section-header" justify="space-between" align="center">
-                    <Text className="tc-pm-assets__section-title" size="sm" fw={600}>角色共享记忆</Text>
+                    <Text className="tc-pm-assets__section-title" size="sm" fw={600}>{ $('角色共享记忆') }</Text>
                     <Badge className="tc-pm-assets__section-count" size="sm" variant="light">{filteredRoleCards.length}</Badge>
                   </Group>
                   {filteredRoleCards.length === 0 ? (
-                    <Text className="tc-pm-assets__empty" size="sm" c="dimmed">暂无角色卡素材</Text>
+                    <Text className="tc-pm-assets__empty" size="sm" c="dimmed">{ $('暂无角色卡素材') }</Text>
                   ) : (
                     <SimpleGrid className="tc-pm-assets__role-grid" cols={{ base: 1, sm: 2 }} spacing="sm">
                       {filteredRoleCards.map((card) => (
@@ -484,19 +483,18 @@ export default function ProjectAssetsViewer({
                             <Text className="tc-pm-assets__role-title" size="sm" fw={600} lineClamp={1}>{card.roleName}</Text>
                             <Group className="tc-pm-assets__role-meta" gap={6}>
                               <Badge className="tc-pm-assets__role-status" size="xs" variant="light">
-                                {card.status === 'draft' ? '草稿' : '已生成'}
+                                {card.status === 'draft' ? $('草稿') : $('已生成')}
                               </Badge>
                               {typeof card.chapter === 'number' ? (
                                 <Badge className="tc-pm-assets__role-chapter" size="xs" variant="outline">
-                                  {`第${card.chapter}章`}
+                                  {$t('第{{chapter}}章', { chapter: card.chapter })}
                                 </Badge>
                               ) : null}
                             </Group>
                             <Text className="tc-pm-assets__role-time" size="xs" c="dimmed">{formatTime(card.updatedAt)}</Text>
                             <Group className="tc-pm-assets__role-actions" justify="flex-end">
                               <Button className="tc-pm-assets__role-preview-btn" size="xs" variant="light" onClick={() => setActiveRoleCard(card)}>
-                                预览详情
-                              </Button>
+                                { $('预览详情') }</Button>
                             </Group>
                           </Stack>
                         </PanelCard>
@@ -509,11 +507,11 @@ export default function ProjectAssetsViewer({
               {(filter === 'all' || filter === 'docs') && (
                 <Stack className="tc-pm-assets__section" gap="xs">
                   <Group className="tc-pm-assets__section-header" justify="space-between" align="center">
-                    <Text className="tc-pm-assets__section-title" size="sm" fw={600}>文本与分镜记忆</Text>
+                    <Text className="tc-pm-assets__section-title" size="sm" fw={600}>{ $('文本与分镜记忆') }</Text>
                     <Badge className="tc-pm-assets__section-count" size="sm" variant="light">{filteredDocs.length}</Badge>
                   </Group>
                   {filteredDocs.length === 0 ? (
-                    <Text className="tc-pm-assets__empty" size="sm" c="dimmed">暂无文档素材</Text>
+                    <Text className="tc-pm-assets__empty" size="sm" c="dimmed">{ $('暂无文档素材') }</Text>
                   ) : (
                     <SimpleGrid className="tc-pm-assets__doc-grid" cols={{ base: 1, sm: 2 }} spacing="sm">
                       {filteredDocs.map((doc) => (
@@ -524,18 +522,17 @@ export default function ProjectAssetsViewer({
                               <Group className="tc-pm-assets__doc-badges" gap={6}>
                                 <Badge className="tc-pm-assets__doc-kind" size="xs" variant="light">{toKindLabel(doc.kind)}</Badge>
                                 {typeof doc.chapter === 'number' ? (
-                                  <Badge className="tc-pm-assets__doc-chapter" size="xs" variant="outline">{`第${doc.chapter}章`}</Badge>
+                                  <Badge className="tc-pm-assets__doc-chapter" size="xs" variant="outline">{$t('第{{chapter}}章', { chapter: doc.chapter })}</Badge>
                                 ) : null}
                               </Group>
                             </Group>
                             <Text className="tc-pm-assets__doc-summary" size="xs" c="dimmed" lineClamp={4}>
-                              {summarize(doc.content) || '无内容'}
+                              {summarize(doc.content) || $('无内容')}
                             </Text>
                             <Group className="tc-pm-assets__doc-footer" justify="space-between" align="center">
                               <Text className="tc-pm-assets__doc-time" size="xs" c="dimmed">{formatTime(doc.updatedAt)}</Text>
                               <Button className="tc-pm-assets__doc-preview-btn" size="xs" variant="light" onClick={() => setActiveDoc(doc)}>
-                                预览全文
-                              </Button>
+                                { $('预览全文') }</Button>
                             </Group>
                           </Stack>
                         </PanelCard>
@@ -553,7 +550,7 @@ export default function ProjectAssetsViewer({
         className="tc-pm-assets__role-preview-modal"
         opened={Boolean(activeRoleCard)}
         onClose={() => setActiveRoleCard(null)}
-        title={String(activeRoleCard?.roleName || activeRoleCard?.name || '角色卡详情')}
+        title={String(activeRoleCard?.roleName || activeRoleCard?.name || $('角色卡详情'))}
         centered
         size="lg"
       >
@@ -562,7 +559,7 @@ export default function ProjectAssetsViewer({
             <Image
               className="tc-pm-assets__role-preview-image"
               src={String(activeRoleCard?.imageUrl || '').trim()}
-              alt={String(activeRoleCard?.roleName || activeRoleCard?.name || '角色卡')}
+              alt={String(activeRoleCard?.roleName || activeRoleCard?.name || $('角色卡'))}
               radius="md"
               fit="contain"
             />
@@ -570,14 +567,14 @@ export default function ProjectAssetsViewer({
           <div className="tc-pm-assets__role-preview-scroll">
             <Stack className="tc-pm-assets__role-preview-content" gap={8}>
               <Text className="tc-pm-assets__role-preview-line" size="sm">
-                <Text className="tc-pm-assets__role-preview-label" component="span" fw={600}>角色状态：</Text>
-                {String(activeRoleCard?.stateDescription || '').trim() || '无'}
+                <Text className="tc-pm-assets__role-preview-label" component="span" fw={600}>{ $('角色状态：') }</Text>
+                {String(activeRoleCard?.stateDescription || '').trim() || $('无')}
               </Text>
               <Text className="tc-pm-assets__role-preview-line" size="sm">
-                <Text className="tc-pm-assets__role-preview-label" component="span" fw={600}>完整提示词：</Text>
+                <Text className="tc-pm-assets__role-preview-label" component="span" fw={600}>{ $('完整提示词：') }</Text>
               </Text>
               <Text className="tc-pm-assets__role-preview-prompt" size="sm" c="dimmed">
-                {String(activeRoleCard?.prompt || '').trim() || '无'}
+                {String(activeRoleCard?.prompt || '').trim() || $('无')}
               </Text>
             </Stack>
           </div>
@@ -588,7 +585,7 @@ export default function ProjectAssetsViewer({
         className="tc-pm-assets__doc-preview-modal"
         opened={Boolean(activeDoc)}
         onClose={() => setActiveDoc(null)}
-        title={String(activeDoc?.name || '文档预览')}
+        title={String(activeDoc?.name || $('文档预览'))}
         centered
         size="xl"
       >
@@ -599,7 +596,7 @@ export default function ProjectAssetsViewer({
             </Badge>
             {typeof activeDoc?.chapter === 'number' ? (
               <Badge className="tc-pm-assets__doc-preview-chapter" size="sm" variant="outline">
-                {`第${activeDoc.chapter}章`}
+                {$t('第{{chapter}}章', { chapter: activeDoc.chapter })}
               </Badge>
             ) : null}
             <Text className="tc-pm-assets__doc-preview-time" size="xs" c="dimmed">
@@ -608,7 +605,7 @@ export default function ProjectAssetsViewer({
           </Group>
           <div className="tc-pm-assets__doc-preview-scroll">
             <Text className="tc-pm-assets__doc-preview-content" size="sm">
-              {String(activeDoc?.content || '').trim() || '无内容'}
+              {String(activeDoc?.content || '').trim() || $('无内容')}
             </Text>
           </div>
         </Stack>

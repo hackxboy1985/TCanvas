@@ -3,6 +3,7 @@ import type { Node, NodeProps } from '@xyflow/react'
 import { NodeResizeControl } from '@xyflow/react'
 import { IconEdit, IconGripVertical } from '@tabler/icons-react'
 import { useRFStore } from '../store'
+import { $ } from '../i18n'
 
 type GroupNodeData = {
   label?: string
@@ -11,7 +12,7 @@ type GroupNodeData = {
 type GroupCanvasNode = Node<GroupNodeData, 'groupNode'>
 
 export default function GroupNode({ id, data, selected, dragging }: NodeProps<GroupCanvasNode>): JSX.Element {
-  const label = String(data?.label || '组').trim() || '组'
+  const label = String(data?.label || $('组')).trim() || $('组')
   const borderColor = selected ? 'var(--canvas-group-border-selected)' : 'var(--canvas-group-border)'
   const renameGroup = useRFStore((s) => s.renameGroup)
   const [editing, setEditing] = React.useState(false)
@@ -72,7 +73,7 @@ export default function GroupNode({ id, data, selected, dragging }: NodeProps<Gr
             boxShadow: selected ? '0 6px 16px rgba(15, 23, 42, 0.14)' : 'none',
             overflow: 'hidden',
           }}
-          title="拖这里移动组"
+          title={$("拖这里移动组")}
         >
           <IconGripVertical size={13} stroke={2} style={{ flex: '0 0 auto', opacity: 0.72 }} />
           {editing ? (
@@ -146,7 +147,7 @@ export default function GroupNode({ id, data, selected, dragging }: NodeProps<Gr
                 cursor: 'pointer',
                 flex: '0 0 auto',
               }}
-              title="编辑组名"
+              title={$("编辑组名")}
             >
               <IconEdit size={12} stroke={2} />
             </button>

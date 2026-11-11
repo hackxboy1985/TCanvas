@@ -28,11 +28,13 @@ import { groupReferenceAssets, ReferenceCategory, type ReferenceAsset, type Refe
 import '../canvas/components/lensReferencePicker.css'
 import { toast } from '../ui/toast'
 
+import { $, $t } from '../canvas/i18n'
 /** Tab 定义：与 ReferenceCategory 一一对应，顺序即展示顺序。 */
+/** 注意：标签在模块加载时按当前语言求值，切换语言需刷新页面（可接受）。 */
 const TABS = [
-  { value: ReferenceCategory.Role, label: '角色' },
-  { value: ReferenceCategory.Scene, label: '场景' },
-  { value: ReferenceCategory.Prop, label: '道具' },
+  { value: ReferenceCategory.Role, label: $('角色') },
+  { value: ReferenceCategory.Scene, label: $('场景') },
+  { value: ReferenceCategory.Prop, label: $('道具') },
 ]
 
 /** 新增弹窗的上下文：决定调哪个接口。 */
@@ -76,7 +78,7 @@ function supportsChildren(category: ReferenceCategory): boolean {
  * @returns 子级名称（角色=子造型，场景=子场景）
  */
 function childLabel(category: ReferenceCategory): string {
-  return category === ReferenceCategory.Role ? '子造型' : '子场景'
+  return category === ReferenceCategory.Role ? $('子造型') : $('子场景')
 }
 
 /**
@@ -116,13 +118,13 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
     setError('')
     setGroups([])
     if (!dramaId) {
-      setError('缺少剧集身份，无法加载资产')
+      setError($('缺少剧集身份，无法加载资产'))
       setLoading(false)
       return
     }
     void listReferenceAssets<LensRole & LensAssetImage>(dramaId, tab)
       .then((rows) => { if (active) setGroups(groupReferenceAssets(tab, rows)) })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : '资产加载失败') })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : $('资产加载失败')) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [opened, dramaId, tab, reload])
@@ -152,7 +154,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
     if (!addContext || saving) return
     const name = addingName.trim()
     if (!name) {
-      toast('请输入名称')
+      toast($('请输入名称'))
       return
     }
     setSaving(true)
@@ -172,11 +174,11 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
       } else {
         await createAssetImage(dramaId, 2, name)
       }
-      toast(`已新增${addDialogTitle}`)
+      toast($t('已新增{{addDialogTitle}}', { addDialogTitle: addDialogTitle }))
       closeAdd()
       setReload((value) => value + 1)
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : '保存失败'
+      const message = reason instanceof Error ? reason.message : $('保存失败')
       toast(message)
     } finally {
       setSaving(false)
@@ -192,8 +194,8 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
 
   /** 新增弹窗标题：主资产显示分类名，子级显示「添加子造型 / 添加子场景」 */
   const addDialogTitle = addContext?.parentId
-    ? `添加${childLabel(addContext.category)}`
-    : `添加${TABS.find((item) => item.value === addContext?.category)?.label || '资产'}`
+    ? $t('添加{{category}}', { category: childLabel(addContext.category) })
+    : $t('添加{{value}}', { value: TABS.find((item) => item.value === addContext?.category)?.label || $('资产') })
 
   /** 渲染单张资产卡片（选择模式可点击；子级显示角标；主资产显示 +子级按钮） */
   const renderCard = (asset: ReferenceAsset, groupName: string) => {
@@ -210,7 +212,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
         <div className={'lens-reference-picker__thumb' + (asset.category === ReferenceCategory.Role ? ' lens-reference-picker__thumb--role' : '')}>
           {imgUrl
             ? <img className="lens-reference-picker__image" src={`${imgUrl}${imgUrl.includes('?') ? '&' : '?'}x-oss-process=image/resize,w_200`} alt={asset.variantName || asset.name} loading="lazy" />
-            : <Text className="lens-reference-picker__no-image" size="xs">暂无图片</Text>}
+            : <Text className="lens-reference-picker__no-image" size="xs">{ $('暂无图片') }</Text>}
           {asset.parentId && <span className="lens-reference-picker__badge">{childLabel(asset.category)}</span>}
         </div>
         <Text className="lens-reference-picker__label" size="xs" title={asset.name}>
@@ -226,7 +228,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
         className="lens-reference-picker nodrag nopan nowheel"
         opened={opened}
         onClose={onClose}
-        title={isSelectMode ? '从资产库添加' : '资产库'}
+        title={isSelectMode ? $('从资产库添加') : $('资产库')}
         centered
         size="min(1100px, 94vw)"
         zIndex={4000}
@@ -246,8 +248,8 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
         <Group gap="xs" wrap="nowrap">
           <TextInput
             className="lens-reference-picker__search"
-            aria-label="搜索资产"
-            placeholder={`搜索${TABS.find((item) => item.value === tab)?.label || '资产'}名称或${childLabel(tab)}`}
+            aria-label={$('搜索资产')}
+            placeholder={$t('搜索{{value}}名称或{{tab}}', { value: TABS.find((item) => item.value === tab)?.label || $('资产'), tab: childLabel(tab) })}
             value={keyword}
             onChange={(event) => setKeyword(event.currentTarget.value)}
             style={{ flex: 1 }}
@@ -261,8 +263,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
             leftSection={<IconRefresh size={14} />}
             onClick={() => setReload((value) => value + 1)}
           >
-            刷新
-          </Button>
+            { $('刷新') }</Button>
         </Group>
 
         {error && (
@@ -275,7 +276,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
           {loading && <Loader className="lens-reference-picker__loader" size="sm" />}
           {!loading && !error && !visibleGroups.length && (
             <Text className="lens-reference-picker__empty" size="sm">
-              {keyword ? '暂无匹配资产' : `暂无${TABS.find((item) => item.value === tab)?.label || '资产'}，可点击左侧「添加」新建`}
+              {keyword ? $('暂无匹配资产') : $t('暂无{{value}}，可点击左侧「添加」新建', { value: TABS.find((item) => item.value === tab)?.label || $('资产') })}
             </Text>
           )}
           <div
@@ -292,7 +293,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
                       <div className="lens-reference-picker__thumb lens-reference-picker__thumb--add">
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                           <IconPlus size={26} />
-                          <Text size="sm" fw={600}>添加{TABS.find((item) => item.value === tab)?.label}</Text>
+                          <Text size="sm" fw={600}>{ $('添加') }{TABS.find((item) => item.value === tab)?.label}</Text>
                         </div>
                       </div>
                       {/* 与普通卡片同样的名称行占位，保证入口卡与道具卡等高、上下沿齐平 */}
@@ -312,7 +313,7 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
                     <div className={'lens-reference-picker__thumb lens-reference-picker__thumb--add' + (tab === ReferenceCategory.Role ? ' lens-reference-picker__thumb--role' : '')}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                         <IconPlus size={26} />
-                        <Text size="sm" fw={600}>添加{TABS.find((item) => item.value === tab)?.label}</Text>
+                        <Text size="sm" fw={600}>{ $('添加') }{TABS.find((item) => item.value === tab)?.label}</Text>
                       </div>
                     </div>
                     <Text className="lens-reference-picker__label" size="xs">&nbsp;</Text>
@@ -361,23 +362,23 @@ export function AssetLibraryModal({ opened, dramaId, onClose, onSelectAsset }: P
         </div>
 
         <Group className="lens-reference-picker__footer" justify="flex-end">
-          <Button className="lens-reference-picker__cancel" variant="default" onClick={onClose}>关闭</Button>
+          <Button className="lens-reference-picker__cancel" variant="default" onClick={onClose}>{ $('关闭') }</Button>
         </Group>
       </Modal>
 
       {/* 新增资产名称输入弹窗 */}
       <Modal opened={Boolean(addContext)} onClose={closeAdd} title={addDialogTitle} size="sm" zIndex={4100}>
         <TextInput
-          label="名称"
-          placeholder={addContext?.parentId ? `请输入${childLabel(addContext.category)}名称` : '请输入名称'}
+          label={$('名称')}
+          placeholder={addContext?.parentId ? $t('请输入{{category}}名称', { category: childLabel(addContext.category) }) : $('请输入名称')}
           value={addingName}
           onChange={(event) => setAddingName(event.currentTarget.value)}
           onKeyDown={(event) => { if (event.key === 'Enter') void submitAdd() }}
           data-autofocus
         />
         <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={closeAdd} disabled={saving}>取消</Button>
-          <Button onClick={() => void submitAdd()} loading={saving}>确定</Button>
+          <Button variant="subtle" onClick={closeAdd} disabled={saving}>{ $('取消') }</Button>
+          <Button onClick={() => void submitAdd()} loading={saving}>{ $('确定') }</Button>
         </Group>
       </Modal>
     </>

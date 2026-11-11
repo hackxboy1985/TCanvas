@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button, Group, Modal, Paper, Stack, Text, Tooltip } from '@mantine/core'
 import { IconCheck, IconMovie, IconVideo } from '@tabler/icons-react'
+import { $, $t } from '../../i18n'
 
 type VideoResult = {
   url: string
@@ -38,14 +39,14 @@ export function VideoResultModal({
   mediaFallbackSurface,
   mediaFallbackText,
   isStoryboardNode = false,
-  title = '选择主视频',
+  title = $('选择主视频'),
 }: VideoResultModalProps) {
   return (
     <Modal
       className="video-result-modal"
       opened={opened}
       onClose={onClose}
-      title={videos.length > 0 ? title : '视频历史记录'}
+      title={videos.length > 0 ? title : $('视频历史记录')}
       centered
       size="xl"
       withinPortal
@@ -66,10 +67,10 @@ export function VideoResultModal({
               >
                 <VideoHistoryIcon className="video-result-modal-empty-icon" size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
                 <Text className="video-result-modal-empty-title" size="sm" c="dimmed">
-                  暂无视频生成历史
+                  {$('暂无视频生成历史')}
                 </Text>
                 <Text className="video-result-modal-empty-desc" size="xs" c="dimmed" mt={4}>
-                  生成视频后，这里将显示所有历史记录，你可以选择效果最好的作为主视频
+                  {$('生成视频后，这里将显示所有历史记录，你可以选择效果最好的作为主视频')}
                 </Text>
               </div>
             )
@@ -77,7 +78,7 @@ export function VideoResultModal({
         ) : (
           <>
             <Text className="video-result-modal-hint" size="xs" c="dimmed">
-              当前共有 {videos.length} 个视频。点击「设为主视频」可更新本节点主视频，点击「全屏预览」可放大查看。
+              {$('当前共有')} {videos.length} {$('个视频。点击「设为主视频」可更新本节点主视频，点击「全屏预览」可放大查看。')}
             </Text>
             <div
               className="video-result-modal-scroll"
@@ -161,11 +162,11 @@ export function VideoResultModal({
                       <Group className="video-result-modal-actions" justify="space-between">
                         <Text className="video-result-modal-label" size="xs" c="dimmed">
                           {isPrimary
-                            ? `${isAdopted ? '已采纳 · ' : ''}主视频 · 第 ${idx + 1} 个`
-                            : `${isAdopted ? '已采纳 · ' : ''}第 ${idx + 1} 个`}
+                            ? $t('{{v1}}主视频 · 第 {{v2}} 个', { v1: isAdopted ? $('已采纳 · ') : '', v2: idx + 1 })
+                            : $t('{{v1}}第 {{v2}} 个', { v1: isAdopted ? $('已采纳 · ') : '', v2: idx + 1 })}
                         </Text>
                         <Group className="video-result-modal-buttons" gap={4}>
-                          <Tooltip label={isAdopted ? '该视频已采纳' : '采纳该视频'} position="top" withArrow>
+                          <Tooltip label={isAdopted ? $('该视频已采纳') : $('采纳该视频')} position="top" withArrow>
                             <Button
                               className="video-result-modal-adopt"
                               size="xs"
@@ -174,7 +175,7 @@ export function VideoResultModal({
                               leftSection={<IconCheck size={12} />}
                               onClick={() => onAdopt(idx)}
                             >
-                              采纳
+                              {$('采纳')}
                             </Button>
                           </Tooltip>
                           <Button
@@ -183,7 +184,7 @@ export function VideoResultModal({
                             variant="subtle"
                             onClick={() => onPreview(video)}
                           >
-                            全屏预览
+                            {$('全屏预览')}
                           </Button>
                           {!isPrimary && (
                             <Button
@@ -195,7 +196,7 @@ export function VideoResultModal({
                                 onClose()
                               }}
                             >
-                              设为主视频
+                              {$('设为主视频')}
                             </Button>
                           )}
                         </Group>

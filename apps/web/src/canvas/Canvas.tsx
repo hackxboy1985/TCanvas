@@ -367,10 +367,10 @@ const isNodeVisibleByFilter = (node: FlowNode, visibility: NodeVisibilityState):
 }
 
 const buildNodeVisibilityLabel = (filter: NodeVisibilityFilter): string => {
-  if (filter === 'text') return '文本'
-  if (filter === 'image') return '图片'
-  if (filter === 'storyboard') return '分镜'
-  return '视频'
+  if (filter === 'text') return $('文本')
+  if (filter === 'image') return $('图片')
+  if (filter === 'storyboard') return $('分镜')
+  return $('视频')
 }
 
 const getNodeVisibilityIcon = (filter: NodeVisibilityFilter) => {
@@ -625,13 +625,13 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const deduped = dedupeLocalFiles(images, (file) => deriveLabelFromFileName(file.name))
     if (deduped.skippedCount > 0) {
       useUploadRuntimeStore.getState().recordDuplicateBlocked(deduped.skippedCount)
-      toast(`已跳过 ${deduped.skippedCount} 个同批次重复文件`, 'info')
+      toast($t('已跳过 {{count}} 个同批次重复文件', { count: deduped.skippedCount }), 'info')
     }
 
     const MAX_BYTES = 30 * 1024 * 1024
     const tooLarge = deduped.uniqueFiles.filter((f) => (typeof f.size === 'number' ? f.size : 0) > MAX_BYTES)
     if (tooLarge.length) {
-      toast(`有 ${tooLarge.length} 张图片超过 30MB，已跳过`, 'error')
+      toast($t('有 {{count}} 张图片超过 30MB，已跳过', { count: tooLarge.length }), 'error')
     }
     const valid = deduped.uniqueFiles.filter((f) => (typeof f.size === 'number' ? f.size : 0) <= MAX_BYTES)
     if (!valid.length) return
@@ -714,15 +714,15 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         }
       } catch (error) {
         console.error('Failed to process pasted image:', error)
-        toast('处理粘贴图片失败，请稍后再试', 'error')
+        toast($('处理粘贴图片失败，请稍后再试'), 'error')
       }
     }
 
     if (hostingFailedCount > 0) {
       if (successCount > 0) {
-        toast(`有 ${hostingFailedCount} 张图片未能托管到 OSS/R2，已使用本地预览`, 'info')
+        toast($t('有 {{count}} 张图片未能托管到 OSS/R2，已使用本地预览', { count: hostingFailedCount }), 'info')
       } else {
-        toast('图片已添加到画布，但未能托管到 OSS/R2，将使用本地预览（远程任务需要可访问链接）', 'error')
+        toast($('图片已添加到画布，但未能托管到 OSS/R2，将使用本地预览（远程任务需要可访问链接）'), 'error')
       }
     }
 
@@ -793,20 +793,20 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     try {
       const res = await fetch(preferred)
       if (!res.ok) {
-        toast('读取帧图片失败，请稍后重试', 'error')
+        toast($('读取帧图片失败，请稍后重试'), 'error')
         return
       }
       blob = await res.blob()
     } catch (error) {
       console.error('Failed to fetch dragged frame:', error)
-      toast('读取帧图片失败，请稍后重试', 'error')
+      toast($('读取帧图片失败，请稍后重试'), 'error')
       return
     }
 
     const MAX_BYTES = 30 * 1024 * 1024
     const size = typeof (blob as any)?.size === 'number' ? (blob as any).size : 0
     if (size > MAX_BYTES) {
-      toast('该帧图片超过 30MB，已取消导入', 'error')
+      toast($('该帧图片超过 30MB，已取消导入'), 'error')
       return
     }
 
@@ -876,7 +876,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       }
     } catch (error) {
       console.error('Failed to process dragged frame:', error)
-      toast('处理帧图片失败，请稍后再试', 'error')
+      toast($('处理帧图片失败，请稍后再试'), 'error')
     }
   }, [deriveLabelFromFileName, viewOnly])
 
@@ -905,7 +905,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       case 'failed':
         setNodeStatus(event.nodeId, 'error', {
           ...progressPatch,
-          lastError: message || '任务执行失败',
+          lastError: message || $('任务执行失败'),
         })
         break
       default:
@@ -971,7 +971,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           void syncGenericVideoNodeOnce(nodeId, useRFStore.getState)
             .catch((error: unknown) => {
               // 同上：接口异常不置终态，只兜住未处理的 Promise 拒绝
-              const message = error instanceof Error && error.message ? error.message : '视频任务接续查询失败'
+              const message = error instanceof Error && error.message ? error.message : $('视频任务接续查询失败')
               console.error('[canvas] sync video node task failed', message)
             })
             .finally(() => {
@@ -1000,7 +1000,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           .catch((error: unknown) => {
             // 接续查询异常只记录，不置终态：终态会被持久化到 flow，一旦误置节点就永远不会再查。
             // 接口层异常由 syncImageNodeOnce 内部退避重试，这里只兜住未处理的 Promise 拒绝。
-            const message = error instanceof Error && error.message ? error.message : '图片任务接续查询失败'
+            const message = error instanceof Error && error.message ? error.message : $('图片任务接续查询失败')
             console.error('[canvas] sync image node task failed', message)
           })
           .finally(() => {
@@ -1248,9 +1248,9 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     if (flowRef) {
       try {
         JSON.parse(flowRef) as { id: string; name: string }
-        toast('子流程任务节点已移除，请改用文本/图片/视频节点组合表达流程', 'warning')
+        toast($('子流程任务节点已移除，请改用文本/图片/视频节点组合表达流程'), 'warning')
       } catch {
-        toast('子流程数据无效，无法导入', 'error')
+        toast($('子流程数据无效，无法导入'), 'error')
       }
       return
     }
@@ -2057,7 +2057,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
   const quickConnectNodes = useCallback((sourceId: string, targetId: string, opts?: { showInvalidToast?: boolean }) => {
     const showInvalidToast = opts?.showInvalidToast !== false
     if (sourceId === targetId) {
-      if (showInvalidToast) toast('不能连接到自身', 'warning')
+      if (showInvalidToast) toast($('不能连接到自身'), 'warning')
       return false
     }
     const sourceNode = nodes.find(n => n.id === sourceId)
@@ -2068,7 +2068,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       return false
     }
     if (edges.some(e => e.source === sourceId && e.target === targetId)) {
-      if (showInvalidToast) toast('节点之间已存在连接', 'info')
+      if (showInvalidToast) toast($('节点之间已存在连接'), 'info')
       return false
     }
     if (createsCycle({ source: sourceId, target: targetId })) {
@@ -2077,11 +2077,11 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const sKind = (sourceNode.data as any)?.kind
     const tKind = (targetNode.data as any)?.kind
     if (String(tKind || '').toLowerCase() === 'text') {
-      if (showInvalidToast) toast('文本节点仅支持作为提示词来源，不支持作为目标节点', 'warning')
+      if (showInvalidToast) toast($('文本节点仅支持作为提示词来源，不支持作为目标节点'), 'warning')
       return false
     }
     if (!isValidEdgeByType(sKind, tKind)) {
-      if (showInvalidToast) toast('当前两种节点类型不支持直连', 'warning')
+      if (showInvalidToast) toast($('当前两种节点类型不支持直连'), 'warning')
       return false
     }
     handleConnect({
@@ -2111,7 +2111,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       if (referencePickerBlockedSourceIds.has(node.id)) return
       if (canvasReferencePicker?.onSelect) {
         void canvasReferencePicker.onSelect(String(node.id)).then(closeCanvasReferencePicker).catch((error: unknown) => {
-          toast(error instanceof Error ? error.message : '添加参考失败', 'error')
+          toast(error instanceof Error ? error.message : $('添加参考失败'), 'error')
         })
         return
       }
@@ -2319,14 +2319,14 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const resolvedGroupLabel = groupLabel || `组-${downloadAssetsGroupId}`
 
     setDownloadingGroupAssetsId(downloadAssetsGroupId)
-    toast('即将触发多文件下载；浏览器可能会提示“允许多个文件下载”', 'info')
+    toast($('即将触发多文件下载；浏览器可能会提示“允许多个文件下载”'), 'info')
     try {
       await downloadGroupAssets({
         nodes,
         groupId: downloadAssetsGroupId,
         groupLabel: resolvedGroupLabel,
       })
-      toast('已触发组内素材下载', 'success')
+      toast($('已触发组内素材下载'), 'success')
     } catch (err) {
       toast(formatErrorMessage(err), 'error')
     } finally {
@@ -2406,21 +2406,21 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const stateNodes = useRFStore.getState().nodes
     const group = stateNodes.find((n) => n.id === groupId && n.type === 'groupNode')
     if (!group) {
-      toast('未找到目标分组', 'error')
+      toast($('未找到目标分组'), 'error')
       return
     }
     const nodeIds = collectGroupTaskNodeIds(groupId)
     if (!nodeIds.length) {
-      toast('组内没有可执行任务节点', 'info')
+      toast($('组内没有可执行任务节点'), 'info')
       return
     }
     setRunningGroupId(groupId)
     try {
       await runFlowDag(1, useRFStore.getState, useRFStore.setState, { only: new Set(nodeIds) })
-      toast(`已触发组内 ${nodeIds.length} 个节点执行`, 'success')
+      toast($t('已触发组内 {{count}} 个节点执行', { count: nodeIds.length }), 'success')
     } catch (err) {
       console.error(err)
-      toast('组内一键执行失败', 'error')
+      toast($('组内一键执行失败'), 'error')
     } finally {
       setRunningGroupId(null)
     }
@@ -2546,7 +2546,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     event.currentTarget.value = ''
     const imageFile = files.find((file) => String(file.type || '').startsWith('image/'))
     if (!imageFile) {
-      toast('请选择图片文件', 'warning')
+      toast($('请选择图片文件'), 'warning')
       return
     }
 
@@ -2569,9 +2569,9 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         String((uploaded as { data?: { url?: unknown } })?.data?.url || '').trim()
         || String((uploaded as { data?: { imageUrl?: unknown } })?.data?.imageUrl || '').trim()
         || String((uploaded as { data?: { thumbnailUrl?: unknown } })?.data?.thumbnailUrl || '').trim()
-      if (!url) throw new Error('上传成功但未返回可用图片地址')
+      if (!url) throw new Error($('上传成功但未返回可用图片地址'))
       setWorkflowCoverUrlInput(url)
-      toast('模板封面上传成功', 'success')
+      toast($('模板封面上传成功'), 'success')
     } catch (error: unknown) {
       console.error(error)
       toast(formatErrorMessage(error), 'error')
@@ -2582,28 +2582,28 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
 
   const saveSelectedGroupAsWorkflowAsset = useCallback(async () => {
     if (selectedGroupIds.length !== 1) {
-      toast('请先选择一个分组', 'info')
+      toast($('请先选择一个分组'), 'info')
       return
     }
     const groupId = selectedGroupIds[0]
     const projectId = String(currentProject?.id || '').trim()
     if (!projectId) {
-      toast('请先选择项目后再保存工作流资产', 'warning')
+      toast($('请先选择项目后再保存工作流资产'), 'warning')
       return
     }
 
     const subgraph = collectGroupSubgraph(groupId)
     if (!subgraph || subgraph.nodes.length <= 1) {
-      toast('组内没有可保存的工作流节点', 'warning')
+      toast($('组内没有可保存的工作流节点'), 'warning')
       return
     }
 
     openWorkflowNameDialog({
       mode: 'asset',
       groupId,
-      title: '保存为资产',
-      confirmLabel: '保存',
-      initialName: `工作流片段 · ${subgraph.groupLabel}`,
+      title: $('保存为资产'),
+      confirmLabel: $('保存'),
+      initialName: $t('工作流片段 · {{name}}', { name: subgraph.groupLabel }),
       initialDescription: '',
       initialCoverUrl: '',
       previewUrl: resolveSubgraphPreviewImageUrl(groupId),
@@ -2613,21 +2613,21 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
   const publishSelectedGroupAsTemplate = useCallback(async (explicitGroupId?: string) => {
     const groupId = explicitGroupId || selectedGroupIds[0]
     if (!groupId) {
-      toast('请先选择一个分组', 'info')
+      toast($('请先选择一个分组'), 'info')
       return
     }
     const subgraph = collectGroupSubgraph(groupId)
     if (!subgraph || subgraph.nodes.length <= 1) {
-      toast('组内没有可发布的工作流节点', 'warning')
+      toast($('组内没有可发布的工作流节点'), 'warning')
       return
     }
 
     openWorkflowNameDialog({
       mode: 'template',
       groupId,
-      title: '创建模板',
-      confirmLabel: '确认',
-      initialName: `模板 · ${subgraph.groupLabel}`,
+      title: $('创建模板'),
+      confirmLabel: $('确认'),
+      initialName: $t('模板 · {{name}}', { name: subgraph.groupLabel }),
       initialDescription: '',
       initialCoverUrl: '',
       previewUrl: resolveSubgraphPreviewImageUrl(groupId),
@@ -2640,19 +2640,19 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const name = workflowNameInput.trim()
     const description = workflowDescriptionInput.trim()
     if (!name) {
-      toast('请输入名称', 'warning')
+      toast($('请输入名称'), 'warning')
       return
     }
 
     const projectId = String(currentProject?.id || '').trim()
     if (!projectId) {
-      toast('请先选择项目', 'warning')
+      toast($('请先选择项目'), 'warning')
       return
     }
 
     const subgraph = collectGroupSubgraph(dialog.groupId)
     if (!subgraph || subgraph.nodes.length <= 1) {
-      toast('组内没有可保存的工作流节点', 'warning')
+      toast($('组内没有可保存的工作流节点'), 'warning')
       closeWorkflowNameDialog()
       return
     }
@@ -2676,7 +2676,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             savedAt: new Date().toISOString(),
           },
         })
-        toast('已保存为个人工作流资产', 'success')
+        toast($('已保存为个人工作流资产'), 'success')
         closeWorkflowNameDialog()
       } catch (error: unknown) {
         console.error(error)
@@ -2695,7 +2695,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         ? selectedTemplateProjectId.trim()
         : ''
       if (templateSaveMode === 'update' && !targetProjectId) {
-        toast('请选择要更新的模板', 'warning')
+        toast($('请选择要更新的模板'), 'warning')
         return
       }
 
@@ -2719,8 +2719,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       })
       toast(
         templateSaveMode === 'update'
-          ? `模板已更新为${isPublicTemplate ? '公共' : '私有'}模板`
-          : `已保存为${isPublicTemplate ? '公共' : '私有'}模板`,
+          ? $t('模板已更新为{{scope}}模板', { scope: isPublicTemplate ? $('公共') : $('私有') })
+          : $t('已保存为{{scope}}模板', { scope: isPublicTemplate ? $('公共') : $('私有') }),
         'success',
       )
       closeWorkflowNameDialog()
@@ -2785,7 +2785,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const stateNodes = useRFStore.getState().nodes
     const group = stateNodes.find((n) => n.id === groupId && n.type === 'groupNode')
     if (!group) {
-      toast('未找到目标组', 'error')
+      toast($('未找到目标组'), 'error')
       setStitchingGroupId(null)
       return
     }
@@ -2806,7 +2806,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       .filter((url): url is string => Boolean(url))
 
     if (!imageUrls.length) {
-      toast('组内没有可拼接的图片节点', 'info')
+      toast($('组内没有可拼接的图片节点'), 'info')
       setStitchingGroupId(null)
       return
     }
@@ -2820,7 +2820,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         }),
       )
       if (!images.length) {
-        toast('未获取到可拼接的图片', 'error')
+        toast($('未获取到可拼接的图片'), 'error')
         return
       }
 
@@ -2831,7 +2831,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       canvas.height = Math.max(1, totalHeight)
       const ctx = canvas.getContext('2d')
       if (!ctx) {
-        toast('创建画布失败', 'error')
+        toast($('创建画布失败'), 'error')
         return
       }
 
@@ -2847,7 +2847,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
 
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png', 0.95))
       if (!blob) {
-        toast('长图导出失败', 'error')
+        toast($('长图导出失败'), 'error')
         return
       }
 
@@ -2862,10 +2862,10 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
       a.click()
       a.remove()
       URL.revokeObjectURL(href)
-      toast(`已生成长图（${images.length} 张）`, 'success')
+      toast($t('已生成长图（{{count}} 张）', { count: images.length }), 'success')
     } catch (error) {
       console.error('Failed to stitch group images:', error)
-      toast('生成长图失败，请确认组内图片可访问', 'error')
+      toast($('生成长图失败，请确认组内图片可访问'), 'error')
     } finally {
       setStitchingGroupId(null)
     }
@@ -3169,8 +3169,8 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     const fromLabel = typeof fromRecord?.label === 'string' ? fromRecord.label.trim() : ''
     const sourceType = parseHandleTypeFromId(insertMenu.fromHandle)
     const title = fromLabel
-      ? `从「${fromLabel}」继续（${getHandleTypeLabel(sourceType)}）`
-      : `继续（${getHandleTypeLabel(sourceType)}）`
+      ? $t('从「{{label}}」继续（{{type}}）', { label: fromLabel, type: getHandleTypeLabel(sourceType) })
+      : $t('继续（{{type}}）', { type: getHandleTypeLabel(sourceType) })
 
     const schemaCandidates = listTaskNodeSchemas()
       .map((schema) => {
@@ -3432,7 +3432,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             e.stopPropagation()
             ;(window as any).__tcLastImagePasteAt = Date.now()
             void importImagesFromFiles(filesFromClipboard, pos)
-            toast(`已导入 ${filesFromClipboard.length} 张图片`, 'success')
+            toast($t('已导入 {{count}} 张图片', { count: filesFromClipboard.length }), 'success')
             handled = true
           }
           const text = e.clipboardData?.getData('text/plain')?.trim()
@@ -3445,12 +3445,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                 e.stopPropagation()
                 ;(window as any).__tcLastWorkflowPasteAt = Date.now()
                 importWorkflow(data, pos)
-                toast('已导入工作流', 'success')
+                toast($('已导入工作流'), 'success')
                 handled = true
               }
             } catch {
               if (!handled && (text.startsWith('{') || text.startsWith('['))) {
-                toast('剪贴板不是有效的工作流 JSON', 'error')
+                toast($('剪贴板不是有效的工作流 JSON'), 'error')
               }
             }
           }
@@ -3677,7 +3677,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                 {focusedNodeSummary.label}
               </Button>
               <Divider className="tc-canvas__breadcrumb-divider" orientation="vertical" style={{ height: 16 }} />
-              <Button className="tc-canvas__breadcrumb-action" size="xs" variant="subtle" onClick={()=>{ clearFocusedSubgraph(); setTimeout(()=> rf.fitView?.({ padding: 0.2 }), 50) }}>退出聚焦</Button>
+              <Button className="tc-canvas__breadcrumb-action" size="xs" variant="subtle" onClick={()=>{ clearFocusedSubgraph(); setTimeout(()=> rf.fitView?.({ padding: 0.2 }), 50) }}>{ $('退出聚焦') }</Button>
             </Group>
           </PanelCard>
         )
@@ -3698,11 +3698,9 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         >
           <Group className="tc-canvas__reference-picker-bar-group" gap={8} wrap="nowrap">
             <Text className="tc-canvas__reference-picker-bar-title" size="sm" fw={700}>
-              从画布选择参考
-            </Text>
+              { $('从画布选择参考') }</Text>
             <Text className="tc-canvas__reference-picker-bar-meta" size="xs" c="dimmed">
-              点击未连接到当前节点的图片后直接连线
-            </Text>
+              { $('点击未连接到当前节点的图片后直接连线') }</Text>
             <Divider className="tc-canvas__reference-picker-bar-divider" orientation="vertical" style={{ height: 16 }} />
             <Button
               className="tc-canvas__reference-picker-bar-exit"
@@ -3710,8 +3708,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
               variant="subtle"
               onClick={() => closeCanvasReferencePicker()}
             >
-              退出
-            </Button>
+              { $('退出') }</Button>
           </Group>
         </PanelCard>
       )}
@@ -3754,8 +3751,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                   styles={{ root: { color: '#f5f5f7', fontWeight: 600 } }}
                   onClick={() => createScriptBundleFromSelection()}
                 >
-                  拼接脚本
-                </Button>
+                  { $('拼接脚本') }</Button>
               )}
               {canCreateGroupFromSelection && (
                 <Button
@@ -3768,8 +3764,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                   styles={{ root: { color: '#f5f5f7', fontWeight: 600 } }}
                   onClick={() => addGroupForSelection()}
                 >
-                  打组
-                </Button>
+                  { $('打组') }</Button>
               )}
               {canRunSelectedGroup && (
                 <Button
@@ -3787,7 +3782,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                     void runGroupNodes(selectedGroupIds[0])
                   }}
                 >
-                  {isRunningSelectedGroup ? '执行中…' : '整组执行'}
+                  {isRunningSelectedGroup ? $('执行中…') : $('整组执行')}
                 </Button>
               )}
               {canPublishSelectedGroupTemplate && (
@@ -3801,8 +3796,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                   styles={{ root: { color: '#f5f5f7', fontWeight: 600 } }}
                   onClick={() => { void publishSelectedGroupAsTemplate() }}
                 >
-                  创建模板
-                </Button>
+                  { $('创建模板') }</Button>
               )}
               {canUngroupSelection && (
                 <Button
@@ -3815,8 +3809,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                   styles={{ root: { color: '#f5f5f7', fontWeight: 600 } }}
                   onClick={() => runUngroupSelection()}
                 >
-                  解组
-                </Button>
+                  { $('解组') }</Button>
               )}
               {hasSelectionOverflowActions && (
                 <Menu shadow="md" width={180} withinPortal position="bottom-end">
@@ -3829,21 +3822,17 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                       color="gray"
                       styles={{ root: { color: '#f5f5f7', fontWeight: 600 } }}
                     >
-                      更多
-                    </Button>
+                      { $('更多') }</Button>
                   </Menu.Target>
                   <Menu.Dropdown>
                     {canLayoutSelection && (
                       <>
                         <Menu.Item onClick={() => runLayoutSelection('grid')}>
-                          紧凑排序
-                        </Menu.Item>
+                          { $('紧凑排序') }</Menu.Item>
                         <Menu.Item onClick={() => runLayoutSelection('flow')}>
-                          链路排序
-                        </Menu.Item>
+                          { $('链路排序') }</Menu.Item>
                         <Menu.Item onClick={() => runLayoutSelection('column')}>
-                          单列排序
-                        </Menu.Item>
+                          { $('单列排序') }</Menu.Item>
                       </>
                     )}
                     {canStitchSelectedGroup && (
@@ -3851,7 +3840,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                         if (selectedGroupIds.length !== 1) return
                         void stitchGroupToLongImage(selectedGroupIds[0])
                       }}>
-                        {stitchingGroupId ? '生成长图中…' : '生成长图'}
+                        {stitchingGroupId ? $('生成长图中…') : $('生成长图')}
                       </Menu.Item>
                     )}
                     {downloadAssetsGroupId && (
@@ -3859,13 +3848,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                         disabled={!canDownloadSelectedGroupAssets}
                         onClick={() => { void runDownloadSelectedGroupAssets() }}
                       >
-                        {downloadingGroupAssetsId ? '下载中…' : '下载组内素材'}
+                        {downloadingGroupAssetsId ? $('下载中…') : $('下载组内素材')}
                       </Menu.Item>
                     )}
                     {canSaveSelectedGroupWorkflow && (
                       <Menu.Item onClick={() => { void saveSelectedGroupAsWorkflowAsset() }}>
-                        保存为资产
-                      </Menu.Item>
+                        { $('保存为资产') }</Menu.Item>
                     )}
                   </Menu.Dropdown>
                 </Menu>
@@ -3901,7 +3889,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                       variant="subtle"
                       onClick={() => createTaskNodeAtMenu(kind)}
                     >
-                      新建{schema.label || kind}
+                      { $t('新建{{name}}', { name: schema.label || kind }) }
                     </Button>
                   )
                 })}
@@ -3916,8 +3904,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                         setMenu(null)
                       }}
                     >
-                      添加资产
-                    </Button>
+                      { $('添加资产') }</Button>
                   </>
                 )}
               </>
@@ -3939,7 +3926,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                           setMenu(null)
                         }}
                       >
-                        {runningGroupId === menu.id ? '执行中…' : '一键执行组内节点'}
+                        {runningGroupId === menu.id ? $('执行中…') : $('一键执行组内节点')}
                       </Button>
                       <Button
                         className="tc-canvas__context-menu-action"
@@ -3951,7 +3938,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                           setMenu(null)
                         }}
                       >
-                        {stitchingGroupId ? '生成中…' : '生成长图'}
+                        {stitchingGroupId ? $('生成中…') : $('生成长图')}
                       </Button>
                       <Button
                         className="tc-canvas__context-menu-action"
@@ -3963,32 +3950,28 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                           setMenu(null)
                         }}
                       >
-                        {publishingTemplateGroupId === menu.id ? '保存模板中…' : '创建模板'}
+                        {publishingTemplateGroupId === menu.id ? $('保存模板中…') : $('创建模板')}
                       </Button>
                       <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { ungroupGroupNode(menu.id!); setMenu(null) }}>
-                        解组
-                      </Button>
+                        { $('解组') }</Button>
                       <Divider className="tc-canvas__context-menu-divider" my={2} />
                     </>
                   )}
                   {!nodeIsGroup && canCreateGroupFromSelection && (
                     <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { addGroupForSelection(); setMenu(null) }}>
-                      打组
-                    </Button>
+                      { $('打组') }</Button>
                   )}
                   {!nodeIsGroup && canCreateScriptBundleFromSelection && (
                     <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { createScriptBundleFromSelection(); setMenu(null) }}>
-                      拼接脚本
-                    </Button>
+                      { $('拼接脚本') }</Button>
                   )}
                   {!nodeIsGroup && canUngroupSelection && (
                     <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { runUngroupSelection(); setMenu(null) }}>
-                      解组
-                    </Button>
+                      { $('解组') }</Button>
                   )}
                   {!nodeIsGroup && (canCreateGroupFromSelection || canCreateScriptBundleFromSelection || canUngroupSelection) && <Divider className="tc-canvas__context-menu-divider" my={2} />}
-                  <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { duplicateNode(menu.id!); setMenu(null) }}>复制一份</Button>
-                  <Button className="tc-canvas__context-menu-action" variant="subtle" color="red" onClick={() => { deleteNode(menu.id!); setMenu(null) }}>删除</Button>
+                  <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { duplicateNode(menu.id!); setMenu(null) }}>{ $('复制一份') }</Button>
+                  <Button className="tc-canvas__context-menu-action" variant="subtle" color="red" onClick={() => { deleteNode(menu.id!); setMenu(null) }}>{ $('删除') }</Button>
                   <Divider className="tc-canvas__context-menu-divider" my={2} />
                   <Button
                     className="tc-canvas__context-menu-action"
@@ -3998,14 +3981,13 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                       setMenu(null)
                     }}
                   >
-                    运行该节点
-                  </Button>
-                  <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { cancelNode(menu.id!); setNodeStatus(menu.id!, 'error', { progress: 0, lastError: '任务已取消' }); setMenu(null) }}>停止该节点</Button>
+                    { $('运行该节点') }</Button>
+                  <Button className="tc-canvas__context-menu-action" variant="subtle" onClick={() => { cancelNode(menu.id!); setNodeStatus(menu.id!, 'error', { progress: 0, lastError: $('任务已取消') }); setMenu(null) }}>{ $('停止该节点') }</Button>
                 </>
               )
             })()}
             {menu.type === 'edge' && menu.id && (
-              <Button className="tc-canvas__context-menu-action" variant="subtle" color="red" onClick={() => { deleteEdge(menu.id!); setMenu(null) }}>删除连线</Button>
+              <Button className="tc-canvas__context-menu-action" variant="subtle" color="red" onClick={() => { deleteEdge(menu.id!); setMenu(null) }}>{ $('删除连线') }</Button>
             )}
           </Stack>
         </PanelCard>
@@ -4030,14 +4012,12 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
                   {insertMenuContent.title}
                 </Text>
                 <Button className="tc-canvas__insert-menu-close" variant="subtle" size="xs" onClick={closeInsertMenu}>
-                  关闭
-                </Button>
+                  { $('关闭') }</Button>
               </Group>
               {insertMenuContent.schemaCandidates.length > 0 && (
                 <>
                   <Text className="tc-canvas__insert-menu-section" size="xs" c="dimmed">
-                    新建并连接
-                  </Text>
+                    { $('新建并连接') }</Text>
                   {insertMenuContent.schemaCandidates.map(({ schema, targetHandleId }) => (
                     <Button
                       key={schema.kind}
@@ -4061,15 +4041,14 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
               )}
               {insertMenuContent.schemaCandidates.length === 0 ? (
                 <Text className="tc-canvas__insert-menu-empty" size="xs" c="dimmed">
-                  暂无可用选项
-                </Text>
+                  { $('暂无可用选项') }</Text>
               ) : null}
             </Stack>
           </PanelCard>
       )}
       {connectingType && (
         <div className="tc-canvas__connecting-tooltip" style={{ position: 'fixed', left: mouse.x + 12, top: mouse.y + 12, pointerEvents: 'none', fontSize: 12, background: 'rgba(17,24,39,.85)', color: '#e5e7eb', padding: '4px 8px', borderRadius: 6 }}>
-          {$t('连接类型: {type}，拖到兼容端口', { type: getHandleTypeLabel(connectingType) })}
+          {$t('连接类型: {{type}}，拖到兼容端口', { type: getHandleTypeLabel(connectingType) })}
         </div>
       )}
       {workflowNameDialog?.mode === 'template' ? (
@@ -4112,16 +4091,16 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
           className="tc-canvas__workflow-name-modal"
           opened={Boolean(workflowNameDialog)}
           onClose={closeWorkflowNameDialog}
-          title={workflowNameDialog?.title || '输入名称'}
+          title={workflowNameDialog?.title || $('输入名称')}
           centered
         >
           <Stack className="tc-canvas__workflow-name-modal-stack" gap="sm">
             <TextInput
               className="tc-canvas__workflow-name-modal-input"
-              label="名称"
+              label={ $('名称') }
               value={workflowNameInput}
               onChange={(event) => setWorkflowNameInput(event.currentTarget.value)}
-              placeholder="请输入名称"
+              placeholder={ $('请输入名称') }
               autoFocus
               onKeyDown={(event) => {
                 if (event.key !== 'Enter') return
@@ -4131,30 +4110,29 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
             />
             <Textarea
               className="tc-canvas__workflow-name-modal-description"
-              label="描述"
+              label={ $('描述') }
               value={workflowDescriptionInput}
               onChange={(event) => setWorkflowDescriptionInput(event.currentTarget.value)}
-              placeholder="可选：一句话说明这个工作流用途"
+              placeholder={ $('可选：一句话说明这个工作流用途') }
               minRows={2}
               maxRows={4}
             />
             <TextInput
               className="tc-canvas__workflow-name-modal-cover"
-              label="封面 URL"
+              label={ $('封面 URL') }
               value={workflowCoverUrlInput}
               onChange={(event) => setWorkflowCoverUrlInput(event.currentTarget.value)}
-              placeholder="可选：https://..."
+              placeholder={ $('可选：https://...') }
             />
             <Group className="tc-canvas__workflow-name-modal-actions" justify="flex-end" gap="xs">
               <Button className="tc-canvas__workflow-name-modal-cancel" variant="subtle" onClick={closeWorkflowNameDialog}>
-                取消
-              </Button>
+                { $('取消') }</Button>
               <Button
                 className="tc-canvas__workflow-name-modal-confirm"
                 onClick={() => { void submitWorkflowNameDialog() }}
                 loading={Boolean(savingWorkflowGroupId)}
               >
-                {workflowNameDialog?.confirmLabel || '确定'}
+                {workflowNameDialog?.confirmLabel || $('确定')}
               </Button>
             </Group>
           </Stack>
@@ -4216,7 +4194,7 @@ const CanvasSelectionActionBar = React.memo(function CanvasSelectionActionBar({
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       role="toolbar"
-      aria-label="框选操作栏"
+      aria-label={ $('框选操作栏') }
     >
       {children}
     </div>

@@ -6,6 +6,7 @@ import {
 } from '../../api/lens'
 import { useRFStore } from '../store'
 import { getEditTypeLabel, getNodeWithDerivatives } from './node'
+import { $ } from '../i18n'
 
 /** 批量查衍生任务时单次请求的行数上限（节点多时按节点数放大，但不能无限大） */
 const MAX_BATCH_TASK_PAGE_SIZE = 500
@@ -108,7 +109,7 @@ export async function collectDerivedTaskRows(params: {
     const afterCreated = filterTasksAfterNodeCreated([row], derivedNode.data?.nodeCreatedAt)
     if (afterCreated.length === 0) continue
     if (filterByStatus([row], matchStatus).length === 0) continue
-    rows.push({ ...row, derivedLabel: getEditTypeLabel(String(derivedNode.data?.editType || '')) || '衍生节点' })
+    rows.push({ ...row, derivedLabel: getEditTypeLabel(String(derivedNode.data?.editType || '')) || $('衍生节点') })
   }
   return rows
 }

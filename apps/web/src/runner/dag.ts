@@ -3,6 +3,7 @@ import { runNodeMock } from './mockRunner'
 import { runNodeRemote } from './remoteRunner'
 import { getNodeAbsPosition } from '../canvas/utils/nodeBounds'
 import { getTaskNodeCoreType } from '../canvas/nodes/taskNodeSchema'
+import { $ } from '../canvas/i18n'
 
 type Getter = () => any
 type Setter = (fn: (s: any) => any) => void
@@ -200,7 +201,7 @@ export async function runFlowDag(
                   data: {
                     ...n.data,
                     status: 'error',
-                    lastError: (n.data as any)?.lastError || '前置节点失败，已阻塞',
+                    lastError: (n.data as any)?.lastError || $('前置节点失败，已阻塞'),
                   },
                 } as Node)
               : n
@@ -280,7 +281,7 @@ export async function runNodeDagToTarget(
   const allNodes = state.nodes as Node[]
   const allEdges = state.edges as Edge[]
   const targetNode = allNodes.find((node) => node.id === targetId)
-  if (!targetNode) throw new Error('节点不存在，无法执行')
+  if (!targetNode) throw new Error($('节点不存在，无法执行'))
   if (!isExecutableTaskNode(targetNode)) {
     const kind = String((asRecord(targetNode.data)?.kind as string | undefined) || '').trim()
     const coreType = getTaskNodeCoreType(kind)

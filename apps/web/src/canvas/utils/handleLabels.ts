@@ -1,11 +1,12 @@
+import { $ } from '../i18n'
 const HANDLE_TYPE_LABELS: Record<string, string> = {
-  any: '通用',
-  image: '图像',
-  video: '视频',
-  audio: '音频',
-  subtitle: '字幕',
-  character: '角色',
-  text: '文本',
+  any: $('通用'),
+  image: $('图像'),
+  video: $('视频'),
+  audio: $('音频'),
+  subtitle: $('字幕'),
+  character: $('角色'),
+  text: $('文本'),
 }
 
 /**

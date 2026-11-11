@@ -1,4 +1,5 @@
 import type { AgentsChatResponseDto } from '../../api/server'
+import { $ } from '../../canvas/i18n'
 
 export type ChatTurnVerdict = NonNullable<NonNullable<AgentsChatResponseDto['trace']>['turnVerdict']>
 type ChatTurnVerdictCarrier = { trace?: { turnVerdict?: ChatTurnVerdict } }
@@ -26,38 +27,38 @@ export function formatTurnVerdictSummary(
   const labels = verdict.reasons.map((reason) => {
     switch (reason) {
       case 'invalid_canvas_plan':
-        return '返回的画布计划无效'
+        return $('返回的画布计划无效')
       case 'parsed_plan_without_nodes':
-        return '返回的画布计划没有可创建节点'
+        return $('返回的画布计划没有可创建节点')
       case 'force_asset_generation_unmet':
-        return '后端判定本轮未满足强制产资产约束'
+        return $('后端判定本轮未满足强制产资产约束')
       case 'empty_response_without_execution':
-        return '后端判定本轮没有可用结果，也没有执行落点'
+        return $('后端判定本轮没有可用结果，也没有执行落点')
       case 'tool_execution_issues':
-        return '存在工具执行异常'
+        return $('存在工具执行异常')
       case 'diagnostic_flags_present':
-        return '存在结构诊断标记'
+        return $('存在结构诊断标记')
       case 'todo_checklist_incomplete':
-        return 'Checklist 仍有未完成关键项'
+        return $('Checklist 仍有未完成关键项')
       case 'video_prompt_core_fields_missing':
-        return '视频提示词缺少 storyBeatPlan 或 prompt'
+        return $('视频提示词缺少 storyBeatPlan 或 prompt')
       case 'video_prompt_contract_missing':
-        return '视频提示词缺少结构化合同'
+        return $('视频提示词缺少结构化合同')
       case 'video_prompt_explicitness_missing':
-        return '视频提示词缺少显式动作清单'
+        return $('视频提示词缺少显式动作清单')
       case 'video_prompt_physics_constraints_missing':
-        return '视频提示词缺少物理/空间约束'
+        return $('视频提示词缺少物理/空间约束')
       case 'video_prompt_cinematic_precedent_missing':
-        return '未说明是否可借鉴经典镜头语法'
+        return $('未说明是否可借鉴经典镜头语法')
       case 'video_prompt_preproduction_decision_missing':
-        return '未声明是否需要预生产资产'
+        return $('未声明是否需要预生产资产')
       case 'video_prompt_preproduction_assets_missing':
-        return '视频提示词依赖的预生产资产尚未补齐'
+        return $('视频提示词依赖的预生产资产尚未补齐')
       default:
         return reason
     }
   })
-  const prefix = verdict.status === 'failed' ? '结构失败' : '部分完成'
+  const prefix = verdict.status === 'failed' ? $('结构失败') : $('部分完成')
   return `${prefix}：${labels.join('；')}`
 }
 

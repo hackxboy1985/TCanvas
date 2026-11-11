@@ -13,11 +13,12 @@ import { PanelCard } from './PanelCard'
 
 type TemplateCategoryKey = 'all' | 'recent' | 'mine' | 'public'
 
+// 模块级常量：语言在模块加载时确定，切换语言需刷新页面
 const TEMPLATE_CATEGORY_LABELS: Record<TemplateCategoryKey, string> = {
-  all: '全部',
-  recent: '最近使用',
-  mine: '我的模板',
-  public: '公开模板',
+  all: $('全部'),
+  recent: $('最近使用'),
+  mine: $('我的模板'),
+  public: $('公开模板'),
 }
 
 const TEMPLATE_PUBLIC_CATEGORY_ITEMS: ReadonlyArray<TemplateCategoryKey> = [
@@ -61,7 +62,7 @@ type TemplateLibraryCard = {
 
 function formatTemplateUpdatedAt(value: string): string {
   const stamp = Date.parse(value)
-  if (!Number.isFinite(stamp)) return value || '未知时间'
+  if (!Number.isFinite(stamp)) return value || $('未知时间')
   const date = new Date(stamp)
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -173,14 +174,14 @@ export default function TemplatePanel({ className }: { className?: string }): JS
           return bTime - aTime
         })
         .find((flow) => Array.isArray(flow.data?.nodes) && flow.data.nodes.length > 0)
-      if (!candidate) throw new Error('该模板没有可导入的工作流')
+      if (!candidate) throw new Error($('该模板没有可导入的工作流'))
       recordTemplateRecent(`public-${project.id}`)
       importWorkflow(sanitizeGraphForCanvas(candidate.data))
       setActivePanel(null)
-      toast(`已添加模板「${project.templateTitle || project.name}」到画布`, 'success')
+      toast($t('已添加模板「{{name}}」到画布', { name: project.templateTitle || project.name }), 'success')
     } catch (err: any) {
       console.error(err)
-      toast(err?.message || '添加公共模板到画布失败', 'error')
+      toast(err?.message || $('添加公共模板到画布失败'), 'error')
     }
   }, [importWorkflow, recordTemplateRecent, setActivePanel])
   const handleReferenceServerFlow = React.useCallback((flow: FlowDto) => {
@@ -233,7 +234,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
     if (metadataEditorSubmitting) return
     const templateTitle = metadataEditorTitle.trim()
     if (!templateTitle) {
-      toast('请输入模板标题', 'error')
+      toast($('请输入模板标题'), 'error')
       return
     }
     setMetadataEditorSubmitting(true)
@@ -246,9 +247,9 @@ export default function TemplatePanel({ className }: { className?: string }): JS
       })
       applyProjectUpdate(updated)
       setMetadataEditorProject(updated)
-      toast('模板信息已更新', 'success')
+      toast($('模板信息已更新'), 'success')
     } catch (error) {
-      const message = error instanceof Error ? error.message : '更新模板信息失败'
+      const message = error instanceof Error ? error.message : $('更新模板信息失败')
       toast(message, 'error')
     } finally {
       setMetadataEditorSubmitting(false)
@@ -258,23 +259,23 @@ export default function TemplatePanel({ className }: { className?: string }): JS
   const handleImportJsonSubmit = React.useCallback(() => {
     const raw = jsonImportValue.trim()
     if (!raw) {
-      toast('请先粘贴画布 JSON', 'error')
+      toast($('请先粘贴画布 JSON'), 'error')
       return
     }
     try {
       const parsed = JSON.parse(raw) as CanvasImportData
       const extracted = extractCanvasGraph(parsed)
       if (!extracted?.nodes.length) {
-        throw new Error('JSON 缺少有效的 nodes / edges / connections')
+        throw new Error($('JSON 缺少有效的 nodes / edges / connections'))
       }
       importWorkflow(parsed)
       setJsonImportOpened(false)
       setJsonImportValue('')
       setActivePanel(null)
       setExpanded(false)
-      toast('已把 JSON 添加进画布', 'success')
+      toast($('已把 JSON 添加进画布'), 'success')
     } catch (error) {
-      toast(error instanceof Error ? error.message : '导入 JSON 失败', 'error')
+      toast(error instanceof Error ? error.message : $('导入 JSON 失败'), 'error')
     }
   }, [importWorkflow, jsonImportValue, setActivePanel])
 
@@ -282,13 +283,13 @@ export default function TemplatePanel({ className }: { className?: string }): JS
     const publicCards = (publicProjects || []).map((project) => ({
       id: `public-${project.id}`,
       title: project.templateTitle || project.name,
-      description: project.templateDescription || '公共模板，可直接导入到当前画布',
+      description: project.templateDescription || $('公共模板，可直接导入到当前画布'),
       coverUrl: project.templateCoverUrl || null,
       source: 'public' as const,
       updatedAt: project.updatedAt,
-      actionLabel: '导入',
+      actionLabel: $('导入'),
       onAction: () => { void handleImportPublicTemplate(project) },
-      editLabel: projectById.has(project.id) ? '信息' : undefined,
+      editLabel: projectById.has(project.id) ? $('信息') : undefined,
       onEdit: projectById.has(project.id) ? () => { openMetadataEditor(projectById.get(project.id) || project) } : undefined,
       metadataProject: projectById.get(project.id) || project,
     }))
@@ -296,14 +297,14 @@ export default function TemplatePanel({ className }: { className?: string }): JS
       id: `server-${flow.id}`,
       title: currentTemplateProject?.templateTitle || flow.name,
       description: currentTemplateProject?.templateDescription
-        ? `${currentTemplateProject.templateDescription} · 工作流：${flow.name}`
-        : '当前项目或服务端工作流，可作为子流程引用',
+        ? $t('{{description}} · 工作流：{{name}}', { description: currentTemplateProject.templateDescription, name: flow.name })
+        : $('当前项目或服务端工作流，可作为子流程引用'),
       coverUrl: currentTemplateProject?.templateCoverUrl || null,
       source: 'server' as const,
       updatedAt: flow.updatedAt,
-      actionLabel: '引用',
+      actionLabel: $('引用'),
       onAction: () => { handleReferenceServerFlow(flow) },
-      editLabel: currentTemplateProject ? '信息' : '编辑',
+      editLabel: currentTemplateProject ? $('信息') : $('编辑'),
       onEdit: currentTemplateProject
         ? () => { openMetadataEditor(currentTemplateProject) }
         : () => { handleEditServerFlow(flow) },
@@ -354,7 +355,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
       </button>
       <div className="template-space-sidebar-group">
         <div className="template-space-sidebar-group-header">
-          <span>公开</span>
+          <span>{$('公开')}</span>
           <IconChevronDown size={14} />
         </div>
         {TEMPLATE_PUBLIC_CATEGORY_ITEMS.map((categoryKey) => (
@@ -390,10 +391,10 @@ export default function TemplatePanel({ className }: { className?: string }): JS
           <PlaceholderImage label={card.title} />
         )}
         <div className="template-panel-card-overlay">
-          <Button className="template-panel-card-overlay-button" size="xs" variant="default" onClick={() => handleViewCard(card)}>查看</Button>
+          <Button className="template-panel-card-overlay-button" size="xs" variant="default" onClick={() => handleViewCard(card)}>{$('查看')}</Button>
           {card.onEdit ? (
             <Button className="template-panel-card-overlay-button" size="xs" variant="default" onClick={card.onEdit}>
-              {card.editLabel || '编辑'}
+              {card.editLabel || $('编辑')}
             </Button>
           ) : null}
           <Button className="template-panel-card-overlay-button template-panel-card-overlay-button--primary" size="xs" onClick={card.onAction}>{card.actionLabel}</Button>
@@ -448,30 +449,30 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                       leftSection={<IconBrackets size={14} />}
                       onClick={() => setJsonImportOpened(true)}
                     >
-                      导入 JSON
+                      {$('导入 JSON')}
                     </Button>
-                    <ActionIcon className="template-panel-expand-button" variant="subtle" radius="md" size={32} onClick={() => setExpanded(true)} aria-label="展开模板空间">
+                    <ActionIcon className="template-panel-expand-button" variant="subtle" radius="md" size={32} onClick={() => setExpanded(true)} aria-label={$('展开模板空间')}>
                       <IconArrowsMaximize size={16} />
                     </ActionIcon>
                   </Group>
                 </div>
                 <div className="template-panel-body">
                   <Tabs.Panel className="template-panel-tab-panel" value="public" pt="md">
-                    {publicProjects === null ? <Text className="template-panel-empty" size="xs" c="dimmed">载入中...</Text> : null}
-                    {publicProjects && publicProjects.length === 0 ? <Text className="template-panel-empty" size="xs" c="dimmed">暂无公共模板</Text> : null}
+                    {publicProjects === null ? <Text className="template-panel-empty" size="xs" c="dimmed">{$('载入中...')}</Text> : null}
+                    {publicProjects && publicProjects.length === 0 ? <Text className="template-panel-empty" size="xs" c="dimmed">{$('暂无公共模板')}</Text> : null}
                     {publicProjects && publicProjects.length > 0 ? (
                       <ScrollArea className="template-panel-scroll" type="never" scrollbarSize={6}>
                         <SimpleGrid className="template-panel-grid" cols={{ base: 2, sm: 3 }} spacing="md">
                           {publicProjects.map((project) => renderTemplateCard({
                             id: `compact-public-${project.id}`,
                             title: project.templateTitle || project.name,
-                            description: project.templateDescription || '公共模板，可直接导入到当前画布',
+                            description: project.templateDescription || $('公共模板，可直接导入到当前画布'),
                             coverUrl: project.templateCoverUrl || null,
                             source: 'public',
                             updatedAt: project.updatedAt,
-                            actionLabel: '导入',
+                            actionLabel: $('导入'),
                             onAction: () => { void handleImportPublicTemplate(project) },
-                            editLabel: projectById.has(project.id) ? '信息' : undefined,
+                            editLabel: projectById.has(project.id) ? $('信息') : undefined,
                             onEdit: projectById.has(project.id) ? () => { openMetadataEditor(projectById.get(project.id) || project) } : undefined,
                             metadataProject: projectById.get(project.id) || project,
                           }, true))}
@@ -480,8 +481,8 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                     ) : null}
                   </Tabs.Panel>
                   <Tabs.Panel className="template-panel-tab-panel" value="server" pt="md">
-                    {serverFlows === null ? <Text className="template-panel-empty" size="xs" c="dimmed">载入中...</Text> : null}
-                    {serverFlows && serverFlows.length === 0 ? <Text className="template-panel-empty" size="xs" c="dimmed">服务端暂无工作流</Text> : null}
+                    {serverFlows === null ? <Text className="template-panel-empty" size="xs" c="dimmed">{$('载入中...')}</Text> : null}
+                    {serverFlows && serverFlows.length === 0 ? <Text className="template-panel-empty" size="xs" c="dimmed">{$('服务端暂无工作流')}</Text> : null}
                     {serverFlows && serverFlows.length > 0 ? (
                       <ScrollArea className="template-panel-scroll" type="never" scrollbarSize={6}>
                         <SimpleGrid className="template-panel-grid" cols={{ base: 2, sm: 3 }} spacing="md">
@@ -489,14 +490,14 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                             id: `compact-server-${flow.id}`,
                             title: currentTemplateProject?.templateTitle || flow.name,
                             description: currentTemplateProject?.templateDescription
-                              ? `${currentTemplateProject.templateDescription} · 工作流：${flow.name}`
-                              : '当前项目或服务端工作流，可作为子流程引用',
+                              ? $t('{{description}} · 工作流：{{name}}', { description: currentTemplateProject.templateDescription, name: flow.name })
+                              : $('当前项目或服务端工作流，可作为子流程引用'),
                             coverUrl: currentTemplateProject?.templateCoverUrl || null,
                             source: 'server',
                             updatedAt: flow.updatedAt,
-                            actionLabel: '引用',
+                            actionLabel: $('引用'),
                             onAction: () => { handleReferenceServerFlow(flow) },
-                            editLabel: currentTemplateProject ? '信息' : '编辑',
+                            editLabel: currentTemplateProject ? $('信息') : $('编辑'),
                             onEdit: currentTemplateProject
                               ? () => { openMetadataEditor(currentTemplateProject) }
                               : () => { handleEditServerFlow(flow) },
@@ -534,12 +535,12 @@ export default function TemplatePanel({ className }: { className?: string }): JS
             <section className="template-detail-main">
               <div className="template-detail-header">
                 <Title className="template-detail-titlebar" order={2}>{expandedCategoryLabel}</Title>
-                <ActionIcon className="template-space-close" variant="subtle" radius="md" onClick={() => setSelectedCard(null)} aria-label="关闭模板详情">
+                <ActionIcon className="template-space-close" variant="subtle" radius="md" onClick={() => setSelectedCard(null)} aria-label={$('关闭模板详情')}>
                   <IconX size={18} />
                 </ActionIcon>
               </div>
               <div className="template-detail-content">
-                <button type="button" className="template-detail-back" onClick={() => setSelectedCard(null)} aria-label="返回模板列表">
+                <button type="button" className="template-detail-back" onClick={() => setSelectedCard(null)} aria-label={$('返回模板列表')}>
                   <IconChevronLeft size={18} />
                 </button>
                 <div className="template-detail-hero">
@@ -554,12 +555,12 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                     <Text className="template-detail-name">{selectedCard.title}</Text>
                     <Text className="template-detail-time">{formatTemplateUpdatedAt(selectedCard.updatedAt)}</Text>
                     <Group className="template-detail-tags" gap="xs">
-                      <span className="template-detail-tag">{selectedCard.source === 'public' ? '公开模板' : '我的模板'}</span>
-                      <span className="template-detail-tag">工作流</span>
+                      <span className="template-detail-tag">{selectedCard.source === 'public' ? $('公开模板') : $('我的模板')}</span>
+                      <span className="template-detail-tag">{$('工作流')}</span>
                       <span className="template-detail-tag">{selectedCard.actionLabel}</span>
                     </Group>
                     <Text className="template-detail-description">
-                      {selectedCard.description || '暂无描述'}
+                      {selectedCard.description || $('暂无描述')}
                     </Text>
                     <Group className="template-detail-actions" gap="sm">
                       {selectedCard.onEdit ? (
@@ -569,7 +570,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                           leftSection={<IconEdit size={16} />}
                           onClick={selectedCard.onEdit}
                         >
-                          {selectedCard.editLabel || '编辑'}
+                          {selectedCard.editLabel || $('编辑')}
                         </Button>
                       ) : null}
                       <Button className="template-detail-apply" onClick={selectedCard.onAction}>
@@ -595,7 +596,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
             <section className="template-space-main">
               <div className="template-space-header">
                 <Title className="template-space-title" order={2}>{expandedCategoryLabel}</Title>
-                <ActionIcon className="template-space-close" variant="subtle" radius="md" onClick={() => setExpanded(false)} aria-label="关闭模板空间">
+                <ActionIcon className="template-space-close" variant="subtle" radius="md" onClick={() => setExpanded(false)} aria-label={$('关闭模板空间')}>
                   <IconX size={18} />
                 </ActionIcon>
               </div>
@@ -604,10 +605,10 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                   className="template-space-search"
                   value={search}
                   onChange={(event) => setSearch(event.currentTarget.value)}
-                  placeholder="搜索 场景/平台/模型..."
+                  placeholder={$('搜索 场景/平台/模型...')}
                   leftSection={<IconSearch size={16} />}
                 />
-                <Button className="template-space-search-button" variant="light" aria-label="搜索">
+                <Button className="template-space-search-button" variant="light" aria-label={$('搜索')}>
                   <IconSearch size={18} />
                 </Button>
                 <Button
@@ -616,7 +617,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                   leftSection={<IconBrackets size={16} />}
                   onClick={() => setJsonImportOpened(true)}
                 >
-                  导入 JSON
+                  {$('导入 JSON')}
                 </Button>
                 <Button
                   className="template-space-create-button"
@@ -626,7 +627,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
                     setActivePanel('add')
                   }}
                 >
-                  创建
+                  {$('创建')}
                 </Button>
               </div>
               <ScrollArea className="template-space-scroll" type="never" scrollbarSize={8}>
@@ -645,31 +646,31 @@ export default function TemplatePanel({ className }: { className?: string }): JS
           if (metadataEditorSubmitting) return
           setMetadataEditorProject(null)
         }}
-        title="编辑模板信息"
+        title={$('编辑模板信息')}
         centered
         size="lg"
       >
         <Stack className="template-metadata-editor-modal-stack" gap="md">
           <TextInput
             className="template-metadata-editor-title"
-            label="模板标题"
+            label={$('模板标题')}
             value={metadataEditorTitle}
             onChange={(event) => setMetadataEditorTitle(event.currentTarget.value)}
-            placeholder="输入模板标题"
+            placeholder={$('输入模板标题')}
           />
           <Textarea
             className="template-metadata-editor-description"
-            label="模板描述"
+            label={$('模板描述')}
             value={metadataEditorDescription}
             onChange={(event) => setMetadataEditorDescription(event.currentTarget.value)}
-            placeholder="输入模板描述"
+            placeholder={$('输入模板描述')}
             autosize
             minRows={4}
             maxRows={8}
           />
           <TextInput
             className="template-metadata-editor-cover-url"
-            label="封面 URL"
+            label={$('封面 URL')}
             value={metadataEditorCoverUrl}
             onChange={(event) => setMetadataEditorCoverUrl(event.currentTarget.value)}
             placeholder="https://..."
@@ -678,7 +679,7 @@ export default function TemplatePanel({ className }: { className?: string }): JS
             <Image
               className="template-metadata-editor-cover-preview"
               src={metadataEditorCoverUrl.trim()}
-              alt={metadataEditorTitle.trim() || '模板封面预览'}
+              alt={metadataEditorTitle.trim() || $('模板封面预览')}
               radius="md"
               h={220}
               fit="cover"
@@ -691,14 +692,14 @@ export default function TemplatePanel({ className }: { className?: string }): JS
               onClick={() => setMetadataEditorProject(null)}
               disabled={metadataEditorSubmitting}
             >
-              取消
+              {$('取消')}
             </Button>
             <Button
               className="template-metadata-editor-submit"
               onClick={() => { void handleMetadataSubmit() }}
               loading={metadataEditorSubmitting}
             >
-              保存信息
+              {$('保存信息')}
             </Button>
           </Group>
         </Stack>
@@ -707,29 +708,29 @@ export default function TemplatePanel({ className }: { className?: string }): JS
         className="template-json-import-modal"
         opened={jsonImportOpened}
         onClose={() => setJsonImportOpened(false)}
-        title="导入画布 JSON"
+        title={$('导入画布 JSON')}
         centered
         size="lg"
       >
         <Stack className="template-json-import-modal-stack" gap="md">
           <Text className="template-json-import-modal-copy" size="sm" c="dimmed">
-            支持裸 nodes/edges、nodes/connections、data 包裹对象，以及完整接口返回体。
+            {$('支持裸 nodes/edges、nodes/connections、data 包裹对象，以及完整接口返回体。')}
           </Text>
           <Textarea
             className="template-json-import-modal-textarea"
             value={jsonImportValue}
             onChange={(event) => setJsonImportValue(event.currentTarget.value)}
-            placeholder="把画布 JSON 粘贴到这里"
+            placeholder={$('把画布 JSON 粘贴到这里')}
             autosize
             minRows={12}
             maxRows={20}
           />
           <Group className="template-json-import-modal-actions" justify="flex-end">
             <Button className="template-json-import-modal-cancel" variant="default" onClick={() => setJsonImportOpened(false)}>
-              取消
+              {$('取消')}
             </Button>
             <Button className="template-json-import-modal-submit" onClick={handleImportJsonSubmit}>
-              导入到画布
+              {$('导入到画布')}
             </Button>
           </Group>
         </Stack>

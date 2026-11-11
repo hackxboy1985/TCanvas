@@ -259,7 +259,7 @@ export default function ProjectPanel(): JSX.Element | null {
 
   const handleCloneProject = async (project: ProjectDto) => {
     try {
-      if (!confirmLeaveForProjectChange({ nextProjectName: project.name || '克隆项目' })) return
+      if (!confirmLeaveForProjectChange({ nextProjectName: project.name || $('克隆项目') })) return
       const clonedProject = await cloneProject(project.id, $t('克隆项目 - {{name}}', { name: project.name }))
       setMyProjects(prev => [clonedProject, ...prev])
       notifications.show({
@@ -547,7 +547,7 @@ export default function ProjectPanel(): JSX.Element | null {
                     </Button>
                     <motion.div className="project-panel-create-motion" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <Button className="project-panel-create-button" size="xs" variant="light" onClick={async () => {
-                        if (!confirmLeaveForProjectChange({ nextProjectName: '上传原文创建项目' })) return
+                        if (!confirmLeaveForProjectChange({ nextProjectName: $('上传原文创建项目') })) return
                         setActivePanel(null)
                         spaNavigate('/projects')
                       }}>
@@ -571,11 +571,11 @@ export default function ProjectPanel(): JSX.Element | null {
                     <Stack className="project-panel-dreamina-stack" gap={8}>
                       <Group className="project-panel-dreamina-header" justify="space-between" align="center">
                         <div className="project-panel-dreamina-header-text">
-                          <Text className="project-panel-dreamina-title" fw={600} size="sm">Dreamina / 即梦</Text>
+                          <Text className="project-panel-dreamina-title" fw={600} size="sm">{$('Dreamina / 即梦')}</Text>
                           <Text className="project-panel-dreamina-subtitle" size="xs" c="dimmed">
                             {boundDreaminaAccount
-                              ? `当前项目已绑定账号 ${boundDreaminaAccount.label}`
-                              : '当前项目尚未绑定 Dreamina 账号'}
+                              ? $t('当前项目已绑定账号 {{label}}', { label: boundDreaminaAccount.label })
+                              : $('当前项目尚未绑定 Dreamina 账号')}
                           </Text>
                         </div>
                         <Group className="project-panel-dreamina-actions" gap={6}>
@@ -595,7 +595,7 @@ export default function ProjectPanel(): JSX.Element | null {
                           placeholder={dreaminaLoading ? $('加载中...') : $('选择 Dreamina 账号')}
                           data={dreaminaAccounts.map((account) => ({
                             value: account.id,
-                            label: `${account.label}${account.lastError ? ' · 未就绪' : ''}`,
+                            label: `${account.label}${account.lastError ? ' ' + $('· 未就绪') : ''}`,
                           }))}
                           value={dreaminaSelectedAccountId}
                           onChange={setDreaminaSelectedAccountId}
@@ -1216,7 +1216,7 @@ export default function ProjectPanel(): JSX.Element | null {
                     label={$('当前操作账号')}
                     data={dreaminaAccounts.map((account) => ({
                       value: account.id,
-                      label: `${account.label}${account.lastError ? ' · 未就绪' : ''}`,
+                      label: `${account.label}${account.lastError ? ' ' + $('· 未就绪') : ''}`,
                     }))}
                     value={dreaminaSelectedAccountId}
                     onChange={setDreaminaSelectedAccountId}

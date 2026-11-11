@@ -10,6 +10,7 @@ import StatsRuntimeDiagnostics from './StatsRuntimeDiagnostics'
 import AiCharacterLibraryManagementPanel from '../../AiCharacterLibraryManagementPanel'
 import { PanelCard } from '../../PanelCard'
 import { InlinePanel } from '../../InlinePanel'
+import { $, $t } from '../../../canvas/i18n'
 
 function parseOriginsInput(input: string): string[] {
   return String(input || '')
@@ -19,20 +20,20 @@ function parseOriginsInput(input: string): string[] {
 }
 
 function formatLastUsedAt(lastUsedAt?: string | null): string {
-  if (!lastUsedAt) return '未使用'
+  if (!lastUsedAt) return $('未使用')
   const t = Date.parse(lastUsedAt)
-  if (!Number.isFinite(t)) return '未使用'
+  if (!Number.isFinite(t)) return $('未使用')
   return new Date(t).toLocaleString()
 }
 
 const TASK_KIND_LABELS: Record<string, string> = {
-  chat: '文本',
-  prompt_refine: '指令优化',
-  text_to_image: '图片',
-  image_to_prompt: '图像理解',
-  image_to_video: '图像转视频',
-  text_to_video: '视频',
-  image_edit: '图像编辑',
+  chat: $('文本'),
+  prompt_refine: $('指令优化'),
+  text_to_image: $('图片'),
+  image_to_prompt: $('图像理解'),
+  image_to_video: $('图像转视频'),
+  text_to_video: $('视频'),
+  image_edit: $('图像编辑'),
 }
 
 function formatTaskKind(kind?: string | null): string {
@@ -306,7 +307,7 @@ function renderAssetPreviewList(
           key={`${classNamePrefix}-${asset.url}`}
           type="button"
           title={asset.url}
-          onClick={() => openPreview({ url: asset.url, kind: asset.kind, name: '任务预览' })}
+          onClick={() => openPreview({ url: asset.url, kind: asset.kind, name: $('任务预览') })}
           style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         >
           {asset.kind === 'video' ? (
@@ -356,47 +357,47 @@ type StatsSystemNavGroup = {
 const STATS_SYSTEM_NAV_GROUPS: StatsSystemNavGroup[] = [
   {
     key: 'models',
-    label: '模型与优化',
-    description: '模型目录与提示词优化任务。',
+    label: $('模型与优化'),
+    description: $('模型目录与提示词优化任务。'),
     children: [
-      { value: 'modelCatalog', label: '模型管理', description: '系统级模型目录、能力与可选项管理。' },
-      { value: 'promptEvolution', label: '提示词优化', description: '查看、触发与发布提示词优化任务。' },
+      { value: 'modelCatalog', label: $('模型管理'), description: $('系统级模型目录、能力与可选项管理。') },
+      { value: 'promptEvolution', label: $('提示词优化'), description: $('查看、触发与发布提示词优化任务。') },
     ],
   },
   {
     key: 'diagnostics',
-    label: '诊断与日志',
-    description: '查看生成任务日志与运行时资源快照。',
+    label: $('诊断与日志'),
+    description: $('查看生成任务日志与运行时资源快照。'),
     children: [
-      { value: 'runtimeDiagnostics', label: '运行时资源', description: '查看资源句柄、对象 URL 与上传 owner 绑定。' },
-      { value: 'taskLogs', label: '生成任务日志', description: '查看任务状态、请求体与上游回显。' },
+      { value: 'runtimeDiagnostics', label: $('运行时资源'), description: $('查看资源句柄、对象 URL 与上传 owner 绑定。') },
+      { value: 'taskLogs', label: $('生成任务日志'), description: $('查看任务状态、请求体与上游回显。') },
     ],
   },
   {
     key: 'access',
-    label: '接入与密钥',
-    description: '外站调用地址、在线调试与 API Key。',
+    label: $('接入与密钥'),
+    description: $('外站调用地址、在线调试与 API Key。'),
     children: [
-      { value: 'apiAccess', label: 'API 接入', description: '查看公开调用地址、在线调试以及 Key 管理。' },
+      { value: 'apiAccess', label: $('API 接入'), description: $('查看公开调用地址、在线调试以及 Key 管理。') },
     ],
   },
   {
     key: 'assets',
-    label: '资产与素材',
-    description: '管理系统级角色库与共享素材能力。',
+    label: $('资产与素材'),
+    description: $('管理系统级角色库与共享素材能力。'),
     children: [
-      { value: 'characterLibrary', label: '角色库管理', description: '角色库后台 CRUD、分页查询与 JSON 批量导入。' },
+      { value: 'characterLibrary', label: $('角色库管理'), description: $('角色库后台 CRUD、分页查询与 JSON 批量导入。') },
     ],
   },
 ]
 
 const STATS_SYSTEM_SECTION_META: Record<StatsSystemSection, { label: string; description: string; groupKey: StatsSystemGroupKey }> = {
-  modelCatalog: { label: '模型管理', description: '系统级模型目录、能力与可选项管理。', groupKey: 'models' },
-  promptEvolution: { label: '提示词优化', description: '查看、触发与发布提示词优化任务。', groupKey: 'models' },
-  runtimeDiagnostics: { label: '运行时资源', description: '查看资源句柄、对象 URL、trim 计数与上传 owner 绑定。', groupKey: 'diagnostics' },
-  taskLogs: { label: '生成任务日志', description: '查看任务状态、请求体与上游回显。', groupKey: 'diagnostics' },
-  apiAccess: { label: 'API 接入', description: '查看公开调用地址、在线调试以及 API Key 管理。', groupKey: 'access' },
-  characterLibrary: { label: '角色库管理', description: '角色库后台 CRUD、分页查询与 JSON 批量导入。', groupKey: 'assets' },
+  modelCatalog: { label: $('模型管理'), description: $('系统级模型目录、能力与可选项管理。'), groupKey: 'models' },
+  promptEvolution: { label: $('提示词优化'), description: $('查看、触发与发布提示词优化任务。'), groupKey: 'models' },
+  runtimeDiagnostics: { label: $('运行时资源'), description: $('查看资源句柄、对象 URL、trim 计数与上传 owner 绑定。'), groupKey: 'diagnostics' },
+  taskLogs: { label: $('生成任务日志'), description: $('查看任务状态、请求体与上游回显。'), groupKey: 'diagnostics' },
+  apiAccess: { label: $('API 接入'), description: $('查看公开调用地址、在线调试以及 API Key 管理。'), groupKey: 'access' },
+  characterLibrary: { label: $('角色库管理'), description: $('角色库后台 CRUD、分页查询与 JSON 批量导入。'), groupKey: 'assets' },
 }
 
 export default function StatsSystemManagement({ className }: { className?: string }): JSX.Element {
@@ -407,7 +408,7 @@ export default function StatsSystemManagement({ className }: { className?: strin
   const [keys, setKeys] = React.useState<ApiKeyDto[]>([])
   const [keysLoading, setKeysLoading] = React.useState(false)
 
-  const [createLabel, setCreateLabel] = React.useState('外部调用')
+  const [createLabel, setCreateLabel] = React.useState($('外部调用'))
   const [createOrigins, setCreateOrigins] = React.useState(() => {
     if (typeof window === 'undefined') return ''
     return window.location.origin
@@ -433,7 +434,7 @@ export default function StatsSystemManagement({ className }: { className?: strin
     } catch (err: any) {
       console.error('list api keys failed', err)
       setKeys([])
-      toast(err?.message || '加载 API Key 列表失败', 'error')
+      toast(err?.message || $('加载 API Key 列表失败'), 'error')
     } finally {
       setKeysLoading(false)
     }
@@ -519,10 +520,10 @@ fetch('${publicChatUrl}', {
 
   const handleCreate = async () => {
     if (createSubmitting) return
-    const label = createLabel.trim() || '外部调用'
+    const label = createLabel.trim() || $('外部调用')
     const allowedOrigins = parseOriginsInput(createOrigins)
     if (!allowedOrigins.length) {
-      toast('请至少填写一个 Origin（如 https://example.com），或使用 *', 'error')
+      toast($('请至少填写一个 Origin（如 https://example.com），或使用 *'), 'error')
       return
     }
     setCreateSubmitting(true)
@@ -531,10 +532,10 @@ fetch('${publicChatUrl}', {
       setKeys((prev) => [result.apiKey, ...prev])
       setCreatedKey(result.key)
       setCreatedOpen(true)
-      toast('Key 已生成（仅展示一次，请及时保存）', 'success')
+      toast($('Key 已生成（仅展示一次，请及时保存）'), 'success')
     } catch (err: any) {
       console.error('create api key failed', err)
-      toast(err?.message || '创建 API Key 失败', 'error')
+      toast(err?.message || $('创建 API Key 失败'), 'error')
     } finally {
       setCreateSubmitting(false)
     }
@@ -550,10 +551,10 @@ fetch('${publicChatUrl}', {
 
   const handleEditSave = async () => {
     if (!editId || editSubmitting) return
-    const label = editLabel.trim() || '外部调用'
+    const label = editLabel.trim() || $('外部调用')
     const allowedOrigins = parseOriginsInput(editOrigins)
     if (!allowedOrigins.length) {
-      toast('请至少填写一个 Origin（如 https://example.com），或使用 *', 'error')
+      toast($('请至少填写一个 Origin（如 https://example.com），或使用 *'), 'error')
       return
     }
     setEditSubmitting(true)
@@ -561,24 +562,24 @@ fetch('${publicChatUrl}', {
       const updated = await updateApiKey(editId, { label, allowedOrigins, enabled: editEnabled })
       setKeys((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
       setEditOpen(false)
-      toast('已保存', 'success')
+      toast($('已保存'), 'success')
     } catch (err: any) {
       console.error('update api key failed', err)
-      toast(err?.message || '更新 API Key 失败', 'error')
+      toast(err?.message || $('更新 API Key 失败'), 'error')
     } finally {
       setEditSubmitting(false)
     }
   }
 
   const handleDelete = async (item: ApiKeyDto) => {
-    if (!window.confirm(`确定删除 API Key「${item.label || item.keyPrefix}」？删除后外站将无法继续调用。`)) return
+    if (!window.confirm($t('确定删除 API Key「{{label}}」？删除后外站将无法继续调用。', { label: item.label || item.keyPrefix }))) return
     try {
       await deleteApiKey(item.id)
       setKeys((prev) => prev.filter((x) => x.id !== item.id))
-      toast('已删除', 'success')
+      toast($('已删除'), 'success')
     } catch (err: any) {
       console.error('delete api key failed', err)
-      toast(err?.message || '删除 API Key 失败', 'error')
+      toast(err?.message || $('删除 API Key 失败'), 'error')
     }
   }
 
@@ -651,7 +652,7 @@ fetch('${publicChatUrl}', {
       setLogs([])
       setLogsHasMore(false)
       setLogsCursor(null)
-      toast(err?.message || '加载生成任务列表失败', 'error')
+      toast(err?.message || $('加载生成任务列表失败'), 'error')
     } finally {
       setLogsLoading(false)
     }
@@ -668,7 +669,7 @@ fetch('${publicChatUrl}', {
       setLogsCursor(typeof resp?.nextBefore === 'string' ? resp.nextBefore : null)
     } catch (err: any) {
       console.error('load more task logs failed', err)
-      toast(err?.message || '加载更多失败', 'error')
+      toast(err?.message || $('加载更多失败'), 'error')
     } finally {
       setLogsLoadingMore(false)
     }
@@ -745,7 +746,7 @@ fetch('${publicChatUrl}', {
         setPromptEvolutionCanaryPercent(runtime.canaryPercent)
       }
     } catch (err: any) {
-      toast(err?.message || '加载提示词任务中心失败', 'error')
+      toast(err?.message || $('加载提示词任务中心失败'), 'error')
     }
   }, [])
 
@@ -760,10 +761,10 @@ fetch('${publicChatUrl}', {
       const result = await runPromptEvolution({ dryRun: promptEvolutionDryRun })
       setPromptEvolutionResult(result)
       await reloadPromptEvolutionCenter()
-      const outcome = result.action === 'ready_for_optimizer' ? '通过门禁，可进入优化流程' : '样本不足或仅演练，已跳过'
-      toast(`提示词优化任务已执行：${outcome}`, 'success')
+      const outcome = result.action === 'ready_for_optimizer' ? $('通过门禁，可进入优化流程') : $('样本不足或仅演练，已跳过')
+      toast($t('提示词优化任务已执行：{{outcome}}', { outcome: outcome }), 'success')
     } catch (err: any) {
-      toast(err?.message || '触发提示词优化任务失败', 'error')
+      toast(err?.message || $('触发提示词优化任务失败'), 'error')
     } finally {
       setPromptEvolutionRunning(false)
     }
@@ -772,7 +773,7 @@ fetch('${publicChatUrl}', {
   const handlePublishPromptEvolution = React.useCallback(async () => {
     const runId = String(promptEvolutionPublishRunId || '').trim()
     if (!runId) {
-      toast('请选择可发布的运行记录', 'error')
+      toast($('请选择可发布的运行记录'), 'error')
       return
     }
     if (promptEvolutionActionLoading) return
@@ -783,9 +784,9 @@ fetch('${publicChatUrl}', {
         canaryPercent: Math.max(1, Math.min(100, Math.floor(Number(promptEvolutionCanaryPercent) || 0))),
       })
       await reloadPromptEvolutionCenter()
-      toast('已发布到运行时策略', 'success')
+      toast($('已发布到运行时策略'), 'success')
     } catch (err: any) {
-      toast(err?.message || '发布失败', 'error')
+      toast(err?.message || $('发布失败'), 'error')
     } finally {
       setPromptEvolutionActionLoading(false)
     }
@@ -797,9 +798,9 @@ fetch('${publicChatUrl}', {
     try {
       await rollbackPromptEvolution({ toRunId: undefined, reason: 'manual rollback from system management' })
       await reloadPromptEvolutionCenter()
-      toast('已回滚当前发布版本', 'success')
+      toast($('已回滚当前发布版本'), 'success')
     } catch (err: any) {
-      toast(err?.message || '回滚失败', 'error')
+      toast(err?.message || $('回滚失败'), 'error')
     } finally {
       setPromptEvolutionActionLoading(false)
     }
@@ -814,8 +815,8 @@ fetch('${publicChatUrl}', {
         <PanelCard className="stats-system-sidebar glass" padding="compact" miw={220} maw={260}>
           <Stack className="stats-system-sidebar-stack" gap="xs">
             <div className="stats-system-sidebar-header">
-              <Text className="stats-system-sidebar-title" fw={700} size="sm">系统管理</Text>
-              <Text className="stats-system-sidebar-subtitle" size="xs" c="dimmed">悬浮左侧分组，选择二级菜单。</Text>
+              <Text className="stats-system-sidebar-title" fw={700} size="sm">{ $('系统管理') }</Text>
+              <Text className="stats-system-sidebar-subtitle" size="xs" c="dimmed">{ $('悬浮左侧分组，选择二级菜单。') }</Text>
             </div>
             {STATS_SYSTEM_NAV_GROUPS.map((group) => {
               const groupChildren = group.children
@@ -867,7 +868,7 @@ fetch('${publicChatUrl}', {
           <Group className="stats-system-card-header" justify="space-between" align="flex-start" gap="md" wrap="wrap">
             <div className="stats-system-card-header-left">
               <Group className="stats-system-card-title-row" gap={8} align="center">
-                <Title className="stats-system-title" order={3}>系统管理</Title>
+                <Title className="stats-system-title" order={3}>{ $('系统管理') }</Title>
                 <Badge className="stats-system-section-badge" variant="light" color="blue">{activeSectionMeta.label}</Badge>
               </Group>
               <Text className="stats-system-subtitle" size="sm" c="dimmed">
@@ -877,12 +878,12 @@ fetch('${publicChatUrl}', {
             <Group className="stats-system-card-header-actions" gap={6}>
               {section === 'apiAccess' ? (
             <>
-                <Tooltip className="stats-system-reload-keys-tooltip" label="刷新 Key" withArrow>
+                <Tooltip className="stats-system-reload-keys-tooltip" label={ $('刷新 Key') } withArrow>
                   <ActionIcon
                     className="stats-system-reload-keys"
                     size="sm"
                     variant="subtle"
-                    aria-label="刷新 Key"
+                    aria-label={ $('刷新 Key') }
                     onClick={() => void reloadKeys()}
                     loading={keysLoading}
                   >
@@ -893,12 +894,12 @@ fetch('${publicChatUrl}', {
               ) : null}
               {section === 'taskLogs' ? (
             <>
-                <Tooltip className="stats-system-reload-logs-tooltip" label="刷新任务" withArrow>
+                <Tooltip className="stats-system-reload-logs-tooltip" label={ $('刷新任务') } withArrow>
                   <ActionIcon
                     className="stats-system-reload-logs"
                     size="sm"
                     variant="subtle"
-                    aria-label="刷新任务"
+                    aria-label={ $('刷新任务') }
                     onClick={() => void reloadLogs()}
                     loading={logsLoading}
                   >
@@ -911,12 +912,12 @@ fetch('${publicChatUrl}', {
           </Group>
 
           <Text className="stats-system-current-group-hint" size="xs" c="dimmed" mt="xs">
-            当前分组：{activeGroup.label}
+            { $t('当前分组：{{label}}', { label: activeGroup.label }) }
           </Text>
 
           {section === 'modelCatalog' ? (
             <>
-        <Divider className="stats-system-divider" my="md" label="模型管理（系统级）" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('模型管理（系统级）') } labelPosition="left" />
         <StatsModelCatalogManagement className="stats-system-model-catalog" />
             </>
 
@@ -925,12 +926,12 @@ fetch('${publicChatUrl}', {
 
           {section === 'promptEvolution' ? (
             <>
-        <Divider className="stats-system-divider" my="md" label="提示词优化任务（独立区域）" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('提示词优化任务（独立区域）') } labelPosition="left" />
         <PanelCard className="stats-system-prompt-evolution" padding="compact">
           <Stack className="stats-system-prompt-evolution-stack" gap="xs">
             <Group className="stats-system-prompt-evolution-row" justify="space-between" align="center" wrap="wrap" gap="xs">
               <Group className="stats-system-prompt-evolution-left" gap="xs" wrap="wrap">
-                <Badge className="stats-system-prompt-evolution-badge" variant="light" color="indigo">每天 0 点自动执行（cron）</Badge>
+                <Badge className="stats-system-prompt-evolution-badge" variant="light" color="indigo">{ $('每天 0 点自动执行（cron）') }</Badge>
                 <Switch
                   className="stats-system-prompt-evolution-dryrun"
                   checked={promptEvolutionDryRun}
@@ -946,11 +947,11 @@ fetch('${publicChatUrl}', {
                 loading={promptEvolutionRunning}
                 onClick={() => void handleRunPromptEvolution()}
               >
-                手动触发更新
+                { $('手动触发更新') }
               </Button>
             </Group>
             <Text className="stats-system-prompt-evolution-hint" size="xs" c="dimmed">
-              用于手动触发“对话数据评估 + 门禁检查”。后续可在此区域扩展版本发布、回滚、灰度策略。
+              { $('用于手动触发“对话数据评估 + 门禁检查”。后续可在此区域扩展版本发布、回滚、灰度策略。') }
             </Text>
             <Group className="stats-system-prompt-evolution-runtime" gap="xs" wrap="wrap">
               <Badge className="stats-system-prompt-evolution-runtime-status" variant="light" color={promptEvolutionRuntime?.status === 'active' ? 'teal' : promptEvolutionRuntime?.status === 'rolled_back' ? 'yellow' : 'gray'}>
@@ -969,15 +970,15 @@ fetch('${publicChatUrl}', {
                   {promptEvolutionResult.action === 'ready_for_optimizer' ? 'ready_for_optimizer' : 'skip'}
                 </Badge>
                 <Text className="stats-system-prompt-evolution-result-metrics" size="xs" c="dimmed">
-                  样本 {promptEvolutionResult.metrics.total} | 成功率 {(promptEvolutionResult.metrics.successRate * 100).toFixed(1)}% | 失败 {promptEvolutionResult.metrics.failed}
+                  { $t('样本 {{total}} | 成功率 {{toFixed}}% | 失败 {{failed}}', { total: promptEvolutionResult.metrics.total, toFixed: (promptEvolutionResult.metrics.successRate * 100).toFixed(1), failed: promptEvolutionResult.metrics.failed }) }
                 </Text>
               </Group>
             ) : null}
             <Group className="stats-system-prompt-evolution-publish" align="flex-end" gap="xs" wrap="wrap">
               <Select
                 className="stats-system-prompt-evolution-publish-run"
-                label="可发布运行记录"
-                placeholder="选择 run"
+                label={ $('可发布运行记录') }
+                placeholder={ $('选择 run') }
                 value={promptEvolutionPublishRunId}
                 onChange={(v) => setPromptEvolutionPublishRunId(v)}
                 data={promptEvolutionRuns
@@ -991,7 +992,7 @@ fetch('${publicChatUrl}', {
               />
               <NumberInput
                 className="stats-system-prompt-evolution-publish-canary"
-                label="灰度比例 %"
+                label={ $('灰度比例 %') }
                 min={1}
                 max={100}
                 step={1}
@@ -1007,7 +1008,7 @@ fetch('${publicChatUrl}', {
                 onClick={() => void handlePublishPromptEvolution()}
                 loading={promptEvolutionActionLoading}
               >
-                发布
+                { $('发布') }
               </Button>
               <Button
                 className="stats-system-prompt-evolution-rollback-btn"
@@ -1018,13 +1019,13 @@ fetch('${publicChatUrl}', {
                 onClick={() => void handleRollbackPromptEvolution()}
                 loading={promptEvolutionActionLoading}
               >
-                回滚
+                { $('回滚') }
               </Button>
               <ActionIcon
                 className="stats-system-prompt-evolution-refresh"
                 size="sm"
                 variant="subtle"
-                aria-label="刷新提示词任务中心"
+                aria-label={ $('刷新提示词任务中心') }
                 onClick={() => void reloadPromptEvolutionCenter()}
               >
                 <IconRefresh className="stats-system-prompt-evolution-refresh-icon" size={14} />
@@ -1034,18 +1035,18 @@ fetch('${publicChatUrl}', {
               <Table className="stats-system-prompt-evolution-runs-table" striped highlightOnHover verticalSpacing="xs">
                 <Table.Thead className="stats-system-prompt-evolution-runs-head">
                   <Table.Tr className="stats-system-prompt-evolution-runs-head-row">
-                    <Table.Th className="stats-system-prompt-evolution-runs-head-cell" style={{ width: 180 }}>时间</Table.Th>
+                    <Table.Th className="stats-system-prompt-evolution-runs-head-cell" style={{ width: 180 }}>{ $('时间') }</Table.Th>
                     <Table.Th className="stats-system-prompt-evolution-runs-head-cell" style={{ width: 220 }}>runId</Table.Th>
-                    <Table.Th className="stats-system-prompt-evolution-runs-head-cell" style={{ width: 90 }}>模式</Table.Th>
+                    <Table.Th className="stats-system-prompt-evolution-runs-head-cell" style={{ width: 90 }}>{ $('模式') }</Table.Th>
                     <Table.Th className="stats-system-prompt-evolution-runs-head-cell" style={{ width: 120 }}>action</Table.Th>
-                    <Table.Th className="stats-system-prompt-evolution-runs-head-cell">指标</Table.Th>
+                    <Table.Th className="stats-system-prompt-evolution-runs-head-cell">{ $('指标') }</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody className="stats-system-prompt-evolution-runs-body">
                   {promptEvolutionRuns.length === 0 ? (
                     <Table.Tr className="stats-system-prompt-evolution-runs-empty-row">
                       <Table.Td className="stats-system-prompt-evolution-runs-empty-cell" colSpan={5}>
-                        <Text className="stats-system-prompt-evolution-runs-empty-text" size="sm" c="dimmed">暂无运行记录</Text>
+                        <Text className="stats-system-prompt-evolution-runs-empty-text" size="sm" c="dimmed">{ $('暂无运行记录') }</Text>
                       </Table.Td>
                     </Table.Tr>
                   ) : promptEvolutionRuns.map((item) => (
@@ -1087,14 +1088,14 @@ fetch('${publicChatUrl}', {
 
           {section === 'runtimeDiagnostics' ? (
             <>
-        <Divider className="stats-system-divider" my="md" label="资源与上传诊断" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('资源与上传诊断') } labelPosition="left" />
         <StatsRuntimeDiagnostics className="stats-system-runtime-diagnostics" />
             </>
           ) : null}
 
           {section === 'characterLibrary' ? (
             <>
-        <Divider className="stats-system-divider" my="md" label="AI 角色库后台管理" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('AI 角色库后台管理') } labelPosition="left" />
         <AiCharacterLibraryManagementPanel
           className="stats-system-character-library"
           opened={section === 'characterLibrary'}
@@ -1105,14 +1106,14 @@ fetch('${publicChatUrl}', {
 
           {section === 'apiAccess' ? (
             <>
-        <Divider className="stats-system-divider" my="md" label="外站调用地址" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('外站调用地址') } labelPosition="left" />
         <Stack className="stats-system-endpoints" gap={6}>
           {[
-            { label: '绘图', url: publicDrawUrl },
-            { label: '图像理解', url: publicVisionUrl },
-            { label: '生成视频', url: publicVideoUrl },
-            { label: '查任务', url: publicTaskResultUrl },
-            { label: 'Agents 文本', url: publicChatUrl },
+            { label: $('绘图'), url: publicDrawUrl },
+            { label: $('图像理解'), url: publicVisionUrl },
+            { label: $('生成视频'), url: publicVideoUrl },
+            { label: $('查任务'), url: publicTaskResultUrl },
+            { label: $('Agents 文本'), url: publicChatUrl },
           ].map((it) => (
             <Group className="stats-system-endpoint" key={it.label} justify="space-between" align="center" gap="xs" wrap="nowrap">
               <Group className="stats-system-endpoint-left" gap={8} wrap="nowrap">
@@ -1123,7 +1124,7 @@ fetch('${publicChatUrl}', {
               </Group>
               <CopyButton value={it.url} timeout={1200}>
                 {({ copied, copy }) => (
-                  <Tooltip className="stats-system-endpoint-copy-tooltip" label={copied ? '已复制' : '复制'} position="top" withArrow>
+                  <Tooltip className="stats-system-endpoint-copy-tooltip" label={copied ? $('已复制') : $('复制')} position="top" withArrow>
                     <ActionIcon className="stats-system-endpoint-copy" variant="light" onClick={copy} aria-label="copy-endpoint">
                       {copied ? <IconCheck className="stats-system-endpoint-copy-icon" size={16} /> : <IconCopy className="stats-system-endpoint-copy-icon" size={16} />}
                     </ActionIcon>
@@ -1137,7 +1138,7 @@ fetch('${publicChatUrl}', {
           <code className="stats-system-endpoint-snippet-code">{fetchSnippet}</code>
         </pre>
 
-        <Divider className="stats-system-divider" my="md" label="在线调试" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('在线调试') } labelPosition="left" />
         <StatsPublicApiDebugger
           className="stats-system-public-debugger"
           endpoints={{
@@ -1149,22 +1150,22 @@ fetch('${publicChatUrl}', {
           }}
         />
 
-        <Divider className="stats-system-divider" my="md" label="创建新 Key" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('创建新 Key') } labelPosition="left" />
         <Stack className="stats-system-create" gap="xs">
           <Group className="stats-system-create-row" gap="sm" align="flex-start" wrap="wrap">
             <TextInput
               className="stats-system-create-label"
-              label="名称"
+              label={ $('名称') }
               value={createLabel}
               onChange={(e) => setCreateLabel(e.currentTarget.value)}
-              placeholder="例如：我的网站"
+              placeholder={ $('例如：我的网站') }
               w={260}
             />
             <Switch
               className="stats-system-create-enabled"
               checked={createEnabled}
               onChange={(e) => setCreateEnabled(e.currentTarget.checked)}
-              label="启用"
+              label={ $('启用') }
               mt={26}
             />
             <Button
@@ -1175,12 +1176,12 @@ fetch('${publicChatUrl}', {
               onClick={() => void handleCreate()}
               mt={22}
             >
-              生成 Key
+              { $('生成 Key') }
             </Button>
           </Group>
           <Textarea
             className="stats-system-create-origins"
-            label="Origin 白名单（每行一个；可用 * 放开所有）"
+            label={ $('Origin 白名单（每行一个；可用 * 放开所有）') }
             value={createOrigins}
             onChange={(e) => setCreateOrigins(e.currentTarget.value)}
             minRows={2}
@@ -1188,20 +1189,20 @@ fetch('${publicChatUrl}', {
             placeholder={`https://example.com\nhttp://localhost:3000`}
           />
           <Text className="stats-system-create-hint" size="xs" c="dimmed">
-            Key 只会在创建成功后展示一次；请复制保存到你的站点环境变量中。
+            { $('Key 只会在创建成功后展示一次；请复制保存到你的站点环境变量中。') }
           </Text>
         </Stack>
 
-        <Divider className="stats-system-divider" my="md" label="API Key 列表" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('API Key 列表') } labelPosition="left" />
         <div className="stats-system-keys-table-wrap" style={{ overflowX: 'auto' }}>
           <Table className="stats-system-keys-table" striped highlightOnHover stickyHeader verticalSpacing="xs">
             <Table.Thead className="stats-system-keys-table-head">
               <Table.Tr className="stats-system-keys-table-head-row">
-                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 160 }}>名称</Table.Th>
-                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 130 }}>前缀</Table.Th>
-                <Table.Th className="stats-system-keys-table-head-cell">Origin 白名单</Table.Th>
-                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 90 }}>状态</Table.Th>
-                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 170 }}>最近使用</Table.Th>
+                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 160 }}>{ $('名称') }</Table.Th>
+                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 130 }}>{ $('前缀') }</Table.Th>
+                <Table.Th className="stats-system-keys-table-head-cell">{ $('Origin 白名单') }</Table.Th>
+                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 90 }}>{ $('状态') }</Table.Th>
+                <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 170 }}>{ $('最近使用') }</Table.Th>
                 <Table.Th className="stats-system-keys-table-head-cell" style={{ width: 100 }} />
               </Table.Tr>
             </Table.Thead>
@@ -1210,7 +1211,7 @@ fetch('${publicChatUrl}', {
                 <Table.Tr className="stats-system-keys-table-row-empty">
                   <Table.Td className="stats-system-keys-table-cell-empty" colSpan={6}>
                     <Text className="stats-system-keys-empty" size="sm" c="dimmed">
-                      暂无 Key
+                      { $('暂无 Key') }
                     </Text>
                   </Table.Td>
                 </Table.Tr>
@@ -1219,7 +1220,7 @@ fetch('${publicChatUrl}', {
                 <Table.Tr className="stats-system-keys-table-row" key={k.id}>
                   <Table.Td className="stats-system-keys-table-cell">
                     <Text className="stats-system-keys-label" size="sm" fw={600}>
-                      {k.label || '未命名'}
+                      {k.label || $('未命名')}
                     </Text>
                   </Table.Td>
                   <Table.Td className="stats-system-keys-table-cell">
@@ -1234,7 +1235,7 @@ fetch('${publicChatUrl}', {
                   </Table.Td>
                   <Table.Td className="stats-system-keys-table-cell">
                     <Badge className="stats-system-keys-status" size="xs" variant="light" color={k.enabled ? 'green' : 'gray'}>
-                      {k.enabled ? '启用' : '禁用'}
+                      {k.enabled ? $('启用') : $('禁用')}
                     </Badge>
                   </Table.Td>
                   <Table.Td className="stats-system-keys-table-cell">
@@ -1244,12 +1245,12 @@ fetch('${publicChatUrl}', {
                   </Table.Td>
                   <Table.Td className="stats-system-keys-table-cell">
                     <Group className="stats-system-keys-actions" gap={6} justify="flex-end" wrap="nowrap">
-                      <Tooltip className="stats-system-keys-edit-tooltip" label="编辑" withArrow>
+                      <Tooltip className="stats-system-keys-edit-tooltip" label={ $('编辑') } withArrow>
                         <ActionIcon className="stats-system-keys-edit" size="sm" variant="light" aria-label="edit" onClick={() => openEdit(k)}>
                           <IconPencil className="stats-system-keys-edit-icon" size={14} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip className="stats-system-keys-delete-tooltip" label="删除" withArrow>
+                      <Tooltip className="stats-system-keys-delete-tooltip" label={ $('删除') } withArrow>
                         <ActionIcon className="stats-system-keys-delete" size="sm" variant="light" color="red" aria-label="delete" onClick={() => void handleDelete(k)}>
                           <IconTrash className="stats-system-keys-delete-icon" size={14} />
                         </ActionIcon>
@@ -1268,7 +1269,7 @@ fetch('${publicChatUrl}', {
 
           {section === 'taskLogs' ? (
             <>
-        <Divider className="stats-system-divider" my="md" label="生成任务列表" labelPosition="left" />
+        <Divider className="stats-system-divider" my="md" label={ $('生成任务列表') } labelPosition="left" />
         <Group className="stats-system-logs-toolbar" justify="space-between" align="center" wrap="wrap" gap="xs">
           <Group className="stats-system-logs-filters" gap="xs" align="center" wrap="wrap">
             <Select
@@ -1277,14 +1278,14 @@ fetch('${publicChatUrl}', {
               value={logsVendor}
               onChange={(v) => setLogsVendor(v || 'all')}
               data={[
-                { value: 'all', label: '全部厂商' },
+                { value: 'all', label: $('全部厂商') },
                 { value: 'openai', label: 'OpenAI' },
                 { value: 'gemini', label: 'Gemini' },
                 { value: 'anthropic', label: 'Anthropic' },
                 { value: 'qwen', label: 'Qwen' },
                 { value: 'veo', label: 'Veo' },
               ]}
-              placeholder="厂商"
+              placeholder={ $('厂商') }
               w={160}
               comboboxProps={{ withinPortal: true }}
             />
@@ -1294,12 +1295,12 @@ fetch('${publicChatUrl}', {
               value={logsStatus}
               onChange={(v) => setLogsStatus(v || 'all')}
               data={[
-                { value: 'all', label: '全部状态' },
-                { value: 'running', label: '运行中' },
-                { value: 'succeeded', label: '成功' },
-                { value: 'failed', label: '失败' },
+                { value: 'all', label: $('全部状态') },
+                { value: 'running', label: $('运行中') },
+                { value: 'succeeded', label: $('成功') },
+                { value: 'failed', label: $('失败') },
               ]}
-              placeholder="状态"
+              placeholder={ $('状态') }
               w={140}
               comboboxProps={{ withinPortal: true }}
             />
@@ -1312,7 +1313,7 @@ fetch('${publicChatUrl}', {
             disabled={logsLoading}
             leftSection={logsLoading ? <Loader className="stats-system-logs-refresh-loader" size="xs" /> : undefined}
           >
-            刷新
+            { $('刷新') }
           </Button>
         </Group>
 
@@ -1320,17 +1321,17 @@ fetch('${publicChatUrl}', {
           <Table className="stats-system-logs-table" striped highlightOnHover stickyHeader verticalSpacing="xs">
             <Table.Thead className="stats-system-logs-table-head">
               <Table.Tr className="stats-system-logs-table-head-row">
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 170 }}>时间</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 90 }}>厂商</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 180 }}>调用者</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 90 }}>类型</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 90 }}>状态</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 80 }}>耗时</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 240 }}>任务</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 140 }}>输入预览</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 140 }}>输出预览</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 70 }}>详情</Table.Th>
-                <Table.Th className="stats-system-logs-table-head-cell">错误</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 170 }}>{ $('时间') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 90 }}>{ $('厂商') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 180 }}>{ $('调用者') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 90 }}>{ $('类型') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 90 }}>{ $('状态') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 80 }}>{ $('耗时') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 240 }}>{ $('任务') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 140 }}>{ $('输入预览') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 140 }}>{ $('输出预览') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell" style={{ width: 70 }}>{ $('详情') }</Table.Th>
+                <Table.Th className="stats-system-logs-table-head-cell">{ $('错误') }</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody className="stats-system-logs-table-body">
@@ -1338,7 +1339,7 @@ fetch('${publicChatUrl}', {
                 <Table.Tr className="stats-system-logs-table-row-empty">
                   <Table.Td className="stats-system-logs-table-cell-empty" colSpan={11}>
                     <Text className="stats-system-logs-empty" size="sm" c="dimmed">
-                      暂无生成记录
+                      { $('暂无生成记录') }
                     </Text>
                   </Table.Td>
                 </Table.Tr>
@@ -1397,7 +1398,7 @@ fetch('${publicChatUrl}', {
                       </Text>
                       <CopyButton value={it.taskId} timeout={1200}>
                         {({ copied, copy }) => (
-                          <Tooltip className="stats-system-logs-task-copy-tooltip" label={copied ? '已复制' : '复制'} position="top" withArrow>
+                          <Tooltip className="stats-system-logs-task-copy-tooltip" label={copied ? $('已复制') : $('复制')} position="top" withArrow>
                             <ActionIcon className="stats-system-logs-task-copy" variant="subtle" onClick={copy} aria-label="copy-task-id">
                               {copied ? <IconCheck className="stats-system-logs-task-copy-icon" size={14} /> : <IconCopy className="stats-system-logs-task-copy-icon" size={14} />}
                             </ActionIcon>
@@ -1416,7 +1417,7 @@ fetch('${publicChatUrl}', {
                     <Group className="stats-system-logs-debug" gap={6} justify="center" wrap="nowrap">
                       <Tooltip
                         className="stats-system-logs-debug-tooltip"
-                        label={(it.requestPayload || it.upstreamResponse) ? '查看请求/回显' : '暂无调试内容'}
+                        label={(it.requestPayload || it.upstreamResponse) ? $('查看请求/回显') : $('暂无调试内容')}
                         withArrow
                       >
                         <ActionIcon
@@ -1458,7 +1459,7 @@ fetch('${publicChatUrl}', {
             leftSection={logsLoadingMore ? <Loader className="stats-system-logs-more-loader" size="xs" /> : undefined}
             mt="sm"
           >
-            加载更多
+            { $('加载更多') }
           </Button>
         )}
             </>
@@ -1471,13 +1472,13 @@ fetch('${publicChatUrl}', {
         className="stats-system-created-modal"
         opened={createdOpen}
         onClose={() => setCreatedOpen(false)}
-        title="你的 Key（仅展示一次）"
+        title={ $('你的 Key（仅展示一次）') }
         centered
         lockScroll={false}
       >
         <Stack className="stats-system-created-modal-body" gap="xs">
           <Text className="stats-system-created-modal-hint" size="sm">
-            请复制保存；之后将无法再次查看明文。
+            { $('请复制保存；之后将无法再次查看明文。') }
           </Text>
           <InlinePanel className="stats-system-created-modal-key" style={{ background: 'rgba(0,0,0,0.18)' }}>
             <Group className="stats-system-created-modal-key-row" justify="space-between" gap="xs" align="center">
@@ -1486,7 +1487,7 @@ fetch('${publicChatUrl}', {
               </Text>
               <CopyButton value={createdKey || ''} timeout={1200}>
                 {({ copied, copy }) => (
-                  <Tooltip className="stats-system-created-modal-copy-tooltip" label={copied ? '已复制' : '复制'} position="top" withArrow>
+                  <Tooltip className="stats-system-created-modal-copy-tooltip" label={copied ? $('已复制') : $('复制')} position="top" withArrow>
                     <ActionIcon className="stats-system-created-modal-copy" variant="light" onClick={copy} aria-label="copy-key">
                       {copied ? <IconCheck className="stats-system-created-modal-copy-icon" size={16} /> : <IconCopy className="stats-system-created-modal-copy-icon" size={16} />}
                     </ActionIcon>
@@ -1496,7 +1497,7 @@ fetch('${publicChatUrl}', {
             </Group>
           </InlinePanel>
           <Text className="stats-system-created-modal-note" size="xs" c="dimmed">
-            默认会按 Origin 白名单校验；若你需要后端/脚本调用，可在白名单中填入 *。
+            { $('默认会按 Origin 白名单校验；若你需要后端/脚本调用，可在白名单中填入 *。') }
           </Text>
         </Stack>
       </Modal>
@@ -1505,21 +1506,21 @@ fetch('${publicChatUrl}', {
         className="stats-system-edit-modal"
         opened={editOpen}
         onClose={() => setEditOpen(false)}
-        title="编辑 Key"
+        title={ $('编辑 Key') }
         centered
         lockScroll={false}
       >
         <Stack className="stats-system-edit-modal-body" gap="xs">
           <TextInput
             className="stats-system-edit-label"
-            label="名称"
+            label={ $('名称') }
             value={editLabel}
             onChange={(e) => setEditLabel(e.currentTarget.value)}
-            placeholder="例如：我的网站"
+            placeholder={ $('例如：我的网站') }
           />
           <Textarea
             className="stats-system-edit-origins"
-            label="Origin 白名单（每行一个；可用 * 放开所有）"
+            label={ $('Origin 白名单（每行一个；可用 * 放开所有）') }
             value={editOrigins}
             onChange={(e) => setEditOrigins(e.currentTarget.value)}
             minRows={3}
@@ -1531,7 +1532,7 @@ fetch('${publicChatUrl}', {
               className="stats-system-edit-enabled"
               checked={editEnabled}
               onChange={(e) => setEditEnabled(e.currentTarget.checked)}
-              label="启用"
+              label={ $('启用') }
             />
             <Button
               className="stats-system-edit-save"
@@ -1539,7 +1540,7 @@ fetch('${publicChatUrl}', {
               loading={editSubmitting}
               onClick={() => void handleEditSave()}
             >
-              保存
+              { $('保存') }
             </Button>
           </Group>
         </Stack>
@@ -1549,7 +1550,7 @@ fetch('${publicChatUrl}', {
         className="stats-system-log-inspect-modal"
         opened={inspectOpen}
         onClose={closeInspect}
-        title="任务调试详情"
+        title={ $('任务调试详情') }
         centered
         size="lg"
         lockScroll={false}
@@ -1560,7 +1561,7 @@ fetch('${publicChatUrl}', {
           </Text>
           <Group className="stats-system-log-inspect-preview-row" align="flex-start" grow>
             <Stack className="stats-system-log-inspect-preview-block" gap={6}>
-              <Text className="stats-system-log-inspect-preview-title" size="sm" fw={600}>输入资产预览</Text>
+              <Text className="stats-system-log-inspect-preview-title" size="sm" fw={600}>{ $('输入资产预览') }</Text>
               <Group className="stats-system-log-inspect-preview-list" gap={8}>
                 {inspectInputAssets.slice(0, 6).map((asset) => (
                   <button
@@ -1568,7 +1569,7 @@ fetch('${publicChatUrl}', {
                     key={`inspect-input-${asset.url}`}
                     type="button"
                     title={asset.url}
-                    onClick={() => openPreview({ url: asset.url, kind: asset.kind, name: '任务输入预览' })}
+                    onClick={() => openPreview({ url: asset.url, kind: asset.kind, name: $('任务输入预览') })}
                     style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
                   >
                     {asset.kind === 'video' ? (
@@ -1597,7 +1598,7 @@ fetch('${publicChatUrl}', {
               </Group>
             </Stack>
             <Stack className="stats-system-log-inspect-preview-block" gap={6}>
-              <Text className="stats-system-log-inspect-preview-title" size="sm" fw={600}>输出资产预览</Text>
+              <Text className="stats-system-log-inspect-preview-title" size="sm" fw={600}>{ $('输出资产预览') }</Text>
               <Group className="stats-system-log-inspect-preview-list" gap={8}>
                 {inspectOutputAssets.slice(0, 6).map((asset) => (
                   <button
@@ -1605,7 +1606,7 @@ fetch('${publicChatUrl}', {
                     key={`inspect-output-${asset.url}`}
                     type="button"
                     title={asset.url}
-                    onClick={() => openPreview({ url: asset.url, kind: asset.kind, name: '任务输出预览' })}
+                    onClick={() => openPreview({ url: asset.url, kind: asset.kind, name: $('任务输出预览') })}
                     style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
                   >
                     {asset.kind === 'video' ? (
@@ -1636,7 +1637,7 @@ fetch('${publicChatUrl}', {
           </Group>
 
           <Stack className="stats-system-log-inspect-section" gap={6}>
-            <Text className="stats-system-log-inspect-section-title" size="sm" fw={600}>内联输入</Text>
+            <Text className="stats-system-log-inspect-section-title" size="sm" fw={600}>{ $('内联输入') }</Text>
             {inspectInlineInputs.length > 0 ? (
               <Stack className="stats-system-log-inspect-inline-list" gap={6}>
                 {inspectInlineInputs.map((item, index) => (
@@ -1663,10 +1664,10 @@ fetch('${publicChatUrl}', {
 
           <Stack className="stats-system-log-inspect-section" gap={6}>
             <Group className="stats-system-log-inspect-section-header" justify="space-between" align="center" wrap="nowrap">
-              <Text className="stats-system-log-inspect-section-title" size="sm" fw={600}>发起请求内容</Text>
+              <Text className="stats-system-log-inspect-section-title" size="sm" fw={600}>{ $('发起请求内容') }</Text>
               <CopyButton value={inspectItem?.requestPayload || ''} timeout={1200}>
                 {({ copied, copy }) => (
-                  <Tooltip className="stats-system-log-inspect-copy-tooltip" label={copied ? '已复制' : '复制'} withArrow>
+                  <Tooltip className="stats-system-log-inspect-copy-tooltip" label={copied ? $('已复制') : $('复制')} withArrow>
                     <ActionIcon className="stats-system-log-inspect-copy" size="sm" variant="light" onClick={copy} aria-label="copy-request-payload">
                       {copied ? <IconCheck className="stats-system-log-inspect-copy-icon" size={14} /> : <IconCopy className="stats-system-log-inspect-copy-icon" size={14} />}
                     </ActionIcon>
@@ -1688,10 +1689,10 @@ fetch('${publicChatUrl}', {
 
           <Stack className="stats-system-log-inspect-section" gap={6}>
             <Group className="stats-system-log-inspect-section-header" justify="space-between" align="center" wrap="nowrap">
-              <Text className="stats-system-log-inspect-section-title" size="sm" fw={600}>上游回显</Text>
+              <Text className="stats-system-log-inspect-section-title" size="sm" fw={600}>{ $('上游回显') }</Text>
               <CopyButton value={inspectItem?.upstreamResponse || ''} timeout={1200}>
                 {({ copied, copy }) => (
-                  <Tooltip className="stats-system-log-inspect-copy-tooltip" label={copied ? '已复制' : '复制'} withArrow>
+                  <Tooltip className="stats-system-log-inspect-copy-tooltip" label={copied ? $('已复制') : $('复制')} withArrow>
                     <ActionIcon className="stats-system-log-inspect-copy" size="sm" variant="light" onClick={copy} aria-label="copy-upstream-response">
                       {copied ? <IconCheck className="stats-system-log-inspect-copy-icon" size={14} /> : <IconCopy className="stats-system-log-inspect-copy-icon" size={14} />}
                     </ActionIcon>

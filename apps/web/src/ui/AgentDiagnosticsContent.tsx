@@ -8,22 +8,23 @@ import {
   type AgentDiagnosticsTraceDto,
 } from '../api/server'
 import { useLiveChatRunStore } from './chat/liveChatRunStore'
+import { $ } from '../canvas/i18n'
 
 const LABEL_OPTIONS = [
-  { value: '', label: '全部标签' },
-  { value: 'storyboard_semantic_bootstrap', label: '语义锚定抽取' },
-  { value: 'storyboard_continuity_qc', label: '连续性 QC' },
+  { value: '', label: $('全部标签') },
+  { value: 'storyboard_semantic_bootstrap', label: $('语义锚定抽取') },
+  { value: 'storyboard_continuity_qc', label: $('连续性 QC') },
 ] as const
 
 const PUBLIC_CHAT_VERDICT_OPTIONS = [
-  { value: '', label: '全部 verdict' },
+  { value: '', label: $('全部 verdict') },
   { value: 'satisfied', label: 'satisfied' },
   { value: 'partial', label: 'partial' },
   { value: 'failed', label: 'failed' },
 ] as const
 
 const PUBLIC_CHAT_OUTCOME_OPTIONS = [
-  { value: '', label: '全部 outcome' },
+  { value: '', label: $('全部 outcome') },
   { value: 'promote', label: 'promote' },
   { value: 'hold', label: 'hold' },
   { value: 'discard', label: 'discard' },
@@ -192,7 +193,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
       })
       setData(result)
     } catch (error) {
-      toast(error instanceof Error ? error.message : '加载 AI 诊断失败', 'error')
+      toast(error instanceof Error ? error.message : $('加载 AI 诊断失败'), 'error')
     } finally {
       setLoading(false)
     }
@@ -208,7 +209,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
   )
   const handleCopyTraceId = React.useCallback(async (traceId: string) => {
     const ok = await copyText(traceId)
-    toast(ok ? '已复制 TraceId' : '复制 TraceId 失败', ok ? 'success' : 'error')
+    toast(ok ? $('已复制 TraceId') : $('复制 TraceId 失败'), ok ? 'success' : 'error')
   }, [])
 
   return (
@@ -235,7 +236,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
               </Text>
             </Group>
             <Button className="agent-diagnostics-panel-live-run-clear" size="compact-xs" variant="subtle" onClick={() => clearLiveRun()}>
-              清空实时日志
+              { $('清空实时日志') }
             </Button>
           </Group>
 
@@ -251,7 +252,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
 
           {activeLiveRun.requestText || activeLiveRun.displayText ? (
             <Stack className="agent-diagnostics-panel-live-run-request" gap={2}>
-              <Text className="agent-diagnostics-panel-live-run-request-title" size="xs" fw={600}>当前请求</Text>
+              <Text className="agent-diagnostics-panel-live-run-request-title" size="xs" fw={600}>{ $('当前请求') }</Text>
               <Text className="agent-diagnostics-panel-live-run-request-text" size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {activeLiveRun.displayText || activeLiveRun.requestText}
               </Text>
@@ -260,7 +261,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
 
           {activeLiveRun.assistantPreview ? (
             <Stack className="agent-diagnostics-panel-live-run-preview" gap={2}>
-              <Text className="agent-diagnostics-panel-live-run-preview-title" size="xs" fw={600}>助手输出预览</Text>
+              <Text className="agent-diagnostics-panel-live-run-preview-title" size="xs" fw={600}>{ $('助手输出预览') }</Text>
               <Text className="agent-diagnostics-panel-live-run-preview-text" size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {activeLiveRun.assistantPreview}
               </Text>
@@ -269,7 +270,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
 
           {activeLiveRun.todoItems.length > 0 ? (
             <Stack className="agent-diagnostics-panel-live-run-todo" gap={4}>
-              <Text className="agent-diagnostics-panel-live-run-todo-title" size="xs" fw={600}>实时 Todo</Text>
+              <Text className="agent-diagnostics-panel-live-run-todo-title" size="xs" fw={600}>{ $('实时 Todo') }</Text>
               {activeLiveRun.todoItems.map((item, index) => (
                 <Group className="agent-diagnostics-panel-live-run-todo-item" key={`live_todo_${index}_${item.text}`} gap="xs" wrap="nowrap" align="flex-start">
                   <Badge className="agent-diagnostics-panel-live-run-todo-status" size="xs" variant="light" color={timelineStatusColor(item.status)}>
@@ -290,11 +291,11 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
           ) : null}
 
           <Stack className="agent-diagnostics-panel-live-run-logs" gap={4}>
-            <Text className="agent-diagnostics-panel-live-run-logs-title" size="xs" fw={600}>实时日志</Text>
+            <Text className="agent-diagnostics-panel-live-run-logs-title" size="xs" fw={600}>{ $('实时日志') }</Text>
             <ScrollArea className="agent-diagnostics-panel-live-run-logs-scroll" h={240} offsetScrollbars>
               <Stack className="agent-diagnostics-panel-live-run-logs-list" gap={4}>
                 {activeLiveRun.logs.length === 0 ? (
-                  <Text className="agent-diagnostics-panel-live-run-logs-empty" size="xs" c="dimmed">暂无实时日志</Text>
+                  <Text className="agent-diagnostics-panel-live-run-logs-empty" size="xs" c="dimmed">{ $('暂无实时日志') }</Text>
                 ) : activeLiveRun.logs.map((entry) => (
                   <Stack className="agent-diagnostics-panel-live-run-log-card" key={entry.id} gap={2} p="xs" style={{ border: '1px solid var(--mantine-color-dark-5)', borderRadius: 8 }}>
                     <Group className="agent-diagnostics-panel-live-run-log-header" gap="xs" wrap="wrap">
@@ -318,30 +319,30 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
       <Group className="agent-diagnostics-panel-filters" gap="sm" align="flex-end" wrap="wrap">
         <TextInput
           className="agent-diagnostics-panel-project-input"
-          label="项目 ID"
+          label={ $('项目 ID') }
           value={projectId || ''}
           readOnly
           w={220}
         />
         <TextInput
           className="agent-diagnostics-panel-book-input"
-          label="书籍 ID"
-          placeholder="可选"
+          label={ $('书籍 ID') }
+          placeholder={ $('可选') }
           value={bookId}
           onChange={(event) => setBookId(event.currentTarget.value)}
           w={180}
         />
         <TextInput
           className="agent-diagnostics-panel-chapter-input"
-          label="章节 ID"
-          placeholder="可选"
+          label={ $('章节 ID') }
+          placeholder={ $('可选') }
           value={chapterId}
           onChange={(event) => setChapterId(event.currentTarget.value)}
           w={140}
         />
         <Select
           className="agent-diagnostics-panel-label-select"
-          label="标签"
+          label={ $('标签') }
           data={LABEL_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
           value={label}
           onChange={(value) => setLabel(value || '')}
@@ -372,7 +373,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
           w={160}
         />
         <Button className="agent-diagnostics-panel-refresh-button" variant="light" onClick={() => void load()} loading={loading}>
-          刷新
+          { $('刷新') }
         </Button>
       </Group>
 
@@ -440,7 +441,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
         <Stack className="agent-diagnostics-panel-content" gap="sm">
           {loading ? <Loader className="agent-diagnostics-panel-loader" size="sm" /> : null}
           {!loading && (!data || (data.traces.length === 0 && data.publicChatRuns.length === 0 && data.storyboardDiagnostics.length === 0)) ? (
-            <Text className="agent-diagnostics-panel-empty" c="dimmed" size="sm">暂无诊断数据</Text>
+            <Text className="agent-diagnostics-panel-empty" c="dimmed" size="sm">{ $('暂无诊断数据') }</Text>
           ) : null}
           {Array.isArray(data?.traces) ? data.traces.map((item) => {
             const isExpanded = expandedTraceId === item.id
@@ -498,7 +499,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
                       variant="subtle"
                       onClick={() => onInspectTrace?.(traceSelection)}
                     >
-                      查看上下文
+                      { $('查看上下文') }
                     </Button>
                   ) : null}
                   <Button
@@ -507,7 +508,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
                     variant="subtle"
                     onClick={() => void handleCopyTraceId(item.id)}
                   >
-                    复制 TraceId
+                    { $('复制 TraceId') }
                   </Button>
                   <Button
                     className="agent-diagnostics-panel-trace-execution-log"
@@ -515,7 +516,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
                     variant="subtle"
                     onClick={() => setExecutionLogTraceId(item.id)}
                   >
-                    执行日志
+                    { $('执行日志') }
                   </Button>
                   <Button
                     className="agent-diagnostics-panel-trace-toggle"
@@ -523,7 +524,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
                     variant="subtle"
                     onClick={() => setExpandedTraceId(isExpanded ? null : item.id)}
                   >
-                    {isExpanded ? '收起' : '详情'}
+                    {isExpanded ? $('收起') : $('详情')}
                   </Button>
                 </Group>
                 <Text className="agent-diagnostics-panel-trace-input" size="sm">{item.inputSummary}</Text>
@@ -722,7 +723,7 @@ export default function AgentDiagnosticsContent(props: AgentDiagnosticsContentPr
                     variant="subtle"
                     onClick={() => setExpandedPublicChatRunId(isExpanded ? null : item.id)}
                   >
-                    {isExpanded ? '收起' : '详情'}
+                    {isExpanded ? $('收起') : $('详情')}
                   </Button>
                 </Group>
                 <Text className="agent-diagnostics-panel-public-chat-session" size="sm" c="dimmed">{item.sessionKey}</Text>
@@ -854,7 +855,7 @@ function AgentTraceExecutionLogModal(props: {
   const copyAllLogs = React.useCallback(async () => {
     const payload = serializeTraceTimeline(trace, timeline)
     const ok = await copyText(payload)
-    toast(ok ? '已复制全部执行日志' : '复制执行日志失败', ok ? 'success' : 'error')
+    toast(ok ? $('已复制全部执行日志') : $('复制执行日志失败'), ok ? 'success' : 'error')
   }, [trace, timeline])
 
   return (
@@ -862,7 +863,7 @@ function AgentTraceExecutionLogModal(props: {
       className="agent-diagnostics-execution-log-modal"
       opened={opened}
       onClose={onClose}
-      title="执行日志"
+      title={ $('执行日志') }
       centered
       size="xl"
     >
@@ -882,11 +883,11 @@ function AgentTraceExecutionLogModal(props: {
               variant="subtle"
               onClick={() => onCopyTraceId(trace.id)}
             >
-              复制 TraceId
+              { $('复制 TraceId') }
             </Button>
           ) : null}
           <Button className="agent-diagnostics-execution-log-copy-all" size="xs" variant="light" onClick={() => void copyAllLogs()}>
-            复制全部日志
+            { $('复制全部日志') }
           </Button>
         </Group>
       </Group>
@@ -904,7 +905,7 @@ function AgentTraceExecutionLogModal(props: {
       ) : null}
       <ScrollArea className="agent-diagnostics-execution-log-scroll" h={620} offsetScrollbars>
         <Stack className="agent-diagnostics-execution-log-stack" gap="sm">
-          {timeline.length === 0 ? <Text className="agent-diagnostics-execution-log-empty" size="sm" c="dimmed">暂无执行日志</Text> : null}
+          {timeline.length === 0 ? <Text className="agent-diagnostics-execution-log-empty" size="sm" c="dimmed">{ $('暂无执行日志') }</Text> : null}
           {timeline.map((entry, index) => (
             <Stack className="agent-diagnostics-execution-log-item" key={`${entry.kind}_${index}`} gap={4} p="sm" style={{ border: '1px solid var(--mantine-color-dark-4)', borderRadius: 10 }}>
               <Group className="agent-diagnostics-execution-log-item-header" gap="xs" wrap="wrap">

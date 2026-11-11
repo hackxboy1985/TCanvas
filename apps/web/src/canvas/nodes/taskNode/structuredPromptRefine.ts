@@ -5,6 +5,7 @@ import { getAuthToken } from '../../../auth/store'
 import { isLensMode } from '../../../config/useModelOptions'
 import { useUIStore } from '../../../ui/uiStore'
 import { extractTextFromTaskResult } from '../taskNodeHelpers'
+import { $, $t } from '../../i18n'
 
 type RefineStructuredPromptInput = {
   prompt: string
@@ -40,7 +41,7 @@ function readStringList(value: unknown): string[] {
 
 function extractJsonPayload(raw: string): unknown {
   const trimmed = raw.trim()
-  if (!trimmed) throw new Error('模型未返回结构化 JSON')
+  if (!trimmed) throw new Error($('模型未返回结构化 JSON'))
 
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
   const candidate = fencedMatch ? fencedMatch[1].trim() : trimmed
@@ -70,14 +71,14 @@ export async function refineStructuredImagePrompt(
 ): Promise<ImagePromptSpecV2> {
   const prompt = readTrimmedString(input.prompt)
   if (!prompt) {
-    throw new Error('缺少 prompt，无法生成结构化 JSON')
+    throw new Error($('缺少 prompt，无法生成结构化 JSON'))
   }
 
   const ui = useUIStore.getState()
   const apiKey = (ui.publicApiKey || '').trim()
   const token = getAuthToken()
   if (!isLensMode() && !apiKey && !token) {
-    throw new Error('请先登录后再试')
+    throw new Error($('请先登录后再试'))
   }
 
   const extraSystemPrompt = readTrimmedString(input.systemPrompt)
@@ -128,8 +129,8 @@ export async function refineStructuredImagePrompt(
   const parsedPayload = extractJsonPayload(rawText)
   const parsedSpec = parseImagePromptSpecV2(parsedPayload)
   if (!parsedSpec.ok || !parsedSpec.value) {
-    const reason = parsedSpec.ok ? '缺少有效结构化内容' : parsedSpec.error
-    throw new Error(`结构化 JSON 非法：${reason}`)
+    const reason = parsedSpec.ok ? $('缺少有效结构化内容') : parsedSpec.error
+    throw new Error($t('结构化 JSON 非法：{{v1}}', { v1: reason }))
   }
 
   return parsedSpec.value

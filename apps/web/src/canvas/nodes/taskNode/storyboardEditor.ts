@@ -1,3 +1,4 @@
+import { $ } from '../../i18n'
 export type StoryboardEditorAspect = '1:1' | '4:3' | '16:9' | '9:16'
 
 export type StoryboardEditorGrid = '2x2' | '3x2' | '3x3' | '5x5'
@@ -25,10 +26,10 @@ export const normalizeStoryboardEditorSelectedIndex = (
 }
 
 export const STORYBOARD_EDITOR_ASPECT_OPTIONS: Array<{ value: StoryboardEditorAspect; label: string }> = [
-  { value: '1:1', label: '比例 1:1' },
-  { value: '4:3', label: '比例 4:3' },
-  { value: '16:9', label: '比例 16:9' },
-  { value: '9:16', label: '比例 9:16' },
+  { value: '1:1', label: $('比例 1:1') },
+  { value: '4:3', label: $('比例 4:3') },
+  { value: '16:9', label: $('比例 16:9') },
+  { value: '9:16', label: $('比例 9:16') },
 ]
 
 export const STORYBOARD_EDITOR_GRID_OPTIONS: Array<{
@@ -37,10 +38,10 @@ export const STORYBOARD_EDITOR_GRID_OPTIONS: Array<{
   columns: number
   rows: number
 }> = [
-  { value: '2x2', label: '网格 2x2', columns: 2, rows: 2 },
-  { value: '3x2', label: '网格 3x2', columns: 3, rows: 2 },
-  { value: '3x3', label: '网格 3x3', columns: 3, rows: 3 },
-  { value: '5x5', label: '网格 5x5', columns: 5, rows: 5 },
+  { value: '2x2', label: $('网格 2x2'), columns: 2, rows: 2 },
+  { value: '3x2', label: $('网格 3x2'), columns: 3, rows: 2 },
+  { value: '3x3', label: $('网格 3x3'), columns: 3, rows: 3 },
+  { value: '5x5', label: $('网格 5x5'), columns: 5, rows: 5 },
 ]
 
 const DEFAULT_GRID: StoryboardEditorGrid = '3x3'

@@ -254,28 +254,28 @@ export default function StatsFullPage(): JSX.Element {
         setStats(statsRes.value)
         anyOk = true
       } else {
-        toast(getErrorMessage(statsRes.reason, '加载统计失败'), 'error')
+        toast(getErrorMessage(statsRes.reason, $('加载统计失败')), 'error')
       }
 
       if (dauRes.status === 'fulfilled') {
         setDau((dauRes.value?.series || []).map((p) => p.activeUsers))
         anyOk = true
       } else {
-        toast(getErrorMessage(dauRes.reason, '加载日活失败'), 'error')
+        toast(getErrorMessage(dauRes.reason, $('加载日活失败')), 'error')
       }
 
       if (vendorRes.status === 'fulfilled') {
         setVendorStats(vendorRes.value?.vendors || [])
         anyOk = true
       } else {
-        toast(getErrorMessage(vendorRes.reason, '加载厂商统计失败'), 'error')
+        toast(getErrorMessage(vendorRes.reason, $('加载厂商统计失败')), 'error')
       }
 
       if (revenueRes.status === 'fulfilled') {
         setRevenue(revenueRes.value)
         anyOk = true
       } else {
-        toast(getErrorMessage(revenueRes.reason, '加载收入统计失败'), 'error')
+        toast(getErrorMessage(revenueRes.reason, $('加载收入统计失败')), 'error')
       }
 
       if (anyOk) setLastUpdated(Date.now())
@@ -372,7 +372,7 @@ export default function StatsFullPage(): JSX.Element {
                 size="xs"
               />
               <Tooltip className="stats-page-refresh-tooltip" label={$('刷新')} withArrow>
-                <IconActionButton className="stats-page-refresh" size="sm" aria-label="刷新" onClick={() => void reload()} loading={loading} icon={
+                <IconActionButton className="stats-page-refresh" size="sm" aria-label={ $('刷新') } onClick={() => void reload()} loading={loading} icon={
                   <IconRefresh className="stats-page-refresh-icon" size={14} />
                 } />
               </Tooltip>
@@ -394,14 +394,14 @@ export default function StatsFullPage(): JSX.Element {
               value={section}
               onChange={(v) => setSection(v as StatsSection)}
               data={[
-                { value: 'overview', label: '概览' },
-                { value: 'system', label: '系统管理' },
-                { value: 'memory', label: '记忆调试' },
+                { value: 'overview', label: $('概览') },
+                { value: 'system', label: $('系统管理') },
+                { value: 'memory', label: $('记忆调试') },
                 { value: 'skills', label: 'Skill' },
-                { value: 'enterprise', label: '企业管理' },
-                { value: 'users', label: '用户管理' },
-                { value: 'projects', label: '项目管理' },
-                { value: 'commerce', label: '商城管理' },
+                { value: 'enterprise', label: $('企业管理') },
+                { value: 'users', label: $('用户管理') },
+                { value: 'projects', label: $('项目管理') },
+                { value: 'commerce', label: $('商城管理') },
               ]}
             />
           </Stack>

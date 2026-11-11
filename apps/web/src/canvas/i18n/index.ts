@@ -4,8 +4,17 @@
  * 使用方式：$('首页') -> "首页" 或 "Home"
  */
 
-// 英文翻译包
-const enTranslations = {
+import { appShellEn } from './locales/appShell'
+import { canvasCoreEn } from './locales/canvasCore'
+import { nodesEn } from './locales/nodes'
+import { projectsEn } from './locales/projects'
+import { uiPanels1En } from './locales/uiPanels1'
+import { uiPanels2En } from './locales/uiPanels2'
+import { statsEn } from './locales/stats'
+import { miscEn } from './locales/misc'
+
+// 内置英文翻译包（历史词表，约 460 条）；分批迁移词表见 ./locales/*
+const builtinEnTranslations = {
   '确定': 'OK',
   '取消': 'Cancel',
   '保存': 'Save',
@@ -467,6 +476,24 @@ const enTranslations = {
   '修改边': 'Modify Edge',
 };
 
+// 合并分批词表（后展开的覆盖前者；未列出的中文原样回退到中文）
+const enTranslations: Record<string, string> = {
+  ...builtinEnTranslations,
+  ...appShellEn,
+  ...canvasCoreEn,
+  ...nodesEn,
+  ...projectsEn,
+  ...uiPanels1En,
+  ...uiPanels2En,
+  ...statsEn,
+  ...miscEn,
+};
+
+/** lens 主应用语言偏好键（与 RuoYi-Vue3 src/locales/registry.js 的 STORAGE_KEY 一致） */
+const LENS_LOCALE_STORAGE_KEY = 'lens_locale'
+/** 画布自身语言偏好键（历史行为，保留） */
+const CANVAS_LANGUAGE_STORAGE_KEY = 'tapcanvas-language'
+
 // 当前语言
 let currentLanguage: 'zh' | 'en' = 'zh';
 
@@ -484,28 +511,74 @@ export function setLanguage(lang: 'zh' | 'en'): void {
   currentLanguage = lang;
   // 保存到本地存储
   if (typeof window !== 'undefined') {
-    localStorage.setItem('tapcanvas-language', lang);
+    localStorage.setItem(CANVAS_LANGUAGE_STORAGE_KEY, lang);
   }
 }
 
+/** 把各种来源的语言标识归一化为画布支持的 zh/en（如 en-US → en、zh-CN → zh） */
+function normalizeLanguage(raw: string | null | undefined): 'zh' | 'en' | null {
+  if (!raw) return null;
+  const value = String(raw).trim().toLowerCase();
+  if (!value) return null;
+  if (value.startsWith('en')) return 'en';
+  if (value.startsWith('zh')) return 'zh';
+  return null;
+}
+
+/** 读取 URL 上的语言参数（?lang=en / ?locale=en-US；兼容 hash 路由 #/path?lang=en） */
+function readUrlLanguage(): 'zh' | 'en' | null {
+  if (typeof window === 'undefined') return null;
+  const candidates: string[] = [];
+  try {
+    const search = new URLSearchParams(window.location.search || '');
+    candidates.push(search.get('lang') || '', search.get('locale') || '');
+    const hash = window.location.hash || '';
+    const hashQueryIndex = hash.indexOf('?');
+    if (hashQueryIndex >= 0) {
+      const hashSearch = new URLSearchParams(hash.slice(hashQueryIndex + 1));
+      candidates.push(hashSearch.get('lang') || '', hashSearch.get('locale') || '');
+    }
+  } catch {
+    return null;
+  }
+  for (const candidate of candidates) {
+    const normalized = normalizeLanguage(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
 /**
- * 初始化语言设置
+ * 初始化语言设置，优先级：
+ * 1. URL 参数 ?lang= / ?locale=（lens 主应用打开画布时传入，保证与主应用当前语言一致）
+ * 2. lens 主应用本地偏好透镜 lens_locale（同源，用户在主应用切换语言后画布跟随）
+ * 3. 画布自身历史选择 tapcanvas-language
+ * 4. 浏览器语言
  */
 export function initLanguage(): void {
-  if (typeof window !== 'undefined') {
-    // 检查本地存储
-    const saved = localStorage.getItem('tapcanvas-language') as 'zh' | 'en';
-    if (saved && (saved === 'zh' || saved === 'en')) {
-      currentLanguage = saved;
-      return;
-    }
+  if (typeof window === 'undefined') return;
 
-    // 检查浏览器语言
-    const browserLang = navigator.language;
-    if (browserLang.startsWith('en')) {
-      currentLanguage = 'en';
-    }
+  const fromUrl = readUrlLanguage();
+  if (fromUrl) {
+    currentLanguage = fromUrl;
+    localStorage.setItem(CANVAS_LANGUAGE_STORAGE_KEY, fromUrl);
+    return;
   }
+
+  const fromLens = normalizeLanguage(localStorage.getItem(LENS_LOCALE_STORAGE_KEY));
+  if (fromLens) {
+    currentLanguage = fromLens;
+    localStorage.setItem(CANVAS_LANGUAGE_STORAGE_KEY, fromLens);
+    return;
+  }
+
+  const saved = normalizeLanguage(localStorage.getItem(CANVAS_LANGUAGE_STORAGE_KEY));
+  if (saved) {
+    currentLanguage = saved;
+    return;
+  }
+
+  currentLanguage = normalizeLanguage(navigator.language) || 'zh';
 }
 
 /**

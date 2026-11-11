@@ -3,6 +3,7 @@ import { Anchor, Text, Title } from '@mantine/core'
 import { IconArrowRight } from '@tabler/icons-react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { buildStudioUrl } from '../utils/appRoutes'
+import { $ } from '../canvas/i18n'
 import './homePage.css'
 
 const HOME_TITLE_LINES = ['TAP', 'CANVAS'] as const
@@ -94,7 +95,7 @@ export default function HomePage(): JSX.Element {
       <motion.section
         ref={sceneRef}
         className="tc-home-page__scene"
-        aria-label="TapCanvas 创作入口"
+        aria-label={$('TapCanvas 创作入口')}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
       >
@@ -117,7 +118,7 @@ export default function HomePage(): JSX.Element {
             variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }}
             transition={HOME_STAGGER_TRANSITION}
           >
-            <Text className="tc-home-page__eyebrow">TapCanvas / 创作入口</Text>
+            <Text className="tc-home-page__eyebrow">{$('TapCanvas / 创作入口')}</Text>
           </motion.div>
 
           <motion.div
@@ -179,10 +180,10 @@ export default function HomePage(): JSX.Element {
             transition={HOME_STAGGER_TRANSITION}
           >
             <Text className="tc-home-page__lede">
-              从整本原文出发，直接进入项目、章节、镜头和共享资产的同一生产现场。
+              {$('从整本原文出发，直接进入项目、章节、镜头和共享资产的同一生产现场。')}
             </Text>
             <Text className="tc-home-page__sublede">
-              TapCanvas 把文本导入、章节推进、镜头生成、资产复用和后续视频生产放进一条连续链路，不再让你在多个工具之间来回切换。
+              {$('TapCanvas 把文本导入、章节推进、镜头生成、资产复用和后续视频生产放进一条连续链路，不再让你在多个工具之间来回切换。')}
             </Text>
           </motion.div>
         </motion.div>
@@ -236,7 +237,7 @@ export default function HomePage(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.32, ...HOME_STAGGER_TRANSITION }}
           >
-            <Text className="tc-home-page__breach-kicker">进入 TapCanvas 创作现场</Text>
+            <Text className="tc-home-page__breach-kicker">{$('进入 TapCanvas 创作现场')}</Text>
           </motion.div>
 
           <div className="tc-home-page__breach-core">
@@ -245,8 +246,8 @@ export default function HomePage(): JSX.Element {
                 <div className="tc-home-page__ritual-device-accent" aria-hidden="true" />
                 <Anchor className="tc-home-page__ritual-link" href={workspaceUrl}>
                   <span className="tc-home-page__ritual-copy">
-                    <span className="tc-home-page__ritual-step">立即进入</span>
-                    <span className="tc-home-page__ritual-label">进入项目与章节工作台</span>
+                    <span className="tc-home-page__ritual-step">{$('立即进入')}</span>
+                    <span className="tc-home-page__ritual-label">{$('进入项目与章节工作台')}</span>
                   </span>
                   <span className="tc-home-page__ritual-arrow-wrap" aria-hidden="true">
                     <IconArrowRight className="tc-home-page__ritual-arrow" size={18} stroke={2} />
@@ -261,9 +262,9 @@ export default function HomePage(): JSX.Element {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.54, ...HOME_STAGGER_TRANSITION }}
             >
-              <Text className="tc-home-page__statement-main">创建项目，按章节稳定生产。</Text>
+              <Text className="tc-home-page__statement-main">{$('创建项目，按章节稳定生产。')}</Text>
               <Text className="tc-home-page__statement-copy">
-                进入后，先上传原文与确定画风，再逐章生成镜头、沉淀资产，并把连续结果稳定推进到下一章。
+                {$('进入后，先上传原文与确定画风，再逐章生成镜头、沉淀资产，并把连续结果稳定推进到下一章。')}
               </Text>
             </motion.div>
           </div>

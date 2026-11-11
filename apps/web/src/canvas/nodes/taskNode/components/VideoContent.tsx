@@ -3,6 +3,7 @@ import { Button, Group, Text, Tooltip } from '@mantine/core'
 import { IconCheck, IconClock, IconScissors } from '@tabler/icons-react'
 import type { FrameSample } from '../types'
 import { VideoFramePreview } from './VideoFramePreview'
+import { $, $t } from '../../../i18n'
 
 type VideoResult = {
   url: string
@@ -81,12 +82,12 @@ export function VideoContent({
       <Group className="video-content-header" justify="space-between" gap={4}>
         <Text className="video-content-header-text" size="xs" c="dimmed">
           {videoResults.length > 0
-            ? `共 ${videoResults.length} 个视频${videoPrimaryIndex >= 0 ? ` (主视频: 第 ${videoPrimaryIndex + 1} 个)` : ''}`
-            : '视频生成中...'}
+            ? $t('共 {{v1}} 个视频{{v2}}', { v1: videoResults.length, v2: videoPrimaryIndex >= 0 ? $t(' (主视频: 第 {{v1}} 个)', { v1: videoPrimaryIndex + 1 }) : '' })
+            : $('视频生成中...')}
         </Text>
 	        <Group className="video-content-header-actions" gap={2}>
             {videoResults[videoPrimaryIndex]?.url && (
-              <Tooltip label={isPrimaryVideoAdopted ? '当前主视频已采纳' : '采纳当前主视频'} position="top" withArrow>
+              <Tooltip label={isPrimaryVideoAdopted ? $('当前主视频已采纳') : $('采纳当前主视频')} position="top" withArrow>
                 <Button
                   className="video-content-adopt-button"
                   size="compact-xs"
@@ -95,7 +96,7 @@ export function VideoContent({
                   onClick={() => onAdoptVideo(videoPrimaryIndex)}
                   leftSection={<IconCheck className="video-content-adopt-icon" size={12} />}
                 >
-                  采纳
+                  {$('采纳')}
                 </Button>
               </Tooltip>
             )}
@@ -107,7 +108,7 @@ export function VideoContent({
             onClick={onOpenWebCut}
             leftSection={<IconScissors className="video-content-clip-icon" size={12} />}
 	          >
-	            剪辑
+	            {$('剪辑')}
 	          </Button>
 	          <Button
 	            className="video-content-history-button"
@@ -116,7 +117,7 @@ export function VideoContent({
             onClick={onOpenVideoModal}
             leftSection={<IconClock className="video-content-history-icon" size={12} />}
           >
-            {videoResults.length > 0 ? '选择主视频' : '查看历史'}
+            {videoResults.length > 0 ? $('选择主视频') : $('查看历史')}
           </Button>
         </Group>
       </Group>
@@ -163,7 +164,7 @@ export function VideoContent({
             fontSize: 12,
           }}
         >
-          等待视频生成完成…
+          {$('等待视频生成完成…')}
         </div>
       )}
 

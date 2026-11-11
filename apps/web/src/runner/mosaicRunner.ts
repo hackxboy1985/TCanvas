@@ -5,6 +5,7 @@ import { uploadServerAssetFile } from '../api/server'
 import { loadBatchImageSource } from '../domain/resource-runtime/services/batchImageSourceLoader'
 import { runBatchProcessingJob } from '../domain/resource-runtime/services/batchProcessingQueue'
 import { buildAssetRefId, buildImageAssetResultItem } from './assetReference'
+import { $ } from '../canvas/i18n'
 
 const MAX_CELLS = 30
 const BG_COLOR = '#0b1224'
@@ -69,7 +70,7 @@ function resolveMosaicInput(data: any): MosaicNormalizedOptions {
     ? (data.mosaicImages as any[]).map((i) => (typeof i?.url === 'string' ? i.url : null)).filter(Boolean)
     : []
   if (!sourcesFromData.length) {
-    throw new Error('请在拼图配置中手动选择图片后再生成')
+    throw new Error($('请在拼图配置中手动选择图片后再生成'))
   }
   const grid = typeof data?.mosaicGrid === 'number' && data.mosaicGrid >= 1 && data.mosaicGrid <= 3 ? data.mosaicGrid : 2
   const limit = Math.min(MAX_CELLS, Math.max(1, Number(data?.mosaicLimit) || grid * grid || MAX_CELLS))
@@ -118,7 +119,7 @@ async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
     try {
       canvas.toBlob((b) => {
         if (b) resolve(b)
-        else reject(new Error('生成拼图失败'))
+        else reject(new Error($('生成拼图失败')))
       }, 'image/png')
     } catch (err) {
       reject(err)
@@ -135,7 +136,7 @@ function buildMergedImageResults(existing: any, hostedUrl: string) {
     ...sanitizedExisting,
     buildImageAssetResultItem({
       url: hostedUrl,
-      title: '拼图',
+      title: $('拼图'),
       assetRefId: buildAssetRefId({ name: 'mosaic', fallbackPrefix: 'mosaic' }),
     }),
   ]
@@ -223,7 +224,7 @@ function drawMosaic(images: LoadedMosaicSource[], grid: number, options?: Mosaic
   const subtitleLineHeight = Math.round(subtitleFontSize * 1.45)
   const measureCanvas = document.createElement('canvas')
   const measureCtx = measureCanvas.getContext('2d')
-  if (!measureCtx) throw new Error('无法创建画布上下文')
+  if (!measureCtx) throw new Error($('无法创建画布上下文'))
   measureCtx.font = `700 ${titleFontSize}px Inter, ui-sans-serif, system-ui, sans-serif`
   const titleLines = title ? wrapTextLines(measureCtx, title, textBlockWidth) : []
   measureCtx.font = `500 ${subtitleFontSize}px Inter, ui-sans-serif, system-ui, sans-serif`
@@ -237,7 +238,7 @@ function drawMosaic(images: LoadedMosaicSource[], grid: number, options?: Mosaic
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('无法创建画布上下文')
+  if (!ctx) throw new Error($('无法创建画布上下文'))
   ctx.fillStyle = backgroundColor
   ctx.fillRect(0, 0, width, height)
   ctx.imageSmoothingQuality = 'high'
@@ -327,7 +328,7 @@ export async function buildMosaicCanvas(urls: string[], grid: number, options?: 
       if (failedUrl) failedUrls.push(failedUrl)
     })
     if (!loaded.length) {
-      const error = new Error('图片已过期或无法加载，请重新选择可访问的图片') as Error & { failedUrls?: string[] }
+      const error = new Error($('图片已过期或无法加载，请重新选择可访问的图片')) as Error & { failedUrls?: string[] }
       error.failedUrls = failedUrls
       throw error
     }
@@ -416,7 +417,7 @@ export async function runNodeMosaic(id: string, get: () => any, set: (fn: (s: an
     const hosted = await uploadServerAssetFile(file, fileName, { taskKind: 'mosaic' })
     const hostedUrl = typeof hosted?.data?.url === 'string' ? hosted.data.url.trim() : ''
     if (!hostedUrl) {
-      throw new Error('拼图已生成，但上传到 OSS 失败')
+      throw new Error($('拼图已生成，但上传到 OSS 失败'))
     }
 
     const { merged, primaryIndex } = buildMergedImageResults(data.imageResults, hostedUrl)
@@ -447,7 +448,7 @@ export async function runNodeMosaic(id: string, get: () => any, set: (fn: (s: an
     })
     appendLog(id, `[${nowLabel()}] 拼图完成，输出 ${merged.length} 张结果，主图更新。`)
   } catch (err: any) {
-    const msg = err?.message || '拼图失败'
+    const msg = err?.message || $('拼图失败')
     toast(msg, 'error')
     setNodeStatus(id, 'error', { progress: 0, lastError: msg })
     appendLog(id, `[${nowLabel()}] error: ${msg}`)

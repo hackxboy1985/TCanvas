@@ -7,6 +7,7 @@ import React from 'react';
 import { BaseModal } from './BaseModal';
 import { getNodeDefaultConfig, getNodeInputTypes, getNodeOutputTypes } from '../../../utils';
 import type { NodeData } from '../NodeBase/NodeBase.types';
+import { $ } from '../../../i18n';
 
 export interface NodeConfigModalProps {
   /** 是否显示 */
@@ -52,7 +53,7 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
   configTemplate,
   onConfirm,
   onCancel,
-  title = '节点配置',
+  title = $('节点配置'),
   showAdvanced = false,
   className = '',
 }) => {
@@ -80,18 +81,18 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
     const baseFields: ConfigField[] = [
       {
         key: 'label',
-        label: '名称',
+        label: $('名称'),
         type: 'text',
         required: true,
-        placeholder: '请输入节点名称',
-        description: '用于标识当前节点的名称',
+        placeholder: $('请输入节点名称'),
+        description: $('用于标识当前节点的名称'),
       },
       {
         key: 'description',
-        label: '描述',
+        label: $('描述'),
         type: 'textarea',
         rows: 3,
-        placeholder: '请输入描述（可选）',
+        placeholder: $('请输入描述（可选）'),
       },
     ];
 
@@ -103,28 +104,28 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
         kindSpecificFields.push(
           {
             key: 'prompt',
-            label: '提示词',
+            label: $('提示词'),
             type: 'textarea',
             required: true,
             rows: 4,
-            placeholder: '请输入提示词',
+            placeholder: $('请输入提示词'),
           },
           {
             key: 'temperature',
-            label: '温度',
+            label: $('温度'),
             type: 'number',
             min: 0,
             max: 2,
             step: 0.1,
-            description: '控制输出随机性（0.0-2.0）',
+            description: $('控制输出随机性（0.0-2.0）'),
           },
           {
             key: 'maxLength',
-            label: '最大长度',
+            label: $('最大长度'),
             type: 'number',
             min: 1,
             max: 4000,
-            description: '生成内容的最大 token 数',
+            description: $('生成内容的最大 token 数'),
           }
         );
         break;
@@ -133,21 +134,21 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
         kindSpecificFields.push(
           {
             key: 'prompt',
-            label: '提示词',
+            label: $('提示词'),
             type: 'textarea',
             required: true,
             rows: 4,
-            placeholder: '请描述你要生成的图像',
+            placeholder: $('请描述你要生成的图像'),
           },
           {
             key: 'size',
-            label: '尺寸',
+            label: $('尺寸'),
             type: 'select',
             options: ['256x256', '512x512', '1024x1024'],
           },
           {
             key: 'quality',
-            label: '质量',
+            label: $('质量'),
             type: 'select',
             options: ['standard', 'hd'],
           }
@@ -158,7 +159,7 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
         kindSpecificFields.push(
           {
             key: 'duration',
-            label: '时长（秒）',
+            label: $('时长（秒）'),
             type: 'number',
             min: 1,
             max: 300,
@@ -166,13 +167,13 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
           },
           {
             key: 'fps',
-            label: '帧率',
+            label: $('帧率'),
             type: 'select',
             options: ['24', '30', '60'],
           },
           {
             key: 'resolution',
-            label: '分辨率',
+            label: $('分辨率'),
             type: 'select',
             options: ['720p', '1080p', '4k'],
           }
@@ -183,14 +184,14 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
         kindSpecificFields.push(
           {
             key: 'duration',
-            label: '时长（秒）',
+            label: $('时长（秒）'),
             type: 'number',
             min: 1,
             max: 600,
           },
           {
             key: 'sampleRate',
-            label: '采样率',
+            label: $('采样率'),
             type: 'select',
             options: ['22050', '44100', '48000'],
           }
@@ -206,11 +207,11 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
     const advancedFields: ConfigField[] = [
       {
         key: 'timeout',
-        label: '超时（秒）',
+        label: $('超时（秒）'),
         type: 'number',
         min: 1,
         max: 3600,
-        description: '允许的最大执行时长',
+        description: $('允许的最大执行时长'),
       },
     ];
 

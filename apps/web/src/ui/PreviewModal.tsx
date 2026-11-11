@@ -4,6 +4,7 @@ import { IconX, IconDownload, IconPhoto } from '@tabler/icons-react'
 import { useUIStore } from './uiStore'
 import { appendDownloadSuffix, downloadUrl } from '../utils/download'
 import { toOssResponsiveUrl } from '../canvas/utils/ossResponsive'
+import { $ } from '../canvas/i18n'
 
 export default function PreviewModal({ className }: { className?: string }): JSX.Element | null {
   const preview = useUIStore(s => s.preview)
@@ -73,7 +74,7 @@ export default function PreviewModal({ className }: { className?: string }): JSX
           }}
         >
           <Title className="preview-modal-title" order={5} style={{ color: '#e5e7eb' }}>
-            {name || '预览'}
+            {name || $('预览')}
           </Title>
           <Group className="preview-modal-actions" gap={6}>
             {kind === 'image' && (
@@ -83,15 +84,15 @@ export default function PreviewModal({ className }: { className?: string }): JSX
                 size="compact-sm"
                 leftSection={<IconPhoto size={14} />}
                 onClick={() => setShowOriginal((prev) => !prev)}
-                title={showOriginal ? '切换回压缩图' : '加载并展示原图'}
+                title={showOriginal ? $('切换回压缩图') : $('加载并展示原图')}
               >
-                {showOriginal ? '显示压缩图' : '展示原图'}
+                {showOriginal ? $('显示压缩图') : $('展示原图')}
               </Button>
             )}
-            <ActionIcon className="preview-modal-download" variant="light" onClick={download} title="下载">
+            <ActionIcon className="preview-modal-download" variant="light" onClick={download} title={$('下载')}>
               <IconDownload className="preview-modal-download-icon" size={16} />
             </ActionIcon>
-            <ActionIcon className="preview-modal-close" variant="light" onClick={close} title="关闭">
+            <ActionIcon className="preview-modal-close" variant="light" onClick={close} title={$('关闭')}>
               <IconX className="preview-modal-close-icon" size={16} />
             </ActionIcon>
           </Group>

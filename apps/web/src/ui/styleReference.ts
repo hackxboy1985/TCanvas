@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react'
 import type { ProjectBookIndexDto } from '../api/server'
 import { tryParseJsonLike } from '../canvas/nodes/taskNodeHelpers'
+import { $, $t } from '../canvas/i18n'
 
 export type DerivedStyleHints = {
   styleName?: string
@@ -65,7 +66,7 @@ export function listCanvasStyleReferenceCandidates(nodes: readonly Node[]): Canv
     seen.add(trimmedUrl)
     output.push({
       url: trimmedUrl,
-      label: String(label || '').trim() || '画布图像',
+      label: String(label || '').trim() || $('画布图像'),
     })
   }
   const pickNodeLabel = (node: Node): string => {
@@ -73,7 +74,7 @@ export function listCanvasStyleReferenceCandidates(nodes: readonly Node[]): Canv
     const label = String(data?.label || data?.title || '').trim()
     if (label) return label
     const kind = String(data?.kind || '').trim()
-    return kind ? `节点 ${kind}` : '画布图像'
+    return kind ? $t('节点 {{kind}}', { kind }) : $('画布图像')
   }
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
     const node = nodes[index]
@@ -154,11 +155,11 @@ export async function persistStyleReferenceImage(input: {
 }): Promise<ProjectBookIndexDto> {
   const url = String(input.referenceUrl || '').trim()
   if (!url) {
-    throw new Error('未找到可用参考图')
+    throw new Error($('未找到可用参考图'))
   }
   const derivedStyleHints = await input.deriveStyleHints(url)
   if (!derivedStyleHints) {
-    throw new Error('风格参考图语义提炼失败：未返回可解析 JSON，请检查模型映射与 vision 输出后重试')
+    throw new Error($('风格参考图语义提炼失败：未返回可解析 JSON，请检查模型映射与 vision 输出后重试'))
   }
   const payload = {
     styleName: String(derivedStyleHints.styleName || '').trim() || '参考图锁定风格',

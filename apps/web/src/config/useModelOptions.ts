@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listModelCatalogModels, listModelCatalogVendors, type BillingModelKind, type ModelCatalogModelDto } from '../api/server'
 import { getImageModels, getShotVideoModels, type LensModelOption } from '../api/lens'
 import { getDefaultModel } from './models'
+import { $ } from '../canvas/i18n'
 import type { ModelOption, ModelOptionPricing, NodeKind } from './models'
 
 export const MODEL_REFRESH_EVENT = 'tapcanvas-models-refresh'
@@ -260,14 +261,14 @@ export function resolveExecutableImageModelFromOptions(
   }
 
   if (options.length === 0) {
-    throw new Error('未找到可用图片模型：请先在系统模型管理中启用 image 模型。')
+    throw new Error($('未找到可用图片模型：请先在系统模型管理中启用 image 模型。'))
   }
 
   const defaultOption = findModelOptionByIdentifier(options, getDefaultModel(params.kind))
   const fallbackOption = defaultOption || options[0] || null
   const source = defaultOption ? 'default' : 'firstAvailable'
   if (!fallbackOption) {
-    throw new Error('未找到可用图片模型：请先在系统模型管理中启用 image 模型。')
+    throw new Error($('未找到可用图片模型：请先在系统模型管理中启用 image 模型。'))
   }
 
   const resolvedValue = trimModelIdentifier(fallbackOption.value)
@@ -365,7 +366,7 @@ export function toLensModelOptions(items: LensModelOption[]): ModelOption[] {
             ? {
                 resolutionOptions: item.resolutions,
                 // 分辨率必须有对应控件映射；否则尺寸去重后两种菜单都会被隐藏。
-                controls: [{ key: 'resolution', label: '分辨率', binding: 'resolution', optionSource: 'resolutionOptions' }],
+                controls: [{ key: 'resolution', label: $('分辨率'), binding: 'resolution', optionSource: 'resolutionOptions' }],
               }
             : {}),
         },

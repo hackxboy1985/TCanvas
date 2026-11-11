@@ -1,6 +1,7 @@
 import React from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
+import { $ } from '../i18n'
 
 type Data = { label?: string; kind: 'io-in' | 'io-out'; types?: string[] }
 
@@ -32,7 +33,7 @@ export default function IONode(props: NodeProps): JSX.Element {
       boxShadow: '0 8px 16px rgba(0,0,0,.2)',
       paddingTop: 4,
     }}>
-      <div className="io-node-label" style={{ position: 'absolute', top: 4, left: 6, fontSize: 10, color: 'var(--canvas-node-subtext)' }}>{isIn ? '入口' : '出口'}</div>
+      <div className="io-node-label" style={{ position: 'absolute', top: 4, left: 6, fontSize: 10, color: 'var(--canvas-node-subtext)' }}>{isIn ? $('入口') : $('出口')}</div>
       {types.map((t: string, idx: number) => {
         const top = paddingY + idx * itemH
         return isIn ? (

@@ -2,6 +2,7 @@ import { uploadServerAssetFile, type TaskKind } from '../api/server'
 import { loadBatchImageSource } from '../domain/resource-runtime/services/batchImageSourceLoader'
 import { runBatchProcessingJob } from '../domain/resource-runtime/services/batchProcessingQueue'
 import type { NamedReferenceEntry } from './assetReference'
+import { $ } from '../canvas/i18n'
 
 export type ReferenceSheetEntryMeta = {
   sourceUrl: string
@@ -109,7 +110,7 @@ export async function composeLabeledReferenceSheetBlob(entries: NamedReferenceEn
       return await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 })
     }
     return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('导出拼图失败'))), 'image/jpeg', 0.92)
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error($('导出拼图失败')))), 'image/jpeg', 0.92)
     })
   })
 }

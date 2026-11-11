@@ -6,6 +6,7 @@ import { useRFStore } from '../canvas/store'
 import { calculateSafeMaxHeight } from './utils/panelPosition'
 import { PanelCard } from './PanelCard'
 import { stopPanelWheelPropagation } from './utils/panelWheel'
+import { $ } from '../canvas/i18n'
 
 export default function HistoryPanel(): JSX.Element | null {
   const active = useUIStore((s) => s.activePanel)
@@ -53,16 +54,16 @@ export default function HistoryPanel(): JSX.Element | null {
             >
               <div className="history-panel-arrow panel-arrow" />
               <Group className="history-panel-header" justify="space-between" mb={8}>
-                <Title className="history-panel-title" order={6}>保存历史</Title>
+                <Title className="history-panel-title" order={6}>{$('保存历史')}</Title>
                 <Button className="history-panel-close" size="xs" variant="light" onClick={() => setActivePanel(null)}>
-                  关闭
+                  {$('关闭')}
                 </Button>
               </Group>
               <div className="history-panel-body" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: 4 }}>
               <Stack className="history-panel-list" gap="xs">
                 {(!versions || versions.length === 0) && (
                   <Text className="history-panel-empty" size="sm" c="dimmed">
-                    暂无历史
+                    {$('暂无历史')}
                   </Text>
                 )}
                 {versions.map((v) => (
@@ -76,7 +77,7 @@ export default function HistoryPanel(): JSX.Element | null {
                       variant="light"
                       onClick={async () => {
                         if (!currentFlow.id) return
-                        if (!confirm('回滚到该版本？当前更改将丢失')) return
+                        if (!confirm($('回滚到该版本？当前更改将丢失'))) return
                         await rollbackFlow(currentFlow.id, v.id)
                         const r = await getServerFlow(currentFlow.id)
                         const data: any = r?.data || {}
@@ -88,7 +89,7 @@ export default function HistoryPanel(): JSX.Element | null {
                         setActivePanel(null)
                       }}
                     >
-                      回滚
+                      {$('回滚')}
                     </Button>
                   </Group>
                 ))}

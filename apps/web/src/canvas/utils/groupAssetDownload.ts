@@ -2,6 +2,7 @@ import type { Node as FlowNode } from '@xyflow/react'
 
 import { downloadUrl } from '../../utils/download'
 import { getTaskNodeSchema } from '../nodes/taskNodeSchema'
+import { $, $t } from '../i18n'
 
 export type GroupDownloadableMediaType = 'image' | 'video' | 'audio'
 
@@ -234,13 +235,13 @@ export async function downloadGroupAssets({
 }: DownloadGroupAssetsParams): Promise<{ total: number; attempted: number }> {
   const assets = collectGroupAssetsForDownload({ nodes, groupId })
   if (assets.length === 0) {
-    throw new Error('组内没有可下载的素材（图片/视频/音频）')
+    throw new Error($('组内没有可下载的素材（图片/视频/音频）'))
   }
   if (!Number.isFinite(maxDownloads) || maxDownloads <= 0) {
-    throw new Error('maxDownloads 必须为正数')
+    throw new Error($('maxDownloads 必须为正数'))
   }
   if (assets.length > maxDownloads) {
-    throw new Error(`组内素材过多（${assets.length} 个）。请拆分分组后重试（上限 ${maxDownloads} 个）。`)
+    throw new Error($t('组内素材过多（{{count}} 个）。请拆分分组后重试（上限 {{max}} 个）。', { count: assets.length, max: maxDownloads }))
   }
 
   const groupPrefix = sanitizeFilenamePart(groupLabel || 'group')

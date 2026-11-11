@@ -1,3 +1,4 @@
+import { $ } from '../../i18n'
 export type ImageEditSizeOption = {
   value: string
   label: string
@@ -15,25 +16,25 @@ export type CanvasResizeSizeOption = {
 export const IMAGE_EDIT_SIZE_OPTIONS: readonly ImageEditSizeOption[] = [
   {
     value: '1280x720',
-    label: '1280x720 · 720P横屏',
+    label: $('1280x720 · 720P横屏'),
     width: 1280,
     height: 720,
   },
   {
     value: '720x1280',
-    label: '720x1280 · 720P竖屏',
+    label: $('720x1280 · 720P竖屏'),
     width: 720,
     height: 1280,
   },
   {
     value: '1792x1024',
-    label: '1792x1024 · 宽画幅大图',
+    label: $('1792x1024 · 宽画幅大图'),
     width: 1792,
     height: 1024,
   },
   {
     value: '1024x1792',
-    label: '1024x1792 · 竖画幅大图',
+    label: $('1024x1792 · 竖画幅大图'),
     width: 1024,
     height: 1792,
   },
@@ -43,16 +44,16 @@ export const DEFAULT_IMAGE_EDIT_SIZE = '1280x720'
 export const DEFAULT_CANVAS_RESIZE_SIZE = '1280x720'
 
 export const CANVAS_RESIZE_SIZE_OPTIONS: readonly CanvasResizeSizeOption[] = [
-  { value: '1280x720', label: '1280x720 · 720P横屏', width: 1280, height: 720 },
-  { value: '720x1280', label: '720x1280 · 720P竖屏', width: 720, height: 1280 },
-  { value: '1920x1080', label: '1920x1080 · 1080P横屏', width: 1920, height: 1080 },
-  { value: '1080x1920', label: '1080x1920 · 1080P竖屏', width: 1080, height: 1920 },
-  { value: '1024x1024', label: '1024x1024 · 方图', width: 1024, height: 1024 },
-  { value: '1440x1440', label: '1440x1440 · 高清方图', width: 1440, height: 1440 },
-  { value: '1536x1024', label: '1536x1024 · 宽画幅', width: 1536, height: 1024 },
-  { value: '1024x1536', label: '1024x1536 · 竖画幅', width: 1024, height: 1536 },
-  { value: '1792x1024', label: '1792x1024 · 宽画幅大图', width: 1792, height: 1024 },
-  { value: '1024x1792', label: '1024x1792 · 竖画幅大图', width: 1024, height: 1792 },
+  { value: '1280x720', label: $('1280x720 · 720P横屏'), width: 1280, height: 720 },
+  { value: '720x1280', label: $('720x1280 · 720P竖屏'), width: 720, height: 1280 },
+  { value: '1920x1080', label: $('1920x1080 · 1080P横屏'), width: 1920, height: 1080 },
+  { value: '1080x1920', label: $('1080x1920 · 1080P竖屏'), width: 1080, height: 1920 },
+  { value: '1024x1024', label: $('1024x1024 · 方图'), width: 1024, height: 1024 },
+  { value: '1440x1440', label: $('1440x1440 · 高清方图'), width: 1440, height: 1440 },
+  { value: '1536x1024', label: $('1536x1024 · 宽画幅'), width: 1536, height: 1024 },
+  { value: '1024x1536', label: $('1024x1536 · 竖画幅'), width: 1024, height: 1536 },
+  { value: '1792x1024', label: $('1792x1024 · 宽画幅大图'), width: 1792, height: 1024 },
+  { value: '1024x1792', label: $('1024x1792 · 竖画幅大图'), width: 1024, height: 1792 },
 ] as const
 
 const CANVAS_RESIZE_MIN = 64

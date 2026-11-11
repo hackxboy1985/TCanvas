@@ -7,6 +7,7 @@ import {
   type ChapterDto,
 } from '../api/server'
 
+import { $, $t } from '../canvas/i18n'
 type EnsureProjectChapterBootstrapResult = {
   changed: boolean
   chapterId?: string
@@ -45,7 +46,7 @@ export async function ensureProjectHasAutoBoundFirstChapter(projectId: string): 
   const placeholder = chapters.find((item) => isBindablePlaceholderChapter(item)) || null
   if (placeholder) {
     const updated = await updateChapter(placeholder.id, {
-      title: firstSourceChapter.title || placeholder.title || '第1章',
+      title: firstSourceChapter.title || placeholder.title || $('第1章'),
       summary: firstSourceChapter.summary || firstSourceChapter.coreConflict || '',
       sourceBookId: primaryBook.bookId,
       sourceBookChapter: firstSourceChapter.chapter,
@@ -55,11 +56,11 @@ export async function ensureProjectHasAutoBoundFirstChapter(projectId: string): 
 
   if (chapters.length === 0) {
     const created = await createProjectChapter(projectId, {
-      title: firstSourceChapter.title || '第1章',
+      title: firstSourceChapter.title || $('第1章'),
       summary: firstSourceChapter.summary || firstSourceChapter.coreConflict || '',
     })
     const updated = await updateChapter(created.id, {
-      title: firstSourceChapter.title || created.title || '第1章',
+      title: firstSourceChapter.title || created.title || $('第1章'),
       summary: firstSourceChapter.summary || firstSourceChapter.coreConflict || '',
       sourceBookId: primaryBook.bookId,
       sourceBookChapter: firstSourceChapter.chapter,
@@ -109,11 +110,11 @@ export async function syncProjectChaptersFromPrimaryBook(
   let firstCreatedChapterId: string | undefined
   for (const item of targetItems) {
     const created = await createProjectChapter(projectId, {
-      title: item.title || `第${item.chapter}章`,
+      title: item.title || $t('第{{chapter}}章', { chapter: item.chapter }),
       summary: item.summary || item.coreConflict || '',
     })
     const updated = await updateChapter(created.id, {
-      title: item.title || created.title || `第${item.chapter}章`,
+      title: item.title || created.title || $t('第{{chapter}}章', { chapter: item.chapter }),
       summary: item.summary || item.coreConflict || '',
       sourceBookId: primaryBook.bookId,
       sourceBookChapter: item.chapter,

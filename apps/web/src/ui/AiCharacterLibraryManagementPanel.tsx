@@ -32,6 +32,7 @@ import {
   type AiCharacterLibraryUpsertPayload,
 } from '../api/server'
 import { toast } from './toast'
+import { $, $t } from '../canvas/i18n'
 
 const PAGE_SIZE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '10', label: '10 / 页' },
@@ -130,7 +131,7 @@ function buildUpsertPayload(editor: CharacterEditorState, projectId?: string | n
 
 function normalizeImportCharacter(raw: unknown): AiCharacterLibraryUpsertPayload {
   if (!raw || typeof raw !== 'object') {
-    throw new Error('JSON 导入数组中的每一项都必须是对象')
+    throw new Error($('JSON 导入数组中的每一项都必须是对象'))
   }
   const item = raw as Record<string, unknown>
   return {
@@ -187,16 +188,16 @@ function safeParseImportJson(text: string): unknown {
 
 function parseImportJsonText(text: string): AiCharacterLibraryUpsertPayload[] {
   const rawText = String(text || '').trim()
-  if (!rawText) throw new Error('请先填写 JSON')
+  if (!rawText) throw new Error($('请先填写 JSON'))
   let parsed: unknown
   try {
     parsed = safeParseImportJson(rawText)
   } catch {
-    throw new Error('JSON 格式错误')
+    throw new Error($('JSON 格式错误'))
   }
   const items = extractImportItems(parsed)
   if (!items || !items.length) {
-    throw new Error('JSON 必须是数组、{ "characters": [...] }，或包在 code/content/payload 中的 JSON / ```json code``` 文本')
+    throw new Error($('JSON 必须是数组、{ "characters": [...] }，或包在 code/content/payload 中的 JSON / ```json code``` 文本'))
   }
   return items.map(normalizeImportCharacter)
 }
@@ -259,7 +260,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
       console.error('list ai character library failed', err)
       setItems([])
       setTotal(0)
-      toast(err instanceof Error ? err.message : '加载角色库失败', 'error')
+      toast(err instanceof Error ? err.message : $('加载角色库失败'), 'error')
     } finally {
       setLoading(false)
     }
@@ -282,23 +283,23 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
     if (!editor) return
     const payload = buildUpsertPayload(editor, effectiveProjectId)
     if (!payload.name && !payload.identity_hint && !payload.character_id) {
-      toast('至少填写 名称 / identity_hint / character_id 之一', 'error')
+      toast($('至少填写 名称 / identity_hint / character_id 之一'), 'error')
       return
     }
     setSaving(true)
     try {
       if (editor.id) {
         await updateAiCharacterLibraryCharacter(editor.id, payload)
-        toast('角色库记录已更新', 'success')
+        toast($('角色库记录已更新'), 'success')
       } else {
         await createAiCharacterLibraryCharacter(payload)
-        toast('角色库记录已创建', 'success')
+        toast($('角色库记录已创建'), 'success')
       }
       setEditor(null)
       await reload()
     } catch (err: unknown) {
       console.error('save ai character library failed', err)
-      toast(err instanceof Error ? err.message : '保存角色库记录失败', 'error')
+      toast(err instanceof Error ? err.message : $('保存角色库记录失败'), 'error')
     } finally {
       setSaving(false)
     }
@@ -307,15 +308,15 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
   const handleDelete = React.useCallback(async (character: AiCharacterLibraryCharacterDto) => {
     if (!canEdit) return
     const label = character.name || character.identity_hint || character.character_id || character.id
-    if (!window.confirm(`确定删除角色库记录「${label}」？`)) return
+    if (!window.confirm($t('确定删除角色库记录「{{label}}」？', { label }))) return
     setDeletingId(character.id)
     try {
       await deleteAiCharacterLibraryCharacter(character.id)
-      toast('角色库记录已删除', 'success')
+      toast($('角色库记录已删除'), 'success')
       await reload()
     } catch (err: unknown) {
       console.error('delete ai character library failed', err)
-      toast(err instanceof Error ? err.message : '删除角色库记录失败', 'error')
+      toast(err instanceof Error ? err.message : $('删除角色库记录失败'), 'error')
     } finally {
       setDeletingId('')
     }
@@ -327,7 +328,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
     try {
       characters = parseImportJsonText(importText)
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'JSON 解析失败', 'error')
+      toast(err instanceof Error ? err.message : $('JSON 解析失败'), 'error')
       return
     }
     setImporting(true)
@@ -336,13 +337,13 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
         ...(effectiveProjectId ? { projectId: effectiveProjectId } : {}),
         characters,
       })
-      toast(`导入完成：新增 ${result.importedCharacters}，更新 ${result.updatedCharacters}`, 'success')
+      toast($t('导入完成：新增 {{imported}}，更新 {{updated}}', { imported: result.importedCharacters, updated: result.updatedCharacters }), 'success')
       setImportText('')
       setPage(1)
       await reload()
     } catch (err: unknown) {
       console.error('import ai character library json failed', err)
-      toast(err instanceof Error ? err.message : 'JSON 导入失败', 'error')
+      toast(err instanceof Error ? err.message : $('JSON 导入失败'), 'error')
     } finally {
       setImporting(false)
     }
@@ -356,7 +357,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
       setImportText(text)
     } catch (err: unknown) {
       console.error('read import file failed', err)
-      toast(err instanceof Error ? err.message : '读取导入文件失败', 'error')
+      toast(err instanceof Error ? err.message : $('读取导入文件失败'), 'error')
     } finally {
       event.currentTarget.value = ''
     }
@@ -370,9 +371,9 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
       <Stack className="ai-character-library-management-stack" gap="sm">
         <Group className="ai-character-library-management-header" justify="space-between" align="flex-start" wrap="wrap">
           <Stack className="ai-character-library-management-copy" gap={2}>
-            <Text className="ai-character-library-management-title" fw={700}>AI 角色库管理</Text>
+            <Text className="ai-character-library-management-title" fw={700}>{$('AI 角色库管理')}</Text>
             <Text className="ai-character-library-management-subtitle" size="xs" c="dimmed">
-              支持分页查询、单条 CRUD 和 JSON 批量导入。{syncState?.lastSyncedAt ? `最近同步：${formatTime(syncState.lastSyncedAt)}` : '当前为本地角色库。'}
+              {$('支持分页查询、单条 CRUD 和 JSON 批量导入。')}{syncState?.lastSyncedAt ? $t('最近同步：{{time}}', { time: formatTime(syncState.lastSyncedAt) }) : $('当前为本地角色库。')}
             </Text>
           </Stack>
           <Group className="ai-character-library-management-actions" gap="xs" wrap="wrap">
@@ -385,11 +386,11 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
                   setCurrentProjectOnly(event.currentTarget.checked)
                   setPage(1)
                 }}
-                label="仅当前项目"
+                label={$('仅当前项目')}
               />
             ) : null}
-            <Tooltip className="ai-character-library-management-refresh-tooltip" label="刷新" withArrow>
-              <ActionIcon className="ai-character-library-management-refresh" variant="subtle" onClick={() => void reload()} loading={loading} aria-label="刷新角色库">
+            <Tooltip className="ai-character-library-management-refresh-tooltip" label={$('刷新')} withArrow>
+              <ActionIcon className="ai-character-library-management-refresh" variant="subtle" onClick={() => void reload()} loading={loading} aria-label={$('刷新角色库')}>
                 <IconRefresh className="ai-character-library-management-refresh-icon" size={16} />
               </ActionIcon>
             </Tooltip>
@@ -400,7 +401,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
               disabled={!canEdit}
               onClick={() => setEditor(buildEditorState())}
             >
-              新建角色
+              {$('新建角色')}
             </Button>
           </Group>
         </Group>
@@ -414,17 +415,17 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
               setPage(1)
             }}
             leftSection={<IconSearch className="ai-character-library-management-search-icon" size={14} />}
-            placeholder="搜索：名称 / character_id / 标签 / 设定"
+            placeholder={$('搜索：名称 / character_id / 标签 / 设定')}
             w={320}
           />
           <Group className="ai-character-library-management-meta" gap="xs" wrap="wrap">
             <Text className="ai-character-library-management-summary" size="xs" c="dimmed">
-              {total > 0 ? `第 ${pageStart}-${pageEnd} / 共 ${total} 条` : '共 0 条'}
+              {total > 0 ? $t('第 {{start}}-{{end}} / 共 {{total}} 条', { start: pageStart, end: pageEnd, total }) : $('共 0 条')}
             </Text>
             <Select
               className="ai-character-library-management-page-size"
               value={String(pageSize)}
-              data={PAGE_SIZE_OPTIONS}
+              data={PAGE_SIZE_OPTIONS.map((option) => ({ value: option.value, label: $(option.label) }))}
               onChange={(value) => {
                 const nextPageSize = Number.parseInt(String(value || pageSize), 10)
                 if (!Number.isFinite(nextPageSize) || nextPageSize <= 0) return
@@ -440,7 +441,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
         <InlinePanel className="ai-character-library-management-import">
           <Stack className="ai-character-library-management-import-stack" gap="xs">
             <Group className="ai-character-library-management-import-header" justify="space-between" align="center" wrap="wrap">
-              <Text className="ai-character-library-management-import-title" fw={600}>JSON 批量导入</Text>
+              <Text className="ai-character-library-management-import-title" fw={600}>{$('JSON 批量导入')}</Text>
               <Group className="ai-character-library-management-import-actions" gap="xs" wrap="wrap">
                 <Button
                   className="ai-character-library-management-import-file"
@@ -450,7 +451,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
                   leftSection={<IconUpload className="ai-character-library-management-import-file-icon" size={14} />}
                   onClick={() => importFileInputRef.current?.click()}
                 >
-                  加载 JSON 文件
+                  {$('加载 JSON 文件')}
                 </Button>
                 <Button
                   className="ai-character-library-management-import-submit"
@@ -459,7 +460,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
                   disabled={!canEdit}
                   onClick={() => void handleImport()}
                 >
-                  导入 JSON
+                  {$('导入 JSON')}
                 </Button>
               </Group>
             </Group>
@@ -472,7 +473,7 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
               hidden
             />
             <Text className="ai-character-library-management-import-hint" size="xs" c="dimmed">
-              支持 <code className="ai-character-library-management-import-code">[{`{...}`}]</code> 或 <code className="ai-character-library-management-import-code">{'{ "characters": [...] }'}</code>。导入按 sourceCharacterUid / 角色关键信息做 upsert，不会静默丢弃。
+              {$('支持')} <code className="ai-character-library-management-import-code">[{`{...}`}]</code> {$('或')} <code className="ai-character-library-management-import-code">{'{ "characters": [...] }'}</code>{$('。导入按 sourceCharacterUid / 角色关键信息做 upsert，不会静默丢弃。')}
             </Text>
             <Textarea
               className="ai-character-library-management-import-textarea"
@@ -490,23 +491,23 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
         {loading ? (
           <Group className="ai-character-library-management-loading" justify="center" py="xl">
             <Loader className="ai-character-library-management-loading-icon" size="sm" />
-            <Text className="ai-character-library-management-loading-text" size="sm" c="dimmed">加载中…</Text>
+            <Text className="ai-character-library-management-loading-text" size="sm" c="dimmed">{$('加载中…')}</Text>
           </Group>
         ) : items.length === 0 ? (
           <InlinePanel className="ai-character-library-management-empty" padding="default">
-            <Text className="ai-character-library-management-empty-text" size="sm" c="dimmed">当前筛选下没有角色库记录。</Text>
+            <Text className="ai-character-library-management-empty-text" size="sm" c="dimmed">{$('当前筛选下没有角色库记录。')}</Text>
           </InlinePanel>
         ) : (
           <Table.ScrollContainer className="ai-character-library-management-table-scroll" minWidth={960}>
             <Table className="ai-character-library-management-table" striped highlightOnHover withTableBorder>
               <Table.Thead className="ai-character-library-management-table-head">
                 <Table.Tr className="ai-character-library-management-table-head-row">
-                  <Table.Th className="ai-character-library-management-table-head-cell">预览</Table.Th>
-                  <Table.Th className="ai-character-library-management-table-head-cell">角色</Table.Th>
-                  <Table.Th className="ai-character-library-management-table-head-cell">标签</Table.Th>
-                  <Table.Th className="ai-character-library-management-table-head-cell">图片</Table.Th>
-                  <Table.Th className="ai-character-library-management-table-head-cell">更新时间</Table.Th>
-                  <Table.Th className="ai-character-library-management-table-head-cell">操作</Table.Th>
+                  <Table.Th className="ai-character-library-management-table-head-cell">{$('预览')}</Table.Th>
+                  <Table.Th className="ai-character-library-management-table-head-cell">{$('角色')}</Table.Th>
+                  <Table.Th className="ai-character-library-management-table-head-cell">{$('标签')}</Table.Th>
+                  <Table.Th className="ai-character-library-management-table-head-cell">{$('图片')}</Table.Th>
+                  <Table.Th className="ai-character-library-management-table-head-cell">{$('更新时间')}</Table.Th>
+                  <Table.Th className="ai-character-library-management-table-head-cell">{$('操作')}</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody className="ai-character-library-management-table-body">
@@ -525,38 +526,38 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
                           <Image className="ai-character-library-management-preview" src={previewUrl} alt={character.name || character.character_id || character.id} w={72} h={72} radius="sm" fit="cover" />
                         ) : (
                           <InlinePanel className="ai-character-library-management-preview ai-character-library-management-preview--empty" padding="compact">
-                            <Text className="ai-character-library-management-preview-empty-text" size="xs" c="dimmed">无图</Text>
+                            <Text className="ai-character-library-management-preview-empty-text" size="xs" c="dimmed">{$('无图')}</Text>
                           </InlinePanel>
                         )}
                       </Table.Td>
                       <Table.Td className="ai-character-library-management-table-cell">
                         <Stack className="ai-character-library-management-role" gap={2}>
-                          <Text className="ai-character-library-management-role-name" fw={600}>{character.name || '未命名角色'}</Text>
+                          <Text className="ai-character-library-management-role-name" fw={600}>{character.name || $('未命名角色')}</Text>
                           <Text className="ai-character-library-management-role-id" size="xs" c="dimmed">
-                            {character.character_id || '无 character_id'}
+                            {character.character_id || $('无 character_id')}
                           </Text>
                           <Text className="ai-character-library-management-role-meta" size="xs" c="dimmed">
-                            {buildCharacterMeta(character) || '无附加标签'}
+                            {buildCharacterMeta(character) || $('无附加标签')}
                           </Text>
                         </Stack>
                       </Table.Td>
                       <Table.Td className="ai-character-library-management-table-cell">
                         <Stack className="ai-character-library-management-tags" gap={2}>
                           <Text className="ai-character-library-management-tag-line" size="xs" c="dimmed">
-                            世界观：{character.filter_worldview || '—'}
+                            {$('世界观：')}{character.filter_worldview || '—'}
                           </Text>
                           <Text className="ai-character-library-management-tag-line" size="xs" c="dimmed">
-                            主题：{character.filter_theme || '—'}
+                            {$('主题：')}{character.filter_theme || '—'}
                           </Text>
                           <Text className="ai-character-library-management-tag-line" size="xs" c="dimmed">
-                            场景：{character.filter_scene || '—'}
+                            {$('场景：')}{character.filter_scene || '—'}
                           </Text>
                         </Stack>
                       </Table.Td>
                       <Table.Td className="ai-character-library-management-table-cell">
                         <Text className="ai-character-library-management-image-count" size="sm">{imageCount} / 4</Text>
                         <Text className="ai-character-library-management-import-time" size="xs" c="dimmed">
-                          导入：{formatTime(character.imported_at)}
+                          {$('导入：')}{formatTime(character.imported_at)}
                         </Text>
                       </Table.Td>
                       <Table.Td className="ai-character-library-management-table-cell">
@@ -566,26 +567,26 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
                       </Table.Td>
                       <Table.Td className="ai-character-library-management-table-cell">
                         <Group className="ai-character-library-management-row-actions" gap="xs" wrap="nowrap">
-                          <Tooltip className="ai-character-library-management-edit-tooltip" label="编辑" withArrow>
+                          <Tooltip className="ai-character-library-management-edit-tooltip" label={$('编辑')} withArrow>
                             <ActionIcon
                               className="ai-character-library-management-edit"
                               variant="subtle"
                               color="blue"
                               disabled={!canEdit}
-                              aria-label="编辑角色库记录"
+                              aria-label={$('编辑角色库记录')}
                               onClick={() => setEditor(buildEditorState(character))}
                             >
                               <IconPencil className="ai-character-library-management-edit-icon" size={16} />
                             </ActionIcon>
                           </Tooltip>
-                          <Tooltip className="ai-character-library-management-delete-tooltip" label="删除" withArrow>
+                          <Tooltip className="ai-character-library-management-delete-tooltip" label={$('删除')} withArrow>
                             <ActionIcon
                               className="ai-character-library-management-delete"
                               variant="subtle"
                               color="red"
                               disabled={!canEdit}
                               loading={deletingId === character.id}
-                              aria-label="删除角色库记录"
+                              aria-label={$('删除角色库记录')}
                               onClick={() => void handleDelete(character)}
                             >
                               <IconTrash className="ai-character-library-management-delete-icon" size={16} />
@@ -618,13 +619,13 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
         className="ai-character-library-management-editor-modal"
         opened={Boolean(editor)}
         onClose={() => setEditor(null)}
-        title={editor?.id ? '编辑角色库记录' : '新建角色库记录'}
+        title={editor?.id ? $('编辑角色库记录') : $('新建角色库记录')}
         size="lg"
       >
         {editor ? (
           <Stack className="ai-character-library-management-editor" gap="sm">
             <SimpleGrid className="ai-character-library-management-editor-grid" cols={{ base: 1, sm: 2 }} spacing="sm">
-              <TextInput className="ai-character-library-management-editor-name" label="名称" value={editor.name} onChange={(event) => setEditor((prev) => (prev ? { ...prev, name: event.currentTarget.value } : prev))} />
+              <TextInput className="ai-character-library-management-editor-name" label={$('名称')} value={editor.name} onChange={(event) => setEditor((prev) => (prev ? { ...prev, name: event.currentTarget.value } : prev))} />
               <TextInput className="ai-character-library-management-editor-character-id" label="character_id" value={editor.character_id} onChange={(event) => setEditor((prev) => (prev ? { ...prev, character_id: event.currentTarget.value } : prev))} />
               <TextInput className="ai-character-library-management-editor-group-number" label="group_number" value={editor.group_number} onChange={(event) => setEditor((prev) => (prev ? { ...prev, group_number: event.currentTarget.value } : prev))} />
               <TextInput className="ai-character-library-management-editor-identity-hint" label="identity_hint" value={editor.identity_hint} onChange={(event) => setEditor((prev) => (prev ? { ...prev, identity_hint: event.currentTarget.value } : prev))} />
@@ -645,10 +646,10 @@ export default function AiCharacterLibraryManagementPanel(props: AiCharacterLibr
             <Textarea className="ai-character-library-management-editor-features" label="distinctive_features" minRows={3} autosize value={editor.distinctive_features} onChange={(event) => setEditor((prev) => (prev ? { ...prev, distinctive_features: event.currentTarget.value } : prev))} />
             <Group className="ai-character-library-management-editor-actions" justify="flex-end">
               <Button className="ai-character-library-management-editor-cancel" variant="light" onClick={() => setEditor(null)}>
-                取消
+                {$('取消')}
               </Button>
               <Button className="ai-character-library-management-editor-submit" loading={saving} disabled={!canEdit} onClick={() => void handleSubmitEditor()}>
-                {editor.id ? '保存修改' : '创建角色'}
+                {editor.id ? $('保存修改') : $('创建角色')}
               </Button>
             </Group>
           </Stack>

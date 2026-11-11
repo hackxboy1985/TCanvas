@@ -17,6 +17,7 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { InlinePanel } from './InlinePanel'
+import { $, $t } from '../canvas/i18n'
 import { PanelCard } from './PanelCard'
 import {
   IconBrain,
@@ -223,7 +224,8 @@ type WorkspaceChecklistItem = {
 }
 
 const WORKSPACE_RUNTIME_SUCCESS_TTL_MS = 8000
-const PROJECT_TEXT_REQUIRED_MESSAGE = '当前项目还没有上传文本，请先上传或替换项目文本。'
+// 模块级常量：语言在模块加载时确定，切换语言需刷新页面
+const PROJECT_TEXT_REQUIRED_MESSAGE = $('当前项目还没有上传文本，请先上传或替换项目文本。')
 const STORYBOARD_EXPERT_SKILL_ID = 'tapcanvas-storyboard-expert'
 const WORKSPACE_ROLE_ANCHOR_BATCH_CONCURRENCY = 4
 
@@ -267,12 +269,12 @@ function buildChapterScriptPersistenceErrorMessage(response: AgentsChatResponseD
   const diagnosticFlags = Array.isArray(response?.trace?.diagnosticFlags) ? response.trace.diagnosticFlags : []
   const diagnosticDetail = diagnosticFlags[0]?.detail ? `：${diagnosticFlags[0].detail}` : ''
   if (!hasStoryboardPlanUpsertToolEvidence(response)) {
-    return '章节剧本结果未写回当前工作台：本轮没有调用章节剧本持久化工具 tapcanvas_book_storyboard_plan_upsert。'
+    return $('章节剧本结果未写回当前工作台：本轮没有调用章节剧本持久化工具 tapcanvas_book_storyboard_plan_upsert。')
   }
   if (turnVerdictStatus === 'partial' || turnVerdictStatus === 'failed') {
-    return `章节剧本结果未完整落盘：agents 返回 ${turnVerdictStatus}，请检查执行日志${diagnosticDetail}`
+    return $t('章节剧本结果未完整落盘：agents 返回 {{status}}，请检查执行日志{{detail}}', { status: turnVerdictStatus, detail: diagnosticDetail })
   }
-  return '章节剧本结果未写回当前工作台：刷新后仍未发现当前章节的 storyboardPlans。'
+  return $('章节剧本结果未写回当前工作台：刷新后仍未发现当前章节的 storyboardPlans。')
 }
 
 function didBackendWriteCanvas(response: AgentsChatResponseDto | null): boolean {
@@ -392,7 +394,7 @@ function readImagePreviewFromNodeData(node: Node | undefined): { imageUrl?: stri
 function buildRuntimeStamp(label: string): { updatedAtLabel: string; updatedAtMs: number } {
   const updatedAtMs = Date.now()
   return {
-    updatedAtLabel: `${label}：${new Date(updatedAtMs).toLocaleString()}`,
+    updatedAtLabel: $t('{{label}}：{{time}}', { label, time: new Date(updatedAtMs).toLocaleString() }),
     updatedAtMs,
   }
 }
@@ -401,21 +403,21 @@ function resolveShotVideoProductionStatus(input: {
   runtimeStatus?: 'idle' | 'running' | 'success' | 'error'
   hasPersistedVideo: boolean
 }): string {
-  if (input.runtimeStatus === 'running') return '视频生成中'
-  if (input.runtimeStatus === 'success') return '视频已生成'
-  if (input.runtimeStatus === 'error') return '视频失败'
-  if (input.hasPersistedVideo) return '视频已生成'
-  return '待生成片段'
+  if (input.runtimeStatus === 'running') return $('视频生成中')
+  if (input.runtimeStatus === 'success') return $('视频已生成')
+  if (input.runtimeStatus === 'error') return $('视频失败')
+  if (input.hasPersistedVideo) return $('视频已生成')
+  return $('待生成片段')
 }
 
 function resolveShotStoryboardProductionStatus(input: {
   chapterRunStatus?: 'running' | 'success' | 'error'
   hasStoryboardImage: boolean
 }): string {
-  if (input.chapterRunStatus === 'running') return '分镜生成中'
-  if (input.chapterRunStatus === 'error') return '分镜失败'
-  if (input.hasStoryboardImage) return '已出分镜'
-  return '待生成分镜'
+  if (input.chapterRunStatus === 'running') return $('分镜生成中')
+  if (input.chapterRunStatus === 'error') return $('分镜失败')
+  if (input.hasStoryboardImage) return $('已出分镜')
+  return $('待生成分镜')
 }
 
 function readRuntimeUpdatedAtMs(record: Record<string, unknown>): number {
@@ -736,9 +738,9 @@ function buildWorkspaceShotVideoBlockReason(input: {
   chapterAssetItems: readonly WorkspaceAssetListItem[]
 }): string | null {
   const promptText = String(input.promptText || '').trim()
-  if (!promptText) return '当前片段提示词为空'
-  if (!input.hasVideoModelOptions) return '当前没有可用视频模型'
-  if (!String(input.selectedVideoModel || '').trim()) return '还没有选择视频模型'
+  if (!promptText) return $('当前片段提示词为空')
+  if (!input.hasVideoModelOptions) return $('当前没有可用视频模型')
+  if (!String(input.selectedVideoModel || '').trim()) return $('还没有选择视频模型')
   const resolvedReferences = resolveShotWorkspaceReferences({
     shot: input.shot,
     assetItems: input.chapterAssetItems,
@@ -756,7 +758,7 @@ function buildWorkspaceShotVideoBlockReason(input: {
     )
   )
   if (hasExistingReferences || resolvedReferences.missingAssetIds.length > 0) return null
-  return '既没有真实参考图，也没有可自动补齐的角色卡/场景资产'
+  return $('既没有真实参考图，也没有可自动补齐的角色卡/场景资产')
 }
 
 function resolveShotWorkspaceReferences(input: {
@@ -866,11 +868,11 @@ function isAssetVisibleInChapter(input: {
 function classifyCanvasAssetKind(record: Record<string, unknown>, entityKey: string): string {
   const nodeKind = readTrimmedRecordString(record, 'kind')
   const productionLayer = readTrimmedRecordString(record, 'productionLayer')
-  if (entityKey.startsWith('video_segment:') || nodeKind === 'video' || nodeKind === 'composeVideo') return '视频片段'
-  if (entityKey.startsWith('shot:')) return '分镜节点'
-  if (entityKey.startsWith('asset:role-')) return '角色卡'
-  if (productionLayer === 'anchors') return '前置资产'
-  return '画布资产'
+  if (entityKey.startsWith('video_segment:') || nodeKind === 'video' || nodeKind === 'composeVideo') return $('视频片段')
+  if (entityKey.startsWith('shot:')) return $('分镜节点')
+  if (entityKey.startsWith('asset:role-')) return $('角色卡')
+  if (productionLayer === 'anchors') return $('前置资产')
+  return $('画布资产')
 }
 
 function isWorkspaceImageNode(record: Record<string, unknown>): boolean {
@@ -1019,7 +1021,7 @@ async function syncWorkspaceVideoReferenceEdges(input: {
   for (const edgeId of staleEdgeIds) {
     const result = await CanvasService.disconnectNodes({ edgeId })
     if (!result.success) {
-      throw new Error(result.error || `断开参考边失败：${edgeId}`)
+      throw new Error(result.error || $t('断开参考边失败：{{edgeId}}', { edgeId }))
     }
   }
 
@@ -1039,7 +1041,7 @@ async function syncWorkspaceVideoReferenceEdges(input: {
       targetHandle: 'in-any',
     })
     if (!result.success) {
-      throw new Error(result.error || `连接参考边失败：${sourceNodeId} -> ${targetNodeId}`)
+      throw new Error(result.error || $t('连接参考边失败：{{source}} -> {{target}}', { source: sourceNodeId, target: targetNodeId }))
     }
     edgeKeySet.add(edgeKey)
   }
@@ -1087,11 +1089,11 @@ function buildCanvasWorkspaceAssetItems(input: {
           readTrimmedRecordString(record, 'stateDescription'),
           readTrimmedRecordString(record, 'summary'),
           prompt,
-        ].find(Boolean) || '当前 flow 已写入节点',
+        ].find(Boolean) || $('当前 flow 已写入节点'),
         72,
       ),
       kindLabel: classifyCanvasAssetKind(record, entityKey),
-      statusLabel: videoUrl ? '已落视频' : imageUrl ? '已落图' : '已写入画布',
+      statusLabel: videoUrl ? $('已落视频') : imageUrl ? $('已落图') : $('已写入画布'),
       imageUrl: String(thumbnailUrl || imageUrl || '').trim() || undefined,
       videoUrl: videoUrl || undefined,
       entityKey: entityKey || undefined,
@@ -1357,7 +1359,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        const message = error instanceof Error ? error.message : '加载项目工作台数据失败'
+        const message = error instanceof Error ? error.message : $('加载项目工作台数据失败')
         setProjectWorkspaceError(message)
         setBooks([])
         setProjectRoleCards([])
@@ -1419,7 +1421,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       .catch((error: unknown) => {
         if (cancelled) return
         setChatArtifactSessions([])
-        setChatArtifactsError(error instanceof Error ? error.message : '加载对话产物历史失败')
+        setChatArtifactsError(error instanceof Error ? error.message : $('加载对话产物历史失败'))
       })
       .finally(() => {
         if (cancelled) return
@@ -1522,7 +1524,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        const message = error instanceof Error ? error.message : '加载项目文本索引失败'
+        const message = error instanceof Error ? error.message : $('加载项目文本索引失败')
         setBookWorkspaceError(message)
         setSelectedBookIndex(null)
         setStoryboardHistory(null)
@@ -1570,7 +1572,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       .catch((error: unknown) => {
         if (cancelled) return
         setSelectedChapterDetail(null)
-        setChapterDetailError(error instanceof Error ? error.message : '读取章节正文失败')
+        setChapterDetailError(error instanceof Error ? error.message : $('读取章节正文失败'))
       })
       .finally(() => {
         if (cancelled) return
@@ -1679,7 +1681,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
   const chapterOptions = React.useMemo(
     () => (selectedBookIndex?.chapters || []).map((chapter) => ({
       value: String(chapter.chapter),
-      label: `第 ${chapter.chapter} 章 · ${chapter.title || '未命名章节'}`,
+      label: $t('第 {{chapter}} 章 · {{title}}', { chapter: chapter.chapter, title: chapter.title || $('未命名章节') }),
     })),
     [selectedBookIndex?.chapters],
   )
@@ -1824,9 +1826,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
 
   const emptyStateMessage = React.useMemo(() => {
     if (workspaceError) return workspaceError
-    if (!currentProject?.id) return '请先选择项目。'
-    if (books.length === 0) return '当前项目还没有上传文本，请直接在上方检查清单上传项目文本。'
-    if (!selectedBookId) return '当前项目文本索引不存在，请重新上传项目文本。'
+    if (!currentProject?.id) return $('请先选择项目。')
+    if (books.length === 0) return $('当前项目还没有上传文本，请直接在上方检查清单上传项目文本。')
+    if (!selectedBookId) return $('当前项目文本索引不存在，请重新上传项目文本。')
     return null
   }, [books.length, currentProject?.id, selectedBookId, workspaceError])
   const hasCurrentChapterStoryboardPlan = React.useMemo(
@@ -1836,7 +1838,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
 
   const openWorkspaceTextUpload = React.useCallback(() => {
     if (!currentProject?.id) {
-      toast('请先选择项目', 'warning')
+      toast($('请先选择项目'), 'warning')
       return
     }
     if (workspaceTextUploading) return
@@ -1849,7 +1851,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     if (!file || !currentProject?.id) return
     setWorkspaceTextUploading(true)
     try {
-      toast('小说上传成功，开始分块上传并进入异步任务队列…', 'info')
+      toast($('小说上传成功，开始分块上传并进入异步任务队列…'), 'info')
       const latestUploadJobResponse = await getLatestProjectBookUploadJob(currentProject.id).catch(() => null)
       const latestUploadJob = latestUploadJobResponse?.job ?? null
       const blockingUpload = latestUploadJob && (latestUploadJob.status === 'queued' || latestUploadJob.status === 'running') ? latestUploadJob : null
@@ -1861,12 +1863,12 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         uploadMode: 'book-only',
         onChunkProgress: (completed, total) => {
           if (completed % 5 === 0 || completed === total) {
-            toast(`分块上传进度：${completed}/${total}`, 'info')
+            toast($t('分块上传进度：{{completed}}/{{total}}', { completed, total }), 'info')
           }
         },
       })
-      toast('已进入后台队列，正在拆分任务处理小说…', 'info')
-      toast('已开始处理小说', 'success')
+      toast($('已进入后台队列，正在拆分任务处理小说…'), 'info')
+      toast($('已开始处理小说'), 'success')
       const nextBooks = await listProjectBooks(currentProject.id).catch(() => [])
       const normalizedBooks = sortProjectBooksByUpdatedAt(Array.isArray(nextBooks) ? nextBooks : [])
       setBooks(normalizedBooks)
@@ -1875,7 +1877,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         setSelectedBookId((currentValue) => currentValue || nextPrimaryBookId)
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '上传项目文本失败'
+      const message = error instanceof Error ? error.message : $('上传项目文本失败')
       toast(message, 'error')
     } finally {
       setWorkspaceTextUploading(false)
@@ -1925,8 +1927,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       confirmProjectBookStyle,
     })
     setSelectedBookIndex(nextIndex)
-    toast(sourceLabel ? `画风参考图已更新（来自${sourceLabel}）` : '画风参考图已更新', 'success')
-    toast('已根据参考图自动提炼风格规则，并应用到角色卡', 'info')
+    toast(sourceLabel ? $t('画风参考图已更新（来自{{source}}）', { source: sourceLabel }) : $('画风参考图已更新'), 'success')
+    toast($('已根据参考图自动提炼风格规则，并应用到角色卡'), 'info')
   }, [currentProject?.id, deriveWorkspaceStyleHints, selectedBookId])
 
   const openWorkspaceStyleReferenceUpload = React.useCallback(() => {
@@ -1947,7 +1949,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       return
     }
     if (!String(file.type || '').startsWith('image/')) {
-      toast('请选择图片文件', 'warning')
+      toast($('请选择图片文件'), 'warning')
       return
     }
     setWorkspaceStyleReferenceUploading(true)
@@ -1963,10 +1965,10 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         String(uploadedData?.url || '').trim()
         || String(uploadedData?.imageUrl || '').trim()
         || String(uploadedData?.thumbnailUrl || '').trim()
-      if (!url) throw new Error('上传成功但未返回可用图片地址')
+      if (!url) throw new Error($('上传成功但未返回可用图片地址'))
       await persistWorkspaceStyleReference(url)
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '上传画风参考图失败'
+      const message = error instanceof Error ? error.message : $('上传画风参考图失败')
       toast(message, 'error')
     } finally {
       setWorkspaceStyleReferenceUploading(false)
@@ -1981,14 +1983,14 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     }
     const candidate = canvasStyleReferenceCandidates[0]
     if (!candidate?.url) {
-      toast('画布里还没有可用图片，请先生成一张图', 'warning')
+      toast($('画布里还没有可用图片，请先生成一张图'), 'warning')
       return
     }
     setWorkspaceStyleReferenceUploading(true)
     try {
-      await persistWorkspaceStyleReference(candidate.url, `画布「${candidate.label}」`)
+      await persistWorkspaceStyleReference(candidate.url, $t('画布「{{label}}」', { label: candidate.label }))
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '使用画布图片失败'
+      const message = error instanceof Error ? error.message : $('使用画布图片失败')
       toast(message, 'error')
     } finally {
       setWorkspaceStyleReferenceUploading(false)
@@ -2041,7 +2043,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           }, 1500)
           return
         }
-        const message = error instanceof Error ? error.message : '章节元数据自动分析失败'
+        const message = error instanceof Error ? error.message : $('章节元数据自动分析失败')
         if (!cancelled) {
           toast(message, 'error')
         }
@@ -2079,9 +2081,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       items.push({
         id: `role-${cardId}`,
         title: roleCard.roleName,
-        subtitle: String(roleCard.stateDescription || '角色锚点').trim() || '角色锚点',
-        kindLabel: '角色卡',
-        statusLabel: String(roleCard.imageUrl || '').trim() ? '已锚定' : '待补图',
+        subtitle: String(roleCard.stateDescription || $('角色锚点')).trim() || $('角色锚点'),
+        kindLabel: $('角色卡'),
+        statusLabel: String(roleCard.imageUrl || '').trim() ? $('已锚定') : $('待补图'),
         canGenerate: !String(roleCard.imageUrl || '').trim(),
         generationTarget: {
           kind: 'roleCard',
@@ -2096,7 +2098,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           String(roleCard.roleId || '').trim(),
           cardId,
         ]),
-        note: String(roleCard.confirmedAt || '').trim() ? '已确认，可直接作为角色引用' : '未确认，建议先确认后批量生产',
+        note: String(roleCard.confirmedAt || '').trim() ? $('已确认，可直接作为角色引用') : $('未确认，建议先确认后批量生产'),
         chapterNo: typeof roleCard.chapter === 'number' ? roleCard.chapter : null,
         isCurrentChapter,
       })
@@ -2114,9 +2116,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       items.push({
         id: `visual-${refId}`,
         title: visualRef.name,
-        subtitle: String(visualRef.stateDescription || visualRef.generatedFrom || '').trim() || '章节视觉参考',
-        kindLabel: visualRef.category === 'spell_fx' ? '特效参考' : '场景/道具参考',
-        statusLabel: String(visualRef.imageUrl || '').trim() ? '已生成' : '待补图',
+        subtitle: String(visualRef.stateDescription || visualRef.generatedFrom || '').trim() || $('章节视觉参考'),
+        kindLabel: visualRef.category === 'spell_fx' ? $('特效参考') : $('场景/道具参考'),
+        statusLabel: String(visualRef.imageUrl || '').trim() ? $('已生成') : $('待补图'),
         canGenerate: !String(visualRef.imageUrl || '').trim(),
         generationTarget: {
           kind: 'visualRef',
@@ -2143,10 +2145,10 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       if (!imageUrl) continue
       items.push({
         id: `style-${index}`,
-        title: styleBible?.styleName || '项目风格锚点',
-        subtitle: '所有场景图和分镜图都应继承这一组风格参考',
-        kindLabel: '风格参考',
-        statusLabel: '已锚定',
+        title: styleBible?.styleName || $('项目风格锚点'),
+        subtitle: $('所有场景图和分镜图都应继承这一组风格参考'),
+        kindLabel: $('风格参考'),
+        statusLabel: $('已锚定'),
         imageUrl,
         mentionAliases: dedupeTrimmedTexts([
           styleBible?.styleName || '',
@@ -2169,9 +2171,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       items.push({
         id: `chapter-role-${roleName}`,
         title: roleName,
-        subtitle: String(character.description || '章节文本提及角色').trim() || '章节文本提及角色',
-        kindLabel: '章节角色',
-        statusLabel: '待角色卡',
+        subtitle: String(character.description || $('章节文本提及角色')).trim() || $('章节文本提及角色'),
+        kindLabel: $('章节角色'),
+        statusLabel: $('待角色卡'),
         canGenerate: true,
         generationTarget: {
           kind: 'roleCard',
@@ -2187,9 +2189,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       items.push({
         id: `scene-${scene.name}`,
         title: scene.name,
-        subtitle: String(scene.description || '章节文本提及场景').trim() || '章节文本提及场景',
-        kindLabel: '文本场景',
-        statusLabel: '待显式资产',
+        subtitle: String(scene.description || $('章节文本提及场景')).trim() || $('章节文本提及场景'),
+        kindLabel: $('文本场景'),
+        statusLabel: $('待显式资产'),
         canGenerate: true,
         generationTarget: {
           kind: 'visualRef',
@@ -2207,9 +2209,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       items.push({
         id: `prop-${prop.name}`,
         title: prop.name,
-        subtitle: String(prop.description || '章节文本提及道具').trim() || '章节文本提及道具',
-        kindLabel: '文本道具',
-        statusLabel: '待显式资产',
+        subtitle: String(prop.description || $('章节文本提及道具')).trim() || $('章节文本提及道具'),
+        kindLabel: $('文本道具'),
+        statusLabel: $('待显式资产'),
         canGenerate: true,
         generationTarget: {
           kind: 'visualRef',
@@ -2248,14 +2250,14 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     if (isWorkspaceAssetGenerating) return
     const pendingRoleAssetIds = currentChapterPendingRoleAnchorItems.map((item) => item.id)
     if (pendingRoleAssetIds.length === 0) {
-      toast('当前章节没有待补齐的角色锚点。', 'info')
+      toast($('当前章节没有待补齐的角色锚点。'), 'info')
       return
     }
     const failures: string[] = []
     setProductionRequestState({
       status: 'running',
-      message: `正在并发补齐 ${pendingRoleAssetIds.length} 个角色锚点…`,
-      ...buildRuntimeStamp('启动时间'),
+      message: $t('正在并发补齐 {{count}} 个角色锚点…', { count: pendingRoleAssetIds.length }),
+      ...buildRuntimeStamp($('启动时间')),
     })
     await runWorkspaceTasksWithConcurrency(
       pendingRoleAssetIds,
@@ -2264,7 +2266,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         try {
           await generateWorkspaceAssetByIdRef.current(assetId)
         } catch (error: unknown) {
-          failures.push(error instanceof Error ? error.message : `角色锚点 ${assetId} 补齐失败`)
+          failures.push(error instanceof Error ? error.message : $t('角色锚点 {{assetId}} 补齐失败', { assetId }))
         }
       },
     )
@@ -2272,15 +2274,15 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       setProductionRequestState({
         status: 'error',
         message: failures[0],
-        updatedAtLabel: failures.length > 1 ? `另有 ${failures.length - 1} 个角色锚点失败` : '',
+        updatedAtLabel: failures.length > 1 ? $t('另有 {{count}} 个角色锚点失败', { count: failures.length - 1 }) : '',
         updatedAtMs: Date.now(),
       })
       toast(failures[0], 'error')
     } else {
       setProductionRequestState({
         status: 'success',
-        message: `已补齐当前章节 ${pendingRoleAssetIds.length} 个角色锚点。`,
-        ...buildRuntimeStamp('完成时间'),
+        message: $t('已补齐当前章节 {{count}} 个角色锚点。', { count: pendingRoleAssetIds.length }),
+        ...buildRuntimeStamp($('完成时间')),
       })
     }
     setRefreshTick((current) => current + 1)
@@ -2290,9 +2292,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     if (!currentProject?.id) {
       return [{
         key: 'project',
-        title: '选择项目',
-        detail: '漫剧工作台依赖当前项目作用域，没有项目时无法读取文本、章节和资产。',
-        actionLabel: '前往项目列表',
+        title: $('选择项目'),
+        detail: $('漫剧工作台依赖当前项目作用域，没有项目时无法读取文本、章节和资产。'),
+        actionLabel: $('前往项目列表'),
         action: () => {
           setActivePanel(null)
           spaNavigate('/projects')
@@ -2304,9 +2306,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     if (!hasUploadedBook) {
       items.push({
         key: 'project-text',
-        title: '项目文本',
-        detail: '当前工作台依赖项目文本。现在可以直接在这里上传，不必先切去素材面板找入口。',
-        actionLabel: '直接上传文本',
+        title: $('项目文本'),
+        detail: $('当前工作台依赖项目文本。现在可以直接在这里上传，不必先切去素材面板找入口。'),
+        actionLabel: $('直接上传文本'),
         actionLoading: workspaceTextUploading,
         action: openWorkspaceTextUpload,
       })
@@ -2314,18 +2316,18 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     if (hasUploadedBook && !selectedBookId) {
       items.push({
         key: 'book-index',
-        title: '文本索引',
-        detail: '检测到文本索引未就绪，继续创作前需要重新选择或替换文本。',
-        actionLabel: '去文本素材',
+        title: $('文本索引'),
+        detail: $('检测到文本索引未就绪，继续创作前需要重新选择或替换文本。'),
+        actionLabel: $('去文本素材'),
         action: openWorkspaceProjectTextDependency,
       })
     }
     if (hasUploadedBook && selectedChapterMetadataComplete && currentChapterMissingRoleAnchorCount > 0) {
       items.push({
         key: 'role-anchors',
-        title: '角色锚点',
-        detail: `章节里识别到了 ${selectedChapterCharacterCount} 个角色，但还有 ${currentChapterMissingRoleAnchorCount} 个缺少可复用角色卡锚点，继续出图会放大人物漂移。`,
-        actionLabel: '补齐角色卡',
+        title: $('角色锚点'),
+        detail: $t('章节里识别到了 {{characters}} 个角色，但还有 {{missing}} 个缺少可复用角色卡锚点，继续出图会放大人物漂移。', { characters: selectedChapterCharacterCount, missing: currentChapterMissingRoleAnchorCount }),
+        actionLabel: $('补齐角色卡'),
         actionLoading: isWorkspaceAssetGenerating,
         action: handleGenerateMissingRoleAnchors,
       })
@@ -2333,11 +2335,11 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     if (hasUploadedBook && selectedStyleReferenceImages.length <= 0) {
       items.push({
         key: 'style-reference',
-        title: '风格参考',
+        title: $('风格参考'),
         detail: canvasStyleReferenceCandidates.length > 0
-          ? '角色卡和章节资产生产依赖风格参考。当前画布已有可复用图片，可以直接拿最近一张设为风格锚点。'
-          : '角色卡和章节资产生产依赖风格参考。现在可以直接在工作台上传风格图，不必切去素材面板。',
-        actionLabel: canvasStyleReferenceCandidates.length > 0 ? '使用最近画布图' : '上传风格图',
+          ? $('角色卡和章节资产生产依赖风格参考。当前画布已有可复用图片，可以直接拿最近一张设为风格锚点。')
+          : $('角色卡和章节资产生产依赖风格参考。现在可以直接在工作台上传风格图，不必切去素材面板。'),
+        actionLabel: canvasStyleReferenceCandidates.length > 0 ? $('使用最近画布图') : $('上传风格图'),
         actionLoading: workspaceStyleReferenceUploading,
         action: canvasStyleReferenceCandidates.length > 0
           ? useCanvasStyleReferenceFromWorkspace
@@ -2443,7 +2445,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     [resolvedStoryboardShots, selectedShotId],
   )
   const selectedShotVideoBlockedReason = React.useMemo(() => {
-    if (!selectedResolvedShot) return '请先选择一个片段'
+    if (!selectedResolvedShot) return $('请先选择一个片段')
     const promptText = String(activeShotPrompt || '').trim()
     return buildWorkspaceShotVideoBlockReason({
       shot: selectedResolvedShot,
@@ -2461,8 +2463,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     const targetAsset = chapterAssetItems.find((item) => item.id === assetId) || null
     if (!projectId || !bookId || !chapterNo || !targetAsset?.generationTarget) {
       notifications.show({
-        title: '缺少上下文',
-        message: '当前项目、工作流、章节或目标资产未就绪，无法在工作台内发起生成。',
+        title: $('缺少上下文'),
+        message: $('当前项目、工作流、章节或目标资产未就绪，无法在工作台内发起生成。'),
         color: 'red',
       })
       return ''
@@ -2494,8 +2496,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       ?? null
     if (!preferredImageModel) {
       notifications.show({
-        title: '图片模型未就绪',
-        message: '当前没有可用图片模型，请先在系统模型管理中启用 image 模型。',
+        title: $('图片模型未就绪'),
+        message: $('当前没有可用图片模型，请先在系统模型管理中启用 image 模型。'),
         color: 'red',
       })
       return ''
@@ -2509,8 +2511,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     })
     setProductionRequestState({
       status: 'running',
-      message: `正在补齐资产：${targetAsset.title}`,
-      ...buildRuntimeStamp('启动时间'),
+      message: $t('正在补齐资产：{{title}}', { title: targetAsset.title }),
+      ...buildRuntimeStamp($('启动时间')),
     })
 
     let resolved = false
@@ -2553,8 +2555,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
             category: targetAsset.generationTarget.category,
           })
       const nodeLabel = targetAsset.generationTarget.kind === 'roleCard'
-        ? `角色卡 · ${targetAsset.generationTarget.roleName}`
-        : `${targetAsset.generationTarget.category === 'spell_fx' ? '特效参考' : '场景参考'} · ${targetAsset.generationTarget.name}`
+        ? $t('角色卡 · {{name}}', { name: targetAsset.generationTarget.roleName })
+        : $t('{{kind}} · {{name}}', { kind: targetAsset.generationTarget.category === 'spell_fx' ? $('特效参考') : $('场景参考'), name: targetAsset.generationTarget.name })
       const anchorBindings = targetAsset.generationTarget.kind === 'roleCard'
         ? upsertSemanticNodeAnchorBinding({
             existing: [],
@@ -2654,12 +2656,12 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         nodeId = typeof createResult.data?.nodeId === 'string' ? createResult.data.nodeId.trim() : ''
       }
       if (!nodeId) {
-        throw new Error('工作台已创建资产节点，但未返回 nodeId')
+        throw new Error($('工作台已创建资产节点，但未返回 nodeId'))
       }
       setProductionRequestState({
         status: 'running',
-        message: `正在执行 ${targetAsset.title} 的图片生成…`,
-        updatedAtLabel: `节点：${nodeId}`,
+        message: $t('正在执行 {{title}} 的图片生成…', { title: targetAsset.title }),
+        updatedAtLabel: $t('节点：{{nodeId}}', { nodeId }),
         updatedAtMs: Date.now(),
       })
       const runResult = await CanvasService.runNode({ nodeId })
@@ -2670,8 +2672,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       resolved = true
       setProductionRequestState({
         status: 'success',
-        message: `资产 ${targetAsset.title} 已生成并写回工作台。`,
-        ...buildRuntimeStamp('完成时间'),
+        message: $t('资产 {{title}} 已生成并写回工作台。', { title: targetAsset.title }),
+        ...buildRuntimeStamp($('完成时间')),
       })
       await refreshSelectedBookArtifacts({ bookId, preserveSelectedChapter: true })
       syncLinkedNodeIdsFromCanvas()
@@ -2681,8 +2683,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       if (!resolved) {
         setProductionRequestState({
           status: 'error',
-          message: error instanceof Error ? error.message : `资产 ${targetAsset.title} 生成失败`,
-          ...buildRuntimeStamp('失败时间'),
+          message: error instanceof Error ? error.message : $t('资产 {{title}} 生成失败', { title: targetAsset.title }),
+          ...buildRuntimeStamp($('失败时间')),
         })
       }
       throw error
@@ -2728,8 +2730,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     const chapterNo = typeof selectedChapterNo === 'number' ? selectedChapterNo : null
     if (!projectId || !flowId || !bookId || !chapterNo) {
       notifications.show({
-        title: '缺少上下文',
-        message: '当前项目、工作流或章节未就绪，无法发起章节生产。',
+        title: $('缺少上下文'),
+        message: $('当前项目、工作流或章节未就绪，无法发起章节生产。'),
         color: 'red',
       })
       return
@@ -2754,8 +2756,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
 
     setChapterScriptState({
       status: 'running',
-      message: `正在生成第 ${chapterNo} 章章节剧本…`,
-      ...buildRuntimeStamp('启动时间'),
+      message: $t('正在生成第 {{chapter}} 章章节剧本…', { chapter: chapterNo }),
+      ...buildRuntimeStamp($('启动时间')),
     })
 
     let resolved = false
@@ -2766,9 +2768,9 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       setChapterScriptState({
         status: 'running',
         message: source === 'stream_error'
-          ? '章节剧本流已结束，正在回读校验落盘结果。'
-          : '章节剧本已生成，正在校验工作台回填。',
-        ...buildRuntimeStamp('校验时间'),
+          ? $('章节剧本流已结束，正在回读校验落盘结果。')
+          : $('章节剧本已生成，正在校验工作台回填。'),
+        ...buildRuntimeStamp($('校验时间')),
       })
       void (async () => {
         try {
@@ -2779,22 +2781,22 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
               status: 'error',
               message: response
                 ? buildChapterScriptPersistenceErrorMessage(response)
-                : '章节剧本流已结束，但刷新后仍未发现当前章节的 storyboardPlans。',
-              ...buildRuntimeStamp('失败时间'),
+                : $('章节剧本流已结束，但刷新后仍未发现当前章节的 storyboardPlans。'),
+              ...buildRuntimeStamp($('失败时间')),
             })
             return
           }
           setChapterScriptState({
             status: 'success',
-            message: '章节剧本已生成并回填当前工作台。',
-            ...buildRuntimeStamp('完成时间'),
+            message: $('章节剧本已生成并回填当前工作台。'),
+            ...buildRuntimeStamp($('完成时间')),
           })
           setRefreshTick((current) => current + 1)
         } catch (error: unknown) {
           setChapterScriptState({
             status: 'error',
-            message: error instanceof Error ? error.message : '章节剧本回填校验失败',
-            ...buildRuntimeStamp('失败时间'),
+            message: error instanceof Error ? error.message : $('章节剧本回填校验失败'),
+            ...buildRuntimeStamp($('失败时间')),
           })
         }
       })()
@@ -2825,8 +2827,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           const toolName = String(event.data?.toolName || 'tool').trim()
           setChapterScriptState({
             status: 'running',
-            message: `正在生成章节剧本：${toolName}`,
-            ...buildRuntimeStamp('最近更新'),
+            message: $t('正在生成章节剧本：{{tool}}', { tool: toolName }),
+            ...buildRuntimeStamp($('最近更新')),
           })
           return
         }
@@ -2834,8 +2836,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           resolved = true
           setChapterScriptState({
             status: 'error',
-            message: String(event.data?.message || '章节剧本生成失败').trim() || '章节剧本生成失败',
-            ...buildRuntimeStamp('失败时间'),
+            message: String(event.data?.message || $('章节剧本生成失败')).trim() || $('章节剧本生成失败'),
+            ...buildRuntimeStamp($('失败时间')),
           })
         }
         if (event.event === 'result') {
@@ -2858,8 +2860,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         if (resolved) return
         setChapterScriptState({
           status: 'error',
-          message: error instanceof Error ? error.message : '章节剧本生成失败',
-          ...buildRuntimeStamp('失败时间'),
+          message: error instanceof Error ? error.message : $('章节剧本生成失败'),
+          ...buildRuntimeStamp($('失败时间')),
         })
       })
   }, [currentFlowId, currentProject?.id, currentProject?.name, refreshSelectedBookArtifacts, selectedBookId, selectedChapterNo])
@@ -2872,8 +2874,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     const chapterNo = typeof selectedChapterNo === 'number' ? selectedChapterNo : null
     if (!projectId || !flowId || !bookId || !chapterNo) {
       notifications.show({
-        title: '缺少上下文',
-        message: '当前项目、工作流或章节未就绪，无法发起章节资产生产。',
+        title: $('缺少上下文'),
+        message: $('当前项目、工作流或章节未就绪，无法发起章节资产生产。'),
         color: 'red',
       })
       return
@@ -2943,8 +2945,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
 
     setProductionRequestState({
       status: 'running',
-      message: `正在补齐第 ${chapterNo} 章资产与分镜图片…`,
-      ...buildRuntimeStamp('启动时间'),
+      message: $t('正在补齐第 {{chapter}} 章资产与分镜图片…', { chapter: chapterNo }),
+      ...buildRuntimeStamp($('启动时间')),
     })
 
     let resolved = false
@@ -2974,8 +2976,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           const toolName = String(event.data?.toolName || 'tool').trim()
           setProductionRequestState({
             status: 'running',
-            message: `正在补齐资产：${toolName}`,
-            ...buildRuntimeStamp('最近更新'),
+            message: $t('正在补齐资产：{{tool}}', { tool: toolName }),
+            ...buildRuntimeStamp($('最近更新')),
           })
           return
         }
@@ -2983,8 +2985,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           resolved = true
           setProductionRequestState({
             status: 'error',
-            message: String(event.data?.message || '章节资产生产失败').trim() || '章节资产生产失败',
-            ...buildRuntimeStamp('失败时间'),
+            message: String(event.data?.message || $('章节资产生产失败')).trim() || $('章节资产生产失败'),
+            ...buildRuntimeStamp($('失败时间')),
           })
         }
         if (event.event === 'result') {
@@ -2992,8 +2994,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           const response = event.data.response
           setProductionRequestState({
             status: 'running',
-            message: '章节资产请求已完成，正在校验画布与工作台回填。',
-            ...buildRuntimeStamp('校验时间'),
+            message: $('章节资产请求已完成，正在校验画布与工作台回填。'),
+            ...buildRuntimeStamp($('校验时间')),
           })
           void (async () => {
             try {
@@ -3023,16 +3025,16 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
               setProductionRequestState({
                 status: 'success',
                 message: backendWroteCanvas
-                  ? '章节资产节点已写入画布，工作台会继续自动执行这些图片节点。'
-                  : '章节资产请求完成，但未检测到后端画布写入；请检查执行日志。',
-                ...buildRuntimeStamp('完成时间'),
+                  ? $('章节资产节点已写入画布，工作台会继续自动执行这些图片节点。')
+                  : $('章节资产请求完成，但未检测到后端画布写入；请检查执行日志。'),
+                ...buildRuntimeStamp($('完成时间')),
               })
               setRefreshTick((current) => current + 1)
             } catch (error: unknown) {
               setProductionRequestState({
                 status: 'error',
-                message: error instanceof Error ? error.message : '章节资产回填校验失败',
-                ...buildRuntimeStamp('失败时间'),
+                message: error instanceof Error ? error.message : $('章节资产回填校验失败'),
+                ...buildRuntimeStamp($('失败时间')),
               })
             }
           })()
@@ -3043,8 +3045,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         if (resolved) return
         setProductionRequestState({
           status: 'error',
-          message: error instanceof Error ? error.message : '章节资产生产失败',
-          ...buildRuntimeStamp('失败时间'),
+          message: error instanceof Error ? error.message : $('章节资产生产失败'),
+          ...buildRuntimeStamp($('失败时间')),
         })
       })
   }, [currentFlowId, currentProject?.id, currentProject?.name, refreshSelectedBookArtifacts, selectedBookId, selectedBookIndex?.assets?.styleBible?.referenceImages, selectedBookIndex?.assets?.visualRefs, selectedBookRoleCards, selectedChapterNo, storyboardProduction?.latestTailFrameUrl, syncLinkedNodeIdsFromCanvas])
@@ -3059,15 +3061,15 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     const chapterNo = typeof selectedChapterNo === 'number' ? selectedChapterNo : null
     if (!selectedShot) {
       notifications.show({
-        title: '缺少片段',
-        message: '请先选中一个片段，再生成视频。',
+        title: $('缺少片段'),
+        message: $('请先选中一个片段，再生成视频。'),
         color: 'red',
       })
       return
     }
     if (selectedShotVideoBlockedReason) {
       notifications.show({
-        title: '前置条件未满足',
+        title: $('前置条件未满足'),
         message: selectedShotVideoBlockedReason,
         color: 'red',
       })
@@ -3075,24 +3077,24 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     }
     if (!prompt) {
       notifications.show({
-        title: '提示词为空',
-        message: '当前片段提示词为空，无法生成视频。',
+        title: $('提示词为空'),
+        message: $('当前片段提示词为空，无法生成视频。'),
         color: 'red',
       })
       return
     }
     if (!modelKey) {
       notifications.show({
-        title: '模型未就绪',
-        message: '当前没有可用视频模型，请先检查模型配置。',
+        title: $('模型未就绪'),
+        message: $('当前没有可用视频模型，请先检查模型配置。'),
         color: 'red',
       })
       return
     }
     if (!projectId || !bookId || !chapterNo) {
       notifications.show({
-        title: '缺少上下文',
-        message: '当前项目或章节未就绪，无法把视频结果写回工作台。',
+        title: $('缺少上下文'),
+        message: $('当前项目或章节未就绪，无法把视频结果写回工作台。'),
         color: 'red',
       })
       return
@@ -3102,16 +3104,16 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
     const vendor = typeof selectedVideoOption?.vendor === 'string' ? selectedVideoOption.vendor.trim() : ''
     if (!vendor) {
       notifications.show({
-        title: '模型配置异常',
-        message: '所选模型缺少 vendor，无法直接执行视频生成。',
+        title: $('模型配置异常'),
+        message: $('所选模型缺少 vendor，无法直接执行视频生成。'),
         color: 'red',
       })
       return
     }
     if (!requestedVideoModel) {
       notifications.show({
-        title: '模型配置异常',
-        message: '所选视频模型缺少可执行标识，无法直接执行视频生成。',
+        title: $('模型配置异常'),
+        message: $('所选视频模型缺少可执行标识，无法直接执行视频生成。'),
         color: 'red',
       })
       return
@@ -3128,8 +3130,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         ...current,
         [selectedShot.id]: {
           status: 'running',
-          message: `片段 ${selectedShot.shotCode} 正在补齐缺失参考资产…`,
-          ...buildRuntimeStamp('启动时间'),
+          message: $t('片段 {{shot}} 正在补齐缺失参考资产…', { shot: selectedShot.shotCode }),
+          ...buildRuntimeStamp($('启动时间')),
         },
       }))
       for (const missingAssetId of resolvedReferences.missingAssetIds) {
@@ -3162,8 +3164,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         ...current,
         [selectedShot.id]: {
           status: 'error',
-          message: '当前片段缺少真实参考图，且自动补资产失败，无法生成视频',
-          ...buildRuntimeStamp('失败时间'),
+          message: $('当前片段缺少真实参考图，且自动补资产失败，无法生成视频'),
+          ...buildRuntimeStamp($('失败时间')),
         },
       }))
       return
@@ -3173,14 +3175,14 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
       ...current,
       [selectedShot.id]: {
         status: 'running',
-        message: `正在生成片段 ${selectedShot.shotCode} 视频…`,
-        ...buildRuntimeStamp('启动时间'),
+        message: $t('正在生成片段 {{shot}} 视频…', { shot: selectedShot.shotCode }),
+        ...buildRuntimeStamp($('启动时间')),
       },
     }))
 
     try {
       const sourceEntityKey = getNanoComicEntityKey('video_segment', selectedShot.id)
-      const nodeLabel = `${selectedShot.shotCode} 视频`
+      const nodeLabel = $t('{{shot}} 视频', { shot: selectedShot.shotCode })
       const referenceSourceNodeIds = collectWorkspaceReferenceSourceNodeIds({
         nodes: useRFStore.getState().nodes,
         projectId,
@@ -3251,7 +3253,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         nodeId = typeof createResult.data?.nodeId === 'string' ? createResult.data.nodeId.trim() : ''
       }
       if (!nodeId) {
-        throw new Error('工作台已创建视频节点，但未返回 nodeId')
+        throw new Error($('工作台已创建视频节点，但未返回 nodeId'))
       }
       await syncWorkspaceVideoReferenceEdges({
         projectId,
@@ -3262,8 +3264,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         ...current,
         [selectedShot.id]: {
           status: 'running',
-          message: `片段 ${selectedShot.shotCode} 视频节点已创建，正在执行…`,
-          updatedAtLabel: `节点：${nodeId}`,
+          message: $t('片段 {{shot}} 视频节点已创建，正在执行…', { shot: selectedShot.shotCode }),
+          updatedAtLabel: $t('节点：{{nodeId}}', { nodeId }),
           updatedAtMs: Date.now(),
         },
       }))
@@ -3283,8 +3285,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         ...current,
         [selectedShot.id]: {
           status: 'success',
-          message: `片段 ${selectedShot.shotCode} 视频已生成并写回画布`,
-          ...buildRuntimeStamp('完成时间'),
+          message: $t('片段 {{shot}} 视频已生成并写回画布', { shot: selectedShot.shotCode }),
+          ...buildRuntimeStamp($('完成时间')),
           ...(taskId ? { taskId } : {}),
           ...preview,
         },
@@ -3295,8 +3297,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
         [selectedShot.id]: {
           ...(current[selectedShot.id] || { status: 'error', message: '', updatedAtLabel: '', updatedAtMs: 0 }),
           status: 'error',
-          message: error instanceof Error ? error.message : '视频生成失败',
-          ...buildRuntimeStamp('失败时间'),
+          message: error instanceof Error ? error.message : $('视频生成失败'),
+          ...buildRuntimeStamp($('失败时间')),
         },
       }))
     }
@@ -3350,7 +3352,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
               <Group className="nano-comic-workspace__toolbar-actions" gap="xs">
                 <Select
                   className="nano-comic-workspace__toolbar-select"
-                  placeholder="选择章节"
+                  placeholder={$('选择章节')}
                   data={chapterOptions}
                   value={selectedChapter}
                   onChange={(value) => setSelectedChapter(typeof value === 'string' ? value : '')}
@@ -3361,7 +3363,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                 <Select
                   className="nano-comic-workspace__toolbar-select"
                   searchable
-                  placeholder={imageModelLoading ? '加载生图模型…' : '选择生图模型'}
+                  placeholder={imageModelLoading ? $('加载生图模型…') : $('选择生图模型')}
                   data={imageModelOptions}
                   value={selectedImageModel}
                   onChange={(value) => setSelectedImageModel(typeof value === 'string' ? value : '')}
@@ -3383,7 +3385,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                       loading={chapterScriptState.status === 'running'}
                       disabled={chapterScriptState.status === 'running'}
                     >
-                      生成章节剧本
+                      {$('生成章节剧本')}
                     </Button>
                     <Button
                       className="nano-comic-workspace__header-action"
@@ -3393,14 +3395,14 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                       onClick={handleHeaderGenerateAssets}
                       loading={chapterScriptState.status === 'running' || productionRequestState.status === 'running'}
                     >
-                      生成分镜资产
+                      {$('生成分镜资产')}
                     </Button>
                   </>
                 ) : (
                   <Group gap={0} wrap="nowrap">
                     <Tooltip
                       className="nano-comic-workspace__header-action-tooltip"
-                      label={selectedShotVideoBlockedReason || '基于当前镜头结果生成视频'}
+                      label={selectedShotVideoBlockedReason || $('基于当前镜头结果生成视频')}
                       disabled={!selectedShotVideoBlockedReason}
                       withArrow
                     >
@@ -3413,7 +3415,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                         disabled={Boolean(selectedShotVideoBlockedReason)}
                         onClick={handleGenerateVideo}
                       >
-                        生成视频
+                        {$('生成视频')}
                       </Button>
                     </Tooltip>
                     <Menu shadow="md" width={280} position="bottom-end" withinPortal zIndex={9000}>
@@ -3422,18 +3424,18 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                           className="nano-comic-workspace__header-action nano-comic-workspace__header-action--split"
                           radius="sm"
                           variant="light"
-                          aria-label="视频生成参数"
+                          aria-label={$('视频生成参数')}
                         >
                           <IconChevronDown className="nano-comic-workspace__header-action-icon" size={14} />
                         </ActionIcon>
                       </Menu.Target>
                       <Menu.Dropdown>
                         <div className="nano-comic-workspace__video-menu">
-                          <Text className="nano-comic-workspace__video-menu-label" size="xs">模型</Text>
+                          <Text className="nano-comic-workspace__video-menu-label" size="xs">{$('模型')}</Text>
                           <Select
                             className="nano-comic-workspace__video-menu-select"
                             searchable
-                            placeholder={videoModelLoading ? '加载中…' : '选择视频模型'}
+                            placeholder={videoModelLoading ? $('加载中…') : $('选择视频模型')}
                             data={videoModelOptions}
                             value={selectedVideoModel}
                             onChange={(value) => setSelectedVideoModel(typeof value === 'string' ? value : '')}
@@ -3443,18 +3445,18 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                           />
                           {videoModelLoading ? (
                             <Text className="nano-comic-workspace__video-menu-hint" size="xs" c="dimmed">
-                              正在加载视频模型…
+                              {$('正在加载视频模型…')}
                             </Text>
                           ) : videoModelOptions.length <= 0 ? (
                             <Text className="nano-comic-workspace__video-menu-hint" size="xs" c="red">
-                              当前没有可用视频模型。请先在系统模型管理中启用 `video` 模型。
+                              {$('当前没有可用视频模型。请先在系统模型管理中启用 `video` 模型。')}
                             </Text>
                           ) : !selectedVideoModel ? (
                             <Text className="nano-comic-workspace__video-menu-hint" size="xs" c="dimmed">
-                              先选择一个视频模型，生成按钮才会解锁。
+                              {$('先选择一个视频模型，生成按钮才会解锁。')}
                             </Text>
                           ) : null}
-                          <Text className="nano-comic-workspace__video-menu-label" size="xs">时长</Text>
+                          <Text className="nano-comic-workspace__video-menu-label" size="xs">{$('时长')}</Text>
                           <NumberInput
                             className="nano-comic-workspace__video-menu-number"
                             min={1}
@@ -3468,14 +3470,14 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                     </Menu>
                   </Group>
                 )}
-                <ActionIcon className="nano-comic-workspace__toolbar-icon" radius="sm" variant="default" aria-label="刷新工作台" onClick={handleRefreshWorkspace}>
+                <ActionIcon className="nano-comic-workspace__toolbar-icon" radius="sm" variant="default" aria-label={$('刷新工作台')} onClick={handleRefreshWorkspace}>
                   <IconRefresh className="nano-comic-workspace__toolbar-icon-svg" size={15} />
                 </ActionIcon>
                 <ActionIcon
                   className="nano-comic-workspace__close"
                   radius="sm"
                   variant="default"
-                  aria-label="关闭漫剧工作台"
+                  aria-label={$('关闭漫剧工作台')}
                   onClick={handleClose}
                 >
                   <IconX className="nano-comic-workspace__close-icon" size={16} />
@@ -3498,8 +3500,8 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                 onChange={(value) => setWorkspaceView(value === 'videoGeneration' ? 'videoGeneration' : 'storyboardImage')}
               >
                 <Tabs.List className="nano-comic-workspace__tabs-list">
-                  <Tabs.Tab className="nano-comic-workspace__tab" value="storyboardImage">分镜图片</Tabs.Tab>
-                  <Tabs.Tab className="nano-comic-workspace__tab" value="videoGeneration">视频生成</Tabs.Tab>
+                  <Tabs.Tab className="nano-comic-workspace__tab" value="storyboardImage">{$('分镜图片')}</Tabs.Tab>
+                  <Tabs.Tab className="nano-comic-workspace__tab" value="videoGeneration">{$('视频生成')}</Tabs.Tab>
                 </Tabs.List>
               </Tabs>
               <input
@@ -3525,10 +3527,10 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                       <Stack className="nano-comic-workspace__checklist-stack" gap="xs">
                         <div className="nano-comic-workspace__checklist-copy">
                           <Title className="nano-comic-workspace__checklist-title" order={5}>
-                            进入工作台前的检查清单
+                            {$('进入工作台前的检查清单')}
                           </Title>
                           <Text className="nano-comic-workspace__checklist-subtitle" size="xs" c="dimmed">
-                            只显示真正会阻塞当前工作流的前置条件，并提供直接跳转入口。
+                            {$('只显示真正会阻塞当前工作流的前置条件，并提供直接跳转入口。')}
                           </Text>
                         </div>
                         <Stack className="nano-comic-workspace__checklist-items" gap="xs">
@@ -3540,7 +3542,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                               <Group className="nano-comic-workspace__checklist-item-row" justify="space-between" align="flex-start" wrap="nowrap">
                                 <div className="nano-comic-workspace__checklist-item-copy">
                                   <Text className="nano-comic-workspace__checklist-item-title" size="sm" fw={600}>
-                                    待处理 · {item.title}
+                                    {$('待处理 · ')}{item.title}
                                   </Text>
                                   <Text className="nano-comic-workspace__checklist-item-detail" size="xs" c="dimmed">
                                     {item.detail}
@@ -3570,25 +3572,25 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                       <Stack gap="sm">
                         <Group justify="space-between" align="flex-start">
                           <div>
-                            <Title order={4}>章节文本窗口</Title>
-                            <Text size="xs" c="dimmed">当前章节的正文、摘要和冲突会直接决定后续镜头板质量。</Text>
+                            <Title order={4}>{$('章节文本窗口')}</Title>
+                            <Text size="xs" c="dimmed">{$('当前章节的正文、摘要和冲突会直接决定后续镜头板质量。')}</Text>
                           </div>
                           <Text className="nano-comic-workspace__section-badge" size="xs" fw={700}>
-                            {selectedChapterMetadataComplete ? '已就绪' : '待补齐'}
+                            {selectedChapterMetadataComplete ? $('已就绪') : $('待补齐')}
                           </Text>
                         </Group>
                         <InlinePanel className="nano-comic-workspace__chapter-panel-block">
-                          <Text size="xs" c="dimmed">章节摘要</Text>
+                          <Text size="xs" c="dimmed">{$('章节摘要')}</Text>
                           <Text size="sm" mt={4}>
-                            {selectedChapterDetail?.summary || selectedChapterMeta?.summary || selectedChapterDetail?.coreConflict || '当前章节还没有稳定摘要，建议先生成章节剧本。'}
+                            {selectedChapterDetail?.summary || selectedChapterMeta?.summary || selectedChapterDetail?.coreConflict || $('当前章节还没有稳定摘要，建议先生成章节剧本。')}
                           </Text>
                         </InlinePanel>
                         <InlinePanel className="nano-comic-workspace__chapter-panel-block">
-                          <Text size="xs" c="dimmed">正文窗口</Text>
+                          <Text size="xs" c="dimmed">{$('正文窗口')}</Text>
                           <Text size="sm" mt={4}>
                             {String(selectedChapterDetail?.content || '').trim()
                               ? `${String(selectedChapterDetail?.content || '').trim().slice(0, 220)}${String(selectedChapterDetail?.content || '').trim().length > 220 ? '…' : ''}`
-                              : '当前章节正文窗口还未读到可执行文本。'}
+                              : $('当前章节正文窗口还未读到可执行文本。')}
                           </Text>
                         </InlinePanel>
                       </Stack>
@@ -3598,25 +3600,25 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                       <Stack gap="sm">
                         <Group justify="space-between" align="flex-start">
                           <div>
-                            <Title order={4}>章节线索</Title>
-                            <Text size="xs" c="dimmed">这里看的是本章真正可复用的角色、场景、道具和地点线索。</Text>
+                            <Title order={4}>{$('章节线索')}</Title>
+                            <Text size="xs" c="dimmed">{$('这里看的是本章真正可复用的角色、场景、道具和地点线索。')}</Text>
                           </div>
                           <Text className="nano-comic-workspace__section-badge" size="xs" fw={700}>
                             {selectedChapterCharacterCount + selectedChapterSceneCount + selectedChapterPropCount}
                           </Text>
                         </Group>
                         <div className="nano-comic-workspace__chapter-metrics">
-                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">角色</Text><Text size="sm" fw={700} mt={4}>{selectedChapterCharacterCount}</Text></InlinePanel>
-                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">场景</Text><Text size="sm" fw={700} mt={4}>{selectedChapterSceneCount}</Text></InlinePanel>
-                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">道具</Text><Text size="sm" fw={700} mt={4}>{selectedChapterPropCount}</Text></InlinePanel>
-                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">地点</Text><Text size="sm" fw={700} mt={4}>{selectedChapterLocationCount}</Text></InlinePanel>
+                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">{$('角色')}</Text><Text size="sm" fw={700} mt={4}>{selectedChapterCharacterCount}</Text></InlinePanel>
+                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">{$('场景')}</Text><Text size="sm" fw={700} mt={4}>{selectedChapterSceneCount}</Text></InlinePanel>
+                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">{$('道具')}</Text><Text size="sm" fw={700} mt={4}>{selectedChapterPropCount}</Text></InlinePanel>
+                          <InlinePanel className="nano-comic-workspace__chapter-metric"><Text size="xs" c="dimmed">{$('地点')}</Text><Text size="sm" fw={700} mt={4}>{selectedChapterLocationCount}</Text></InlinePanel>
                         </div>
                         <InlinePanel className="nano-comic-workspace__chapter-panel-block">
-                          <Text size="xs" c="dimmed">连续性准备度</Text>
+                          <Text size="xs" c="dimmed">{$('连续性准备度')}</Text>
                           <Text size="sm" mt={4}>
                             {selectedChapterMetadataComplete
-                              ? `角色锚点 ${currentChapterRoleAnchorCount} 个，风格参考 ${selectedStyleReferenceImages.length} 组，可直接继续本章分镜生产。`
-                              : '当前章节上下文还没完全锁住，继续大批量出图会放大漂移。'}
+                              ? $t('角色锚点 {{anchors}} 个，风格参考 {{styles}} 组，可直接继续本章分镜生产。', { anchors: currentChapterRoleAnchorCount, styles: selectedStyleReferenceImages.length })
+                              : $('当前章节上下文还没完全锁住，继续大批量出图会放大漂移。')}
                           </Text>
                         </InlinePanel>
                       </Stack>
@@ -3628,10 +3630,10 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                       <Group className="nano-comic-workspace__storyboard-stage-header" justify="space-between" align="flex-start">
                         <div className="nano-comic-workspace__storyboard-stage-copy">
                           <Title className="nano-comic-workspace__storyboard-stage-title" order={4}>
-                            镜头板工作区
+                            {$('镜头板工作区')}
                           </Title>
                           <Text className="nano-comic-workspace__storyboard-stage-subtitle" size="xs" c="dimmed">
-                            上面的章节上下文确认完，再在这里逐镜头看脚本、改提示词、出图并回写画布。
+                            {$('上面的章节上下文确认完，再在这里逐镜头看脚本、改提示词、出图并回写画布。')}
                           </Text>
                         </div>
                         <Text className="nano-comic-workspace__section-badge" size="xs" fw={700}>
@@ -3694,10 +3696,10 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
           <PanelCard className="nano-comic-workspace__empty" padding="comfortable">
             <Stack className="nano-comic-workspace__empty-stack" gap="md" align="flex-start">
               <Title className="nano-comic-workspace__empty-title" order={3}>
-                还没有选中项目
+                {$('还没有选中项目')}
               </Title>
               <Text className="nano-comic-workspace__empty-text" size="sm" c="dimmed">
-                先去项目列表选择一个 `currentProject`，再回到当前页打开漫剧工作台。
+                {$('先去项目列表选择一个 `currentProject`，再回到当前页打开漫剧工作台。')}
               </Text>
               <Button
                 className="nano-comic-workspace__empty-action"
@@ -3707,7 +3709,7 @@ export default function NanoComicWorkspacePanel(): JSX.Element | null {
                   spaNavigate('/projects')
                 }}
               >
-                前往项目列表
+                {$('前往项目列表')}
               </Button>
             </Stack>
           </PanelCard>

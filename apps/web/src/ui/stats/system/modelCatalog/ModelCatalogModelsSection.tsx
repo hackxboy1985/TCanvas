@@ -6,6 +6,7 @@ import { EnabledBadge } from './ModelCatalogBadges'
 import { ModelCatalogTableFooter } from './ModelCatalogTableFooter'
 import { KIND_OPTIONS } from './modelCatalog.constants'
 import { defaultModelPricingCost, formatKind, formatVendor, includesSearchText, paginateItems } from './modelCatalog.utils'
+import { $, $t } from '../../../../canvas/i18n'
 
 export function ModelCatalogModelsSection({
   loading,
@@ -83,12 +84,12 @@ export function ModelCatalogModelsSection({
 
   return (
     <>
-      <Divider className="stats-model-catalog-divider" label="模型（Model）" labelPosition="left" />
+      <Divider className="stats-model-catalog-divider" label={ $('模型（Model）') } labelPosition="left" />
       <Group className="stats-model-catalog-model-search" gap="sm" wrap="wrap" align="flex-end">
         <TextInput
           className="stats-model-catalog-model-search-keyword"
-          label="模型名称"
-          placeholder="搜索模型 Key / 别名 / 中文名"
+          label={ $('模型名称') }
+          placeholder={ $('搜索模型 Key / 别名 / 中文名') }
           value={keywordInput}
           onChange={(event) => setKeywordInput(event.currentTarget.value)}
           leftSection={<IconSearch className="stats-model-catalog-model-search-keyword-icon" size={14} />}
@@ -96,15 +97,15 @@ export function ModelCatalogModelsSection({
         />
         <Select
           className="stats-model-catalog-model-search-kind"
-          label="模型类型"
+          label={ $('模型类型') }
           value={kindFilterInput}
           onChange={(value) => setKindFilterInput(((value as BillingModelKind | 'all' | null) || 'all'))}
-          data={[{ value: 'all', label: '全部类型' }, ...KIND_OPTIONS]}
+          data={[{ value: 'all', label: $('全部类型') }, ...KIND_OPTIONS]}
           w={180}
         />
         <Select
           className="stats-model-catalog-model-search-vendor"
-          label="厂商"
+          label={ $('厂商') }
           value={vendorFilterInput}
           onChange={(value) => setVendorFilterInput(value || 'all')}
           data={vendorSelectData}
@@ -115,18 +116,18 @@ export function ModelCatalogModelsSection({
           className="stats-model-catalog-model-search-capability"
           checked={enabledCapabilityOnlyInput}
           onChange={(event) => setEnabledCapabilityOnlyInput(event.currentTarget.checked)}
-          label="仅看已启用能力"
+          label={ $('仅看已启用能力') }
           mb={4}
         />
         <Group className="stats-model-catalog-model-search-actions" gap={8} mb={4}>
           <Button className="stats-model-catalog-model-search-submit" size="xs" onClick={submitSearch}>
-            查询
+            { $('查询') }
           </Button>
           <Button className="stats-model-catalog-model-search-reset" size="xs" variant="subtle" onClick={resetSearch}>
-            重置
+            { $('重置') }
           </Button>
           <Button className="stats-model-catalog-model-create" size="xs" variant="light" leftSection={<IconPlus className="stats-model-catalog-model-create-icon" size={14} />} onClick={onCreateModel}>
-            新增模型
+            { $('新增模型') }
           </Button>
         </Group>
       </Group>
@@ -135,14 +136,14 @@ export function ModelCatalogModelsSection({
         <Table className="stats-model-catalog-models-table" striped highlightOnHover withTableBorder withColumnBorders>
           <Table.Thead className="stats-model-catalog-models-table-head">
             <Table.Tr className="stats-model-catalog-models-table-head-row">
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 260 }}>模型 Key</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 220 }}>别名（Public）</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 220 }}>名称</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 140 }}>厂商</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 90 }}>类型</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 120 }}>价格</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 90 }}>状态</Table.Th>
-              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 156 }}>操作</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 260 }}>{ $('模型 Key') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 220 }}>{ $('别名（Public）') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 220 }}>{ $('名称') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 140 }}>{ $('厂商') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 90 }}>{ $('类型') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 120 }}>{ $('价格') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 90 }}>{ $('状态') }</Table.Th>
+              <Table.Th className="stats-model-catalog-models-table-head-cell" style={{ width: 156 }}>{ $('操作') }</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody className="stats-model-catalog-models-table-body">
@@ -151,14 +152,14 @@ export function ModelCatalogModelsSection({
                 <Table.Td className="stats-model-catalog-models-table-cell" colSpan={8}>
                   <Group className="stats-model-catalog-loading" gap="xs" align="center">
                     <Loader className="stats-model-catalog-loading-icon" size="sm" />
-                    <Text className="stats-model-catalog-loading-text" size="sm" c="dimmed">加载中…</Text>
+                    <Text className="stats-model-catalog-loading-text" size="sm" c="dimmed">{ $('加载中…') }</Text>
                   </Group>
                 </Table.Td>
               </Table.Tr>
             ) : !pagedModels.length ? (
               <Table.Tr className="stats-model-catalog-models-table-row-empty">
                 <Table.Td className="stats-model-catalog-models-table-cell" colSpan={8}>
-                  <Text className="stats-model-catalog-empty" size="sm" c="dimmed">暂无模型</Text>
+                  <Text className="stats-model-catalog-empty" size="sm" c="dimmed">{ $('暂无模型') }</Text>
                 </Table.Td>
               </Table.Tr>
             ) : (
@@ -185,7 +186,7 @@ export function ModelCatalogModelsSection({
                     </Text>
                     {!!model.pricing?.specCosts?.length && (
                       <Text className="stats-model-catalog-model-price-specs" size="xs" c="dimmed">
-                        +{model.pricing.specCosts.length} 规格
+                        { $t('+{{length}} 规格', { length: model.pricing.specCosts.length }) }
                       </Text>
                     )}
                   </Table.Td>
@@ -194,7 +195,7 @@ export function ModelCatalogModelsSection({
                   </Table.Td>
                   <Table.Td className="stats-model-catalog-models-table-cell">
                     <Group className="stats-model-catalog-model-row-actions" gap={6} justify="flex-end" wrap="nowrap">
-                      <Button className="stats-model-catalog-model-edit" size="xs" variant="light" onClick={() => onEditModel(model)}>编辑</Button>
+                      <Button className="stats-model-catalog-model-edit" size="xs" variant="light" onClick={() => onEditModel(model)}>{ $('编辑') }</Button>
                       <ActionIcon className="stats-model-catalog-model-duplicate" size="sm" variant="light" aria-label="duplicate-model" onClick={() => onDuplicateModel(model)}>
                         <IconCopyPlus className="stats-model-catalog-model-duplicate-icon" size={14} />
                       </ActionIcon>

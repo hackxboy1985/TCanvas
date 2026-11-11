@@ -4,6 +4,7 @@ import { IconList } from '@tabler/icons-react'
 import { useCanvasRenderContext } from '../../../CanvasRenderContext'
 import { readLensAssetTaskIdentity } from '../../../utils/lensAssetTaskIdentity'
 import { getLensCanvasFlowId, readCanvasNodeAssetId } from '../../../utils/canvasNodeAssetId'
+import { $ } from '../../../i18n'
 
 /**
  * 任务入口按钮：业务资产节点与画布自由节点（含衍生出的图片编辑/角度/打光节点）都要显示。
@@ -27,13 +28,13 @@ export function AssetTaskListButton({ nodeId, data, showLabel = false, onOpen }:
       <Button className="lens-asset-task-results nodrag nopan" size="compact-xs" variant="subtle" color="gray"
         leftSection={<IconList className="lens-asset-task-results-icon" size={14} />}
         onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => { event.stopPropagation(); onOpenTaskResult(nodeId) }}>任务结果</Button>
+        onClick={(event) => { event.stopPropagation(); onOpenTaskResult(nodeId) }}>{$('任务结果')}</Button>
     </div>
   )
   return (
-    <Tooltip className="lens-asset-task-tooltip" label="任务记录" withArrow>
+    <Tooltip className="lens-asset-task-tooltip" label={$("任务记录")} withArrow>
       <ActionIcon className="lens-asset-task-button nodrag nopan" variant="subtle" color="gray" size="sm"
-        aria-label="任务记录" onPointerDown={(event) => event.stopPropagation()}
+        aria-label={$("任务记录")} onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => { event.stopPropagation(); onOpenTaskResult(nodeId) }}>
         <IconList className="lens-asset-task-button-icon" size={16} />
       </ActionIcon>

@@ -1,4 +1,5 @@
 import { uploadServerAssetFile, type TaskKind } from '../api/server'
+import { $, $t } from '../canvas/i18n'
 
 export type PreparedVideoReferenceAssetRole = 'target' | 'reference'
 
@@ -31,13 +32,13 @@ type PrepareVideoReferenceAssetsResult = {
 
 async function fetchBlob(url: string, init?: RequestInit): Promise<Blob> {
   const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`下载失败（${response.status}）`)
+  if (!response.ok) throw new Error($t('下载失败（{{status}}）', { status: response.status }))
   return await response.blob()
 }
 
 async function fetchImageBlob(url: string): Promise<Blob> {
   const trimmed = String(url || '').trim()
-  if (!trimmed) throw new Error('缺少图片 URL')
+  if (!trimmed) throw new Error($('缺少图片 URL'))
   return await fetchBlob(trimmed)
 }
 
@@ -121,7 +122,7 @@ async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
         resolve(blob)
         return
       }
-      reject(new Error('导出参考图失败'))
+      reject(new Error($('导出参考图失败')))
     }, 'image/png')
   })
 }
@@ -139,7 +140,7 @@ async function buildPaddedReferenceFile(input: {
     canvas.width = input.targetWidth
     canvas.height = input.targetHeight
     const context = canvas.getContext('2d')
-    if (!context) throw new Error('Canvas 初始化失败')
+    if (!context) throw new Error($('Canvas 初始化失败'))
 
     context.fillStyle = '#000000'
     context.fillRect(0, 0, input.targetWidth, input.targetHeight)
@@ -198,7 +199,7 @@ async function uploadPreparedReferenceAsset(input: {
       : null
   const url = typeof uploadedData?.url === 'string' ? uploadedData.url.trim() : ''
   if (!uploaded.id || !url) {
-    throw new Error('参考图已处理，但上传结果缺少 assetId 或 url')
+    throw new Error($('参考图已处理，但上传结果缺少 assetId 或 url'))
   }
   return {
     assetId: uploaded.id,
@@ -219,7 +220,7 @@ export async function prepareSoraVideoReferenceAssets(
 ): Promise<PrepareVideoReferenceAssetsResult> {
   const targetSize = parseTargetDimensions(input.size, input.aspectRatio)
   if (!targetSize) {
-    throw new Error(`无法解析 Sora 参考图目标尺寸：size=${String(input.size || '').trim() || '(empty)'} aspect=${input.aspectRatio}`)
+    throw new Error($t('无法解析 Sora 参考图目标尺寸：size={{size}} aspect={{aspect}}', { size: String(input.size || '').trim() || '(empty)', aspect: input.aspectRatio }))
   }
 
   const firstFrameUrl = typeof input.firstFrameUrl === 'string' ? input.firstFrameUrl.trim() : ''

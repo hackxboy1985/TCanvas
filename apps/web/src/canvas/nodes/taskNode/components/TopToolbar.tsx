@@ -2,6 +2,7 @@ import React from 'react'
 import { ActionIcon, Tooltip } from '@mantine/core'
 import { NodeToolbar, Position } from '@xyflow/react'
 import { IconDownload, IconMaximize } from '@tabler/icons-react'
+import { $ } from '../../../i18n'
 
 type ToolbarAction = { key: string; label: string; icon: JSX.Element; onClick: () => void; active?: boolean }
 
@@ -53,26 +54,26 @@ export function TopToolbar({
             maxWidth: 'min(92vw, 980px)',
           }}
         >
-          <Tooltip className="top-toolbar-tooltip" label="放大预览" position="bottom" withArrow>
+          <Tooltip className="top-toolbar-tooltip" label={$("放大预览")} position="bottom" withArrow>
             <ActionIcon
               className="top-toolbar-action"
               variant="transparent"
               radius={0}
               size="sm"
-              aria-label="放大预览"
+              aria-label={$("放大预览")}
               styles={toolbarActionIconStyles}
               onClick={onPreview}
             >
               <IconMaximize className="top-toolbar-action-icon" size={16} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip className="top-toolbar-tooltip" label="下载" position="bottom" withArrow>
+          <Tooltip className="top-toolbar-tooltip" label={$("下载")} position="bottom" withArrow>
             <ActionIcon
               className="top-toolbar-action"
               variant="transparent"
               radius={0}
               size="sm"
-              aria-label="下载"
+              aria-label={$("下载")}
               styles={toolbarActionIconStyles}
               onClick={onDownload}
             >

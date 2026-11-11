@@ -6,6 +6,7 @@ import { toast } from '../../ui/toast'
 import { IconCopy, IconEye } from '@tabler/icons-react'
 import { AssetTaskAdoptButton, AssetTaskNodeImageAdoptButton } from './AssetTaskAdoptButton'
 import { toOssResponsiveUrl } from '../utils/ossResponsive'
+import { $, $t } from '../i18n'
 
 /** 参考图缩略图显示宽度（px），与 CSS .lens-asset-task-panel__reference 的 36px 一致 */
 const REFERENCE_THUMB_DISPLAY_WIDTH = 36
@@ -13,9 +14,9 @@ const REFERENCE_THUMB_DISPLAY_WIDTH = 36
 const RESULT_THUMB_DISPLAY_WIDTH = 164
 
 const STATUS_LABELS: Record<string, string> = {
-  [LensAssetTaskStatus.Created]: '创建', CREATED: '创建', [LensAssetTaskStatus.Queued]: '排队',
-  [LensAssetTaskStatus.Running]: '生成中', SYNCING: '同步中', [LensAssetTaskStatus.Success]: '成功',
-  [LensAssetTaskStatus.Failed]: '失败', ERROR: '失败', SYNC_FAILED: '同步失败', CANCEL: '已取消',
+  [LensAssetTaskStatus.Created]: $('创建'), CREATED: $('创建'), [LensAssetTaskStatus.Queued]: $('排队'),
+  [LensAssetTaskStatus.Running]: $('生成中'), SYNCING: $('同步中'), [LensAssetTaskStatus.Success]: $('成功'),
+  [LensAssetTaskStatus.Failed]: $('失败'), ERROR: $('失败'), SYNC_FAILED: $('同步失败'), CANCEL: $('已取消'),
 }
 type Media = { url: string; type: 'image' | 'video'; thumbnail?: string }
 
@@ -84,7 +85,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
         if (url) media.push({ url, type: isRecord(result) && result.type === 'video' ? 'video' : 'image',
           thumbnail: isRecord(result) ? safeMediaUrl(result.thumbnail) : undefined })
       }
-    } catch { errors.push('结果数据格式异常') }
+    } catch { errors.push($('结果数据格式异常')) }
     if (!media.length) for (const value of record.fileUrl?.split(',') || []) {
       const url = safeMediaUrl(value)
       if (url) media.push({ url, type: 'image' })
@@ -95,7 +96,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
       if (isRecord(component)) {
         ratio = typeof component.ratio === 'string' ? component.ratio : typeof component.aspectRatio === 'string' ? component.aspectRatio : ''
         // 只展示接口中实际存在的生成参数，不补默认值。
-        for (const [key, label] of [['resolution', '分辨率'], ['quality', '质量'], ['width', '宽'], ['height', '高']] as const) {
+        for (const [key, label] of [['resolution', $('分辨率')], ['quality', $('质量')], ['width', $('宽')], ['height', $('高')]] as const) {
           const value = component[key]
           if ((typeof value === 'string' && value.trim()) || typeof value === 'number') parameters.push(label + ' ' + value)
         }
@@ -106,14 +107,14 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
           if (url) references.push(url)
         }
       }
-    } catch { errors.push('任务参数格式异常') }
+    } catch { errors.push($('任务参数格式异常')) }
     return { media, references, ratio, parameters, errors }
   }, [record.results, record.fileUrl, record.referenceImages, rawParams])
   const failed = [LensAssetTaskStatus.Failed, 'ERROR', 'SYNC_FAILED'].includes(status)
   const pending = ['CREATE', 'CREATED', 'QUEUED', 'RUNNING', 'SYNCING'].includes(status)
   const copyPrompt = async (): Promise<void> => {
-    try { await navigator.clipboard.writeText(record.prompt || ''); toast('提示词已复制', 'success') }
-    catch { toast('复制失败，请手动选择文本复制', 'error') }
+    try { await navigator.clipboard.writeText(record.prompt || ''); toast($('提示词已复制'), 'success') }
+    catch { toast($('复制失败，请手动选择文本复制'), 'error') }
   }
   const submitter = record.createUserName || record.submitter || record.userName
   const detailText = [record.createTime, record.id ? '#' + record.id : '', details.ratio, ...details.parameters].filter(Boolean).join(' · ')
@@ -123,7 +124,7 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
         {/* 衍生节点任务：标明来自该节点的哪类图片编辑，便于和原资产任务区分 */}
         {derivedLabel && <span className="lens-task-derived-tag">{derivedLabel}</span>}
         <Text className="lens-asset-task-panel__model" size="xs" fw={600} title={applicationName}>{applicationName}</Text>
-        <Badge className="lens-asset-task-panel__badge" size="xs" variant="light" color={failed ? 'red' : status === LensAssetTaskStatus.Success ? 'green' : 'blue'}>{STATUS_LABELS[status] || status || '未知状态'}</Badge>
+        <Badge className="lens-asset-task-panel__badge" size="xs" variant="light" color={failed ? 'red' : status === LensAssetTaskStatus.Success ? 'green' : 'blue'}>{STATUS_LABELS[status] || status || $('未知状态')}</Badge>
         {submitter && <Text className="lens-asset-task-panel__submitter" size="xs" title={submitter}>{submitter}</Text>}
         {record.channel && <Text className="lens-asset-task-panel__channel" size="xs" title={record.channel}>{record.channel}</Text>}
       </Group>
@@ -131,26 +132,26 @@ export function AssetTaskPanelCard({ record, canViewParams, target, applicationN
       {/* 参考图：点击打开站内大图预览，与结果图一致（原先只是裸缩略图，点不开） */}
       {!!details.references.length && <div className="lens-asset-task-panel__references">{details.references.map((url, index) => (
         <button className="lens-asset-task-panel__reference-btn" type="button" key={url + index}
-          aria-label={'预览参考图 ' + (index + 1)}
-          onClick={() => useUIStore.getState().openPreview({ url, kind: 'image', name: '参考图 ' + (index + 1) })}>
+          aria-label={$t('预览参考图 {{index}}', { index: index + 1 })}
+          onClick={() => useUIStore.getState().openPreview({ url, kind: 'image', name: $t('参考图 {{index}}', { index: index + 1 }) })}>
           {/* 列表用小图走 OSS 缩略图，避免直接拉 2k 原图；点开预览仍用原图 */}
-          <img className="lens-asset-task-panel__reference" src={toOssResponsiveUrl(url, REFERENCE_THUMB_DISPLAY_WIDTH)} alt={'参考图 ' + (index + 1)} loading="lazy" />
+          <img className="lens-asset-task-panel__reference" src={toOssResponsiveUrl(url, REFERENCE_THUMB_DISPLAY_WIDTH)} alt={$t('参考图 {{index}}', { index: index + 1 })} loading="lazy" />
         </button>
       ))}</div>}
       {!!record.prompt && <Text className="lens-asset-task-panel__prompt" size="xs" title={record.prompt}>{record.prompt}</Text>}
       <div className="lens-asset-task-panel__results">{details.media.map((media, index) => <button className="lens-asset-task-panel__preview" type="button" key={media.url + index}
-        aria-label={'预览结果 ' + (index + 1)} onClick={() => useUIStore.getState().openPreview({ url: media.url, kind: media.type, name: applicationName })}>
-        {media.type === 'image' ? <img className="lens-asset-task-panel__image" src={media.thumbnail || toOssResponsiveUrl(media.url, RESULT_THUMB_DISPLAY_WIDTH)} alt={'生成结果 ' + (index + 1)} loading="lazy" /> : <video className="lens-asset-task-panel__image" src={media.url} preload="metadata" />}
+        aria-label={$t('预览结果 {{index}}', { index: index + 1 })} onClick={() => useUIStore.getState().openPreview({ url: media.url, kind: media.type, name: applicationName })}>
+        {media.type === 'image' ? <img className="lens-asset-task-panel__image" src={media.thumbnail || toOssResponsiveUrl(media.url, RESULT_THUMB_DISPLAY_WIDTH)} alt={$t('生成结果 {{index}}', { index: index + 1 })} loading="lazy" /> : <video className="lens-asset-task-panel__image" src={media.url} preload="metadata" />}
       </button>)}</div>
-      {!details.media.length && <Text className="lens-asset-task-panel__result-status" size="xs" c={failed ? 'red' : undefined}>{record.resMsg || record.errorMsg || (pending ? '生成中，请稍候…' : '暂无结果')}</Text>}
+      {!details.media.length && <Text className="lens-asset-task-panel__result-status" size="xs" c={failed ? 'red' : undefined}>{record.resMsg || record.errorMsg || (pending ? $('生成中，请稍候…') : $('暂无结果'))}</Text>}
       {details.errors.map((error) => <Text className="lens-asset-task-panel__error" key={error} size="xs" c="red">{error}</Text>)}
       <Group className="lens-asset-task-panel__actions" gap={6}>
         {target && <AssetTaskAdoptButton target={target} images={details.media.filter((media) => media.type === 'image' && /^https?:/.test(media.url)).map((media) => media.url)} />}
         {!target && onAdoptNodeImage && <AssetTaskNodeImageAdoptButton images={details.media.filter((media) => media.type === 'image' && /^https?:/.test(media.url)).map((media) => media.url)} onAdopt={onAdoptNodeImage} />}
-        {!!record.prompt && <Button className="lens-asset-task-panel__copy" size="compact-xs" variant="outline" color="gray" leftSection={<IconCopy className="lens-asset-task-panel__copy-icon" size={13} />} onClick={() => { void copyPrompt() }}>复制提示词</Button>}
-        {canViewParams && rawParams && <Button className="lens-asset-task-panel__params" size="compact-xs" variant="light" color="gray" leftSection={<IconEye className="lens-asset-task-panel__params-icon" size={13} />} onClick={() => setParamsOpened(true)}>查看参数</Button>}
+        {!!record.prompt && <Button className="lens-asset-task-panel__copy" size="compact-xs" variant="outline" color="gray" leftSection={<IconCopy className="lens-asset-task-panel__copy-icon" size={13} />} onClick={() => { void copyPrompt() }}>{ $('复制提示词') }</Button>}
+        {canViewParams && rawParams && <Button className="lens-asset-task-panel__params" size="compact-xs" variant="light" color="gray" leftSection={<IconEye className="lens-asset-task-panel__params-icon" size={13} />} onClick={() => setParamsOpened(true)}>{ $('查看参数') }</Button>}
       </Group>
-      <Modal className="lens-asset-task-panel__params-modal" opened={paramsOpened} onClose={() => setParamsOpened(false)} title="任务参数" centered>
+      <Modal className="lens-asset-task-panel__params-modal" opened={paramsOpened} onClose={() => setParamsOpened(false)} title={ $('任务参数') } centered>
         <Text className="lens-asset-task-panel__params-content" component="pre" size="xs">{prettyJson(rawParams)}</Text>
       </Modal>
     </article>

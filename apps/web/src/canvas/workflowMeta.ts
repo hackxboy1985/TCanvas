@@ -1,4 +1,5 @@
 import type { Edge, Node } from '@xyflow/react'
+import { $t } from './i18n'
 
 export const WORKFLOW_STAGE_VALUES = [
   'material_ingest',
@@ -35,7 +36,7 @@ export function validateWorkflowNodeMeta(node: Node): string | null {
   const stageRaw = readTrimmedString(data.workflowStage)
   if (!stageRaw) return null
   if (!WORKFLOW_STAGE_SET.has(stageRaw)) {
-    return `节点 ${node.id} 的 workflowStage 非法: ${stageRaw}`
+    return $t('节点 {{id}} 的 workflowStage 非法: {{stage}}', { id: node.id, stage: stageRaw })
   }
   return null
 }
@@ -45,7 +46,7 @@ export function validateWorkflowEdgeMeta(edge: Edge): string | null {
   const branchGroupId = data.branchGroupId
   if (typeof branchGroupId === 'undefined' || branchGroupId === null) return null
   if (typeof branchGroupId === 'string' && branchGroupId.trim()) return null
-  return `连线 ${edge.id} 的 branchGroupId 非法，必须是非空字符串`
+  return $t('连线 {{id}} 的 branchGroupId 非法，必须是非空字符串', { id: edge.id })
 }
 
 export function normalizeWorkflowNodeMeta(node: Node): Node {

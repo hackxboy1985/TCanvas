@@ -12,6 +12,7 @@ import {
   filterTasksAfterNodeCreated,
   type DerivedTaskRecord,
 } from '../utils/derivedTasks'
+import { $ } from '../i18n'
 
 /** 面板任务记录：衍生节点任务额外带来源标签（角度修改/打光调整/自定义编辑） */
 type PanelTaskRecord = DerivedTaskRecord
@@ -20,12 +21,12 @@ const PAGE_SIZE = 20
 /** 有未终态任务时的轮询间隔（毫秒）：只在存在排队/生成中任务时续期，全终态即停止 */
 const POLL_INTERVAL_MS = 20000
 const STATUS_OPTIONS = [
-  { value: LensAssetTaskStatus.All, label: '默认：隐藏失败' },
-  { value: LensAssetTaskStatus.Created, label: '创建' },
-  { value: LensAssetTaskStatus.Queued, label: '排队' },
-  { value: LensAssetTaskStatus.Running, label: '生成中' },
-  { value: LensAssetTaskStatus.Success, label: '成功' },
-  { value: LensAssetTaskStatus.Failed, label: '失败' },
+  { value: LensAssetTaskStatus.All, label: $('默认：隐藏失败') },
+  { value: LensAssetTaskStatus.Created, label: $('创建') },
+  { value: LensAssetTaskStatus.Queued, label: $('排队') },
+  { value: LensAssetTaskStatus.Running, label: $('生成中') },
+  { value: LensAssetTaskStatus.Success, label: $('成功') },
+  { value: LensAssetTaskStatus.Failed, label: $('失败') },
 ]
 const PENDING_STATUSES = new Set(['CREATE', 'CREATED', 'QUEUED', 'RUNNING', 'SYNCING'])
 /**
@@ -65,7 +66,7 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
           category: assetType + 1,
           entityId: assetId,
           dramaId,
-          label: typeof data.label === 'string' && data.label ? data.label : '当前资产',
+          label: typeof data.label === 'string' && data.label ? data.label : $('当前资产'),
         }
       : undefined
   /**
@@ -123,7 +124,7 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
       setLoading(true)
       setError(null)
       try {
-        if (!dramaId) throw new Error('缺少剧信息，无法查询任务')
+        if (!dramaId) throw new Error($('缺少剧信息，无法查询任务'))
         // 应用名解析表必须两个分支都加载：
         // 自由节点（含局部修改等衍生节点）虽然查询不按应用筛选，但任务卡片要把 originAppId
         // 显示成用户选择的应用名；此前只在业务资产分支加载，自由节点恒为空数组，
@@ -156,9 +157,9 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
           }
           return
         }
-        if (!assetId || assetType === undefined) throw new Error('缺少剧或资产信息，无法查询任务')
+        if (!assetId || assetType === undefined) throw new Error($('缺少剧或资产信息，无法查询任务'))
         const applicationIds = models.filter((model) => model.enabled === true).map((model) => String(model.value))
-        if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
+        if (!applicationIds.length) throw new Error($('当前未配置可用生图应用，无法筛选资产任务'))
         const result = await listAssetImageTasks({ dramaId, assetId, assetType, applicationIds,
           taskStatus: status, pageNum: page, pageSize: PAGE_SIZE })
         if (disposed) return
@@ -178,7 +179,7 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
           timer = setTimeout(() => { void query() }, POLL_INTERVAL_MS)
         }
       } catch (cause) {
-        if (!disposed) setError(cause instanceof Error ? cause.message : '任务列表加载失败')
+        if (!disposed) setError(cause instanceof Error ? cause.message : $('任务列表加载失败'))
       } finally {
         if (!disposed) setLoading(false)
       }
@@ -190,34 +191,34 @@ export function AssetTaskPanel({ nodeId, data, onClose, onExpand }: {
   }, [assetId, assetType, canvasNodeAssetId, flowId, dramaId, page, status, refresh])
 
   return (
-    <aside className="lens-asset-task-panel nodrag nopan nowheel" aria-label="资产任务列表"
+    <aside className="lens-asset-task-panel nodrag nopan nowheel" aria-label={ $('资产任务列表') }
       onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
       <Group className="lens-asset-task-panel__header" gap="xs" wrap="nowrap">
-        <ActionIcon className="lens-asset-task-panel__close" variant="subtle" color="gray" aria-label="关闭任务列表" onClick={onClose}>
+        <ActionIcon className="lens-asset-task-panel__close" variant="subtle" color="gray" aria-label={ $('关闭任务列表') } onClick={onClose}>
           <IconX className="lens-asset-task-panel__close-icon" size={16} />
         </ActionIcon>
-        <Text className="lens-asset-task-panel__title" size="sm" fw={600}>任务列表</Text>
-        <ActionIcon className="lens-asset-task-panel__refresh" variant="subtle" color="gray" aria-label="刷新任务列表"
+        <Text className="lens-asset-task-panel__title" size="sm" fw={600}>{ $('任务列表') }</Text>
+        <ActionIcon className="lens-asset-task-panel__refresh" variant="subtle" color="gray" aria-label={ $('刷新任务列表') }
           loading={loading} onClick={() => setRefresh((value) => value + 1)}>
           <IconRefresh className="lens-asset-task-panel__refresh-icon" size={16} />
         </ActionIcon>
         <Badge className="lens-asset-task-panel__count" variant="light" color="gray">{total}</Badge>
         {onExpand && (
           <ActionIcon className="lens-asset-task-panel__expand" variant="subtle" color="gray"
-            aria-label="扩展任务列表" title="扩展任务列表" onClick={onExpand}>
+            aria-label={ $('扩展任务列表') } title={ $('扩展任务列表') } onClick={onExpand}>
             <IconArrowsMaximize className="lens-asset-task-panel__expand-icon" size={16} />
           </ActionIcon>
         )}
       </Group>
-      <Select className="lens-asset-task-panel__status" size="xs" aria-label="资产任务状态" data={STATUS_OPTIONS}
+      <Select className="lens-asset-task-panel__status" size="xs" aria-label={ $('资产任务状态') } data={STATUS_OPTIONS}
         value={status} allowDeselect={false} onChange={(value) => {
           if (value !== null) { setPage(1); setStatus(value as LensAssetTaskStatus) }
         }} />
       <div className="lens-asset-task-panel__body nowheel" aria-live="polite">
         {error && <Text className="lens-asset-task-panel__error" c="red" size="sm">{error}</Text>}
-        {error && <Button className="lens-asset-task-panel__retry" size="compact-xs" variant="subtle" onClick={() => setRefresh((value) => value + 1)}>重新加载</Button>}
+        {error && <Button className="lens-asset-task-panel__retry" size="compact-xs" variant="subtle" onClick={() => setRefresh((value) => value + 1)}>{ $('重新加载') }</Button>}
         {!error && loading && records.length === 0 && <Loader className="lens-asset-task-panel__loading" size="sm" />}
-        {!error && !loading && records.length === 0 && <Text className="lens-asset-task-panel__empty" size="sm">暂无任务记录</Text>}
+        {!error && !loading && records.length === 0 && <Text className="lens-asset-task-panel__empty" size="sm">{ $('暂无任务记录') }</Text>}
         {records.map((record, index) => <AssetTaskPanelCard key={record.id || index} record={record} derivedLabel={record.derivedLabel} applicationName={resolveLensTaskApplicationName(record.originAppId, applications)} canViewParams={canViewParams}
           target={adoptTarget} onAdoptNodeImage={canAdoptToNode ? handleAdoptNodeImage : undefined} />)}
       </div>

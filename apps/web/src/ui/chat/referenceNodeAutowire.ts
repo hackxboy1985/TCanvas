@@ -7,6 +7,7 @@ import {
   readNodeFirstFrameUrl,
   readNodeLastFrameUrl,
 } from '../../runner/nodeReferenceInputs'
+import { $t } from '../../canvas/i18n'
 
 type NodeDataRecord = Record<string, unknown>
 
@@ -337,7 +338,7 @@ export async function autoConnectReferenceNodesForTargets(targetNodeIds: readonl
       }
       const message = String(result.error || '').trim()
       if (message.includes('已存在连接')) continue
-      throw new Error(message || `自动补齐参考图连线失败：${connection.sourceNodeId} -> ${intent.targetNodeId}`)
+      throw new Error(message || $t('自动补齐参考图连线失败：{{sourceNodeId}} -> {{targetNodeId}}', { sourceNodeId: connection.sourceNodeId, targetNodeId: intent.targetNodeId }))
     }
   }
 

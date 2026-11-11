@@ -1,3 +1,5 @@
+import { $, $t } from '../../canvas/i18n'
+
 export type ChatExecutionEventKey =
   | 'request_sent'
   | 'canvas_plan_parsed'
@@ -79,8 +81,8 @@ export function getChatExecutionEventDefinition(eventKey: ChatExecutionEventKey)
 export function buildChatExecutionEventMessage(input: BuildChatExecutionEventMessageInput): string {
   const eventDefinition = getChatExecutionEventDefinition(input.eventKey)
   const detail = String(input.detail || '').trim()
-  if (!detail) return `进度更新 · ${eventDefinition.label}`
-  return `进度更新 · ${eventDefinition.label}\n${detail}`
+  if (!detail) return $t('进度更新 · {{label}}', { label: $(eventDefinition.label) })
+  return $t('进度更新 · {{label}}', { label: $(eventDefinition.label) }) + '\n' + detail
 }
 
 export function buildChatProgressMetadata(input: BuildChatProgressMetadataInput): ChatProgressMetadata {
@@ -92,7 +94,7 @@ export function buildChatProgressMetadata(input: BuildChatProgressMetadataInput)
     route: input.route,
     sessionKey: input.sessionKey,
     eventKey: input.eventKey,
-    eventLabel: eventDefinition.label,
+    eventLabel: $(eventDefinition.label),
     eventIndex: nextEventIndex,
     totalEvents: CHAT_EXECUTION_EVENT_DEFINITIONS.length,
     rerunTarget: {

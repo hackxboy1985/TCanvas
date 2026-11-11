@@ -6,15 +6,17 @@ import { PanelCard } from './PanelCard'
 import { useUIStore } from './uiStore'
 import { calculateSafeMaxHeight } from './utils/panelPosition'
 import { stopPanelWheelPropagation } from './utils/panelWheel'
+import { $ } from '../canvas/i18n'
 
 type VendorOption = { value: string; label: string; description: string }
 
+// 模块级常量：语言在模块加载时确定，切换语言需刷新页面
 const DEFAULT_ENABLED_VENDORS: VendorOption[] = [
-  { value: 'openai', label: 'OpenAI', description: 'GPT / 图像理解 / 图像编辑 等' },
-  { value: 'anthropic', label: 'Anthropic', description: 'Claude / GLM（Claude 兼容）等' },
-  { value: 'gemini', label: 'Gemini', description: 'Nano Banana / Imagen 等' },
-  { value: 'qwen', label: 'Qwen', description: '绘图（严格像素宽高常用）' },
-  { value: 'veo', label: 'Veo', description: '视频生成' },
+  { value: 'openai', label: 'OpenAI', description: $('GPT / 图像理解 / 图像编辑 等') },
+  { value: 'anthropic', label: 'Anthropic', description: $('Claude / GLM（Claude 兼容）等') },
+  { value: 'gemini', label: 'Gemini', description: $('Nano Banana / Imagen 等') },
+  { value: 'qwen', label: 'Qwen', description: $('绘图（严格像素宽高常用）') },
+  { value: 'veo', label: 'Veo', description: $('视频生成') },
 ]
 
 const normalizeApiKey = (value: string): string => String(value || '').trim()
@@ -51,7 +53,7 @@ export default function ModelPanel(): JSX.Element | null {
     try {
       if (enabled) {
         const normalizedKey = normalizeApiKey(apiKey)
-        if (!normalizedKey) throw new Error('请填写 API Key')
+        if (!normalizedKey) throw new Error($('请填写 API Key'))
         setStoredApiKey(normalizedKey)
         setStoredVendorCandidates(vendorCandidates)
       } else {
@@ -59,11 +61,11 @@ export default function ModelPanel(): JSX.Element | null {
         setStoredVendorCandidates([])
       }
 
-      notifications.show({ title: '已保存', message: '模型配置已更新', color: 'teal' })
+      notifications.show({ title: $('已保存'), message: $('模型配置已更新'), color: 'teal' })
     } catch (err: any) {
-      const msg = err?.message || '保存失败'
+      const msg = err?.message || $('保存失败')
       setError(msg)
-      notifications.show({ title: '保存失败', message: msg, color: 'red' })
+      notifications.show({ title: $('保存失败'), message: msg, color: 'red' })
     } finally {
       setSaving(false)
     }
@@ -89,7 +91,7 @@ export default function ModelPanel(): JSX.Element | null {
   if (!mounted) return null
 
   const maxHeight = calculateSafeMaxHeight(anchorY, 120)
-  const apiKeyHint = 'API Key（保存到本地 localStorage）'
+  const apiKeyHint = $('API Key（保存到本地 localStorage）')
 
   return (
     <div className="tc-model-panel-anchor" style={{ position: 'fixed', left: 82, top: anchorY ? anchorY - 160 : 140, zIndex: 200 }} data-ux-panel>
@@ -115,14 +117,14 @@ export default function ModelPanel(): JSX.Element | null {
                 <Group className="tc-model-panel-header" justify="space-between" align="center" wrap="nowrap" mb={6}>
                   <div className="tc-model-panel-header-left">
                     <Title className="tc-model-panel-title" order={6}>
-                      模型设置
+                      {$('模型设置')}
                     </Title>
                     <Text className="tc-model-panel-subtitle" size="xs" c="dimmed">
-                      配置画布调用参数（可选）。
+                      {$('配置画布调用参数（可选）。')}
                     </Text>
                   </div>
                   <Group className="tc-model-panel-header-actions" gap={6} wrap="nowrap">
-                    <Tooltip label="关闭" withArrow>
+                    <Tooltip label={$('关闭')} withArrow>
                       <ActionIcon
                         className="tc-model-panel-close"
                         size="sm"
@@ -141,8 +143,8 @@ export default function ModelPanel(): JSX.Element | null {
                       className="tc-model-panel-enabled"
                       checked={enabled}
                       onChange={(e) => setEnabled(e.currentTarget.checked)}
-                      label="启用 API Key"
-                      description="关闭后会清空 Key。"
+                      label={$('启用 API Key')}
+                      description={$('关闭后会清空 Key。')}
                     />
 
                     <PasswordInput
@@ -165,19 +167,19 @@ export default function ModelPanel(): JSX.Element | null {
                         onClick={() => setApiKey('')}
                         disabled={saving}
                       >
-                        清空 Key
+                        {$('清空 Key')}
                       </Button>
                       <Button className="tc-model-panel-select-all" size="xs" variant="subtle" onClick={selectAll} disabled={saving}>
-                        全选
+                        {$('全选')}
                       </Button>
                       <Button className="tc-model-panel-clear-all" size="xs" variant="subtle" onClick={clearAll} disabled={saving}>
-                        全不选
+                        {$('全不选')}
                       </Button>
                     </Group>
 
-                    <Divider className="tc-model-panel-divider" label="vendorCandidates（可选）" labelPosition="left" />
+                    <Divider className="tc-model-panel-divider" label={$('vendorCandidates（可选）')} labelPosition="left" />
                     <Text className="tc-model-panel-hint" size="xs" c="dimmed">
-                      留空表示 `vendor=auto` 使用系统级可用厂商；勾选则限制自动回退范围。
+                      {$('留空表示 `vendor=auto` 使用系统级可用厂商；勾选则限制自动回退范围。')}
                     </Text>
                     <Stack className="tc-model-panel-vendor-list" gap={6}>
                       {DEFAULT_ENABLED_VENDORS.map((opt) => {
@@ -216,7 +218,7 @@ export default function ModelPanel(): JSX.Element | null {
                         loading={saving}
                         disabled={false}
                       >
-                        保存
+                        {$('保存')}
                       </Button>
                     </Group>
                   </Stack>

@@ -7,6 +7,7 @@ import { toOssResponsiveUrl, computeNodeImageDisplayWidth } from '../../../utils
 import { setTapImageDragData } from '../../../dnd/setTapImageDragData'
 import { useUIStore } from '../../../../ui/uiStore'
 import { ManagedImage } from '../../../../domain/resource-runtime'
+import { $ } from '../../../i18n'
 
 type ImageResult = {
   url: string
@@ -321,7 +322,7 @@ export function ImageContent(props: ImageContentProps) {
                 ref={bindMainImageRef}
                 className="task-node-image__preview-image"
                 src={mainImageSrc}
-                alt="主图"
+                alt={$("主图")}
                 draggable={false}
                 loading={previewLoading}
                 decoding={imageDecoding}
@@ -386,8 +387,8 @@ export function ImageContent(props: ImageContentProps) {
                 </div>
               ) : (
                 selected
-                  ? (compact ? '单击上传，或拖拽/粘贴图片' : '单击上传，或拖拽/粘贴图片到画布')
-                  : (compact ? '单击聚焦，聚焦后上传' : '单击聚焦，聚焦后上传，或拖拽/粘贴图片到画布')
+                  ? (compact ? $('单击上传，或拖拽/粘贴图片') : $('单击上传，或拖拽/粘贴图片到画布'))
+                  : (compact ? $('单击聚焦，聚焦后上传') : $('单击聚焦，聚焦后上传，或拖拽/粘贴图片到画布'))
               )}
             </div>
           </div>
@@ -408,7 +409,7 @@ export function ImageContent(props: ImageContentProps) {
                 boxShadow: '0 10px 20px rgba(0,0,0,0.25)',
               }}
             >
-              裂变
+              {$('裂变')}
             </div>
           </div>
         )}
@@ -428,7 +429,7 @@ export function ImageContent(props: ImageContentProps) {
                 boxShadow: '0 10px 20px rgba(0,0,0,0.25)',
               }}
             >
-              主图
+              {$('主图')}
             </div>
           </div>
         )}
@@ -447,7 +448,7 @@ export function ImageContent(props: ImageContentProps) {
             }}
           >
             {hasPrimaryImage && (
-              <Tooltip label={isPrimaryImageAdopted ? '当前主图已采纳' : '采纳当前主图'} position="left" withArrow>
+              <Tooltip label={isPrimaryImageAdopted ? $('当前主图已采纳') : $('采纳当前主图')} position="left" withArrow>
                 <ActionIcon
                   className="task-node-image__adopt-trigger nodrag"
                   variant={isPrimaryImageAdopted ? 'filled' : 'light'}
@@ -459,7 +460,7 @@ export function ImageContent(props: ImageContentProps) {
                     event.stopPropagation()
                     onAdoptImage(imagePrimaryIndex)
                   }}
-                  aria-label={isPrimaryImageAdopted ? '当前主图已采纳' : '采纳当前主图'}
+                  aria-label={isPrimaryImageAdopted ? $('当前主图已采纳') : $('采纳当前主图')}
                 >
                   <IconCheck size={14} stroke={2.1} />
                 </ActionIcon>
@@ -472,8 +473,8 @@ export function ImageContent(props: ImageContentProps) {
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={handleOpenUploadPicker}
                 disabled={uploading}
-                title={hasPrimaryImage ? '替换/上传图片' : '上传图片'}
-                aria-label={hasPrimaryImage ? '替换/上传图片' : '上传图片'}
+                title={hasPrimaryImage ? $('替换/上传图片') : $('上传图片')}
+                aria-label={hasPrimaryImage ? $('替换/上传图片') : $('上传图片')}
                 style={{
                   width: 26,
                   height: 26,
@@ -504,7 +505,7 @@ export function ImageContent(props: ImageContentProps) {
                   event.stopPropagation()
                   toggleVariants()
                 }}
-                title={variantsOpen ? '收起候选' : '展开候选'}
+                title={variantsOpen ? $('收起候选') : $('展开候选')}
                 style={{
                   minWidth: 26,
                   height: 26,
@@ -554,8 +555,8 @@ export function ImageContent(props: ImageContentProps) {
               }}
             >
               {imageError
-                ? '资源不可用'
-                : stateLabel || '加载中'}
+                ? $('资源不可用')
+                : stateLabel || $('加载中')}
             </div>
           </div>
         )}
@@ -623,7 +624,7 @@ export function ImageContent(props: ImageContentProps) {
                   }
                   onUpdateNodeData({ variantsOpen: false })
                 }}
-                title="设为主图 / 拖拽生成新节点"
+                title={$("设为主图 / 拖拽生成新节点")}
                 style={{
                   position: 'relative',
                   width: tileWidth,
@@ -650,7 +651,7 @@ export function ImageContent(props: ImageContentProps) {
                     gap: 6,
                   }}
                 >
-                  <Tooltip label={isAdopted ? '该图片已采纳' : '采纳该图片'} position="left" withArrow>
+                  <Tooltip label={isAdopted ? $('该图片已采纳') : $('采纳该图片')} position="left" withArrow>
                     <ActionIcon
                       className="task-node-image__variant-adopt nodrag"
                       variant={isAdopted ? 'filled' : 'light'}
@@ -662,7 +663,7 @@ export function ImageContent(props: ImageContentProps) {
                         event.stopPropagation()
                         onAdoptImage(index)
                       }}
-                      aria-label={isAdopted ? '该图片已采纳' : '采纳该图片'}
+                      aria-label={isAdopted ? $('该图片已采纳') : $('采纳该图片')}
                     >
                       <IconCheck size={13} stroke={2.1} />
                     </ActionIcon>
@@ -671,7 +672,7 @@ export function ImageContent(props: ImageContentProps) {
                 <ManagedImage
                   className="task-node-image__variant-image"
                   src={r.url}
-                  alt="候选"
+                  alt={$("候选")}
                   kind="thumbnail"
                   variantKey="thumbnail"
                   priority={selected ? 'prefetch' : 'background'}

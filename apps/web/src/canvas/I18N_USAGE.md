@@ -1,301 +1,85 @@
-# Canvas 国际化使用指南
+# Canvas 国际化（i18n）使用与状态
 
-## 概述
+> 更新：2026-11-10（画布全量 i18n 恢复推进）。源码词表在 `src/canvas/i18n/`，构建产物由 lens 后端 `/canvas/` 托管。
 
-Canvas模块集成了简单的国际化系统，默认使用中文，提供英文翻译包。使用方式非常简洁：
+## 1. 语言来源与优先级
 
-```typescript
-import { $, $t, useI18n, setLanguage } from '@/canvas/i18n';
+画布加载时按以下顺序确定语言（只支持 `zh` / `en`）：
 
-// 基础翻译 - 源码写中文，自动翻译
-const text = $('确定'); // 中文环境: "确定", 英文环境: "OK"
+1. URL 参数 `?lang=` / `?locale=`（lens 主应用打开画布时传入，值可为 `en`、`en-US`、`zh`、`zh-CN`；兼容 hash 路由）
+2. lens 主应用语言偏好 `localStorage['lens_locale']`（`zh-CN` / `en-US`，同源共享）
+3. 画布自身历史选择 `localStorage['tapcanvas-language']`（画布右上角语言切换会写入）
+4. 浏览器语言 `navigator.language`
 
-// 参数插值翻译
-const message = $t('共 {{count}} 项', { count: 10 }); // 中文: "共 10 项", 英文: "10 Items"
+lens 入口（`RuoYi-Vue3/src/utils/canvasEntry.js`）已按当前页面语言拼接 `?lang=`，因此主应用切英文后打开画布即为英文。直接访问 `/canvas/`（无参数）时按上面 2→4 回退。
 
-// React Hook
-const { $, $t, currentLanguage, setLanguage } = useI18n();
+## 2. 词表结构
+
+- `src/canvas/i18n/index.ts`：i18n 运行时（`$` / `$t` / `useI18n` / `getCurrentLanguage` / `setLanguage` / `initLanguage`）+ 内置基础词表 `builtinEnTranslations`（历史通用词汇）。
+- `src/canvas/i18n/locales/*.ts`：分批英文词表（按模块拆分，便于并行维护），由 `index.ts` 统一 spread 合并：
+  ```
+  appShell  — App 壳层/登录/账户/资产小面板
+  canvasCore — 画布核心（Canvas/components/utils/edges）
+  nodes      — 画布节点（canvas/nodes/**）
+  projects   — 项目页（projects/**）
+  uiPanels1  — 核心 UI 面板（资产/模板/账户/Tapshow/执行/历史/参数/模型）
+  uiPanels2  — chat / nanoComic / Agent 面板
+  stats      — 统计与系统管理（ui/stats/**）
+  misc       — runner/api/ai/inspector/storyboard/flows/config
+  ```
+
+## 3. 使用方式
+
+```tsx
+import { $, $t } from '../canvas/i18n' // 相对路径按文件位置
+
+// JSX 文本
+<span>{$('我的项目')}</span>
+
+// 属性
+<Button title={$('运行')}>{$('运行')}</Button>
+
+// 变量插值（key 里用 {{x}}，源码写中文原文）
+$t('共 {{count}} 个节点', { count: nodes.length })
 ```
 
-## 核心功能
+- key 一律使用**中文原文逐字**（含 `{{占位符}}`），英文 value 由各 locale 文件提供。
+- 英文词表未命中时原样回退中文，不会报错；新增文案时**必须同时补英文词条**才算完成。
+- 语言在加载时确定（非响应式）：渲染期调用的 `$` 在刷新后生效；模块级常量里的 `$` 同样需要刷新页面。若后续需要“不刷新即时切换”，需把相关常量改为渲染期函数/订阅语言事件。
 
-### 1. 基础翻译函数 `$()`
+## 4. 新增翻译流程
 
-```typescript
-// 直接使用中文文本，系统自动翻译
-$('确定')      // → "确定" | "OK"
-$('运行')      // → "运行" | "Run"
-$('删除')      // → "删除" | "Delete"
-$('配置')      // → "配置" | "Configure"
+1. 在源码里把中文包成 `$()` / `$t()`；
+2. 先查 `src/canvas/i18n/index.ts` 的 `builtinEnTranslations` 是否已有该 key（有则复用）；
+3. 没有则在对应批次文件（`locales/<batch>.ts`）补 `: 'English'`，占位符与 key 保持一致；
+4. 不要修改 `i18n/index.ts` 的合并结构；新增批次才在 `index.ts` 注册 import + spread。
+
+## 5. 不译清单（强制）
+
+注释；console/日志；LLM / system prompt 正文与 prompt 模板；接口字段名；业务枚举提交值（展示 label 可译）；用户数据与持久化数据值；mock 数据内部字段；用于语义判断/匹配的字符串（如 `includes('已存在连接')`、`startsWith('镜头')` 类逻辑，须保持语言无关）。
+
+## 6. 当前覆盖状态（2026-11-10）
+
+| 批次 | 词表 | 新增词条（约） | 覆盖文件 |
+|---|---|---|---|
+| A appShell | appShell.ts | 314 | App.tsx、auth、FloatingNav/HomePage/Recharge/账户/资产小面板、tour 等 23 文件 |
+| B projects | projects.ts | 1138 | projects/** 14 文件（含 ProjectChapterWorkbenchPage） |
+| C canvasCore | canvasCore.ts | 335 | canvas/**（不含 nodes）26 文件 |
+| D nodes | nodes.ts | 606 | canvas/nodes/** 36 文件（TaskNode/LensShotNode 等） |
+| E1 uiPanels1 | uiPanels1.ts | 499 | 核心 UI 面板 16 文件 |
+| E2 uiPanels2 | uiPanels2.ts | 564 | chat/nanoComic/Agent 面板 23 文件 |
+| F stats | stats.ts | 720 | ui/stats/** + StatsUserManagement 27 文件 |
+| G misc | misc.ts | 208 | runner/api/ai/inspector/storyboard/flows/config 19 文件 |
+
+合计约 **4,300+ 条英文词条 / 6,000+ 处调用点**，覆盖画布主要可见 UI；`tsc --noEmit` 无新增错误、`vite build` 通过。
+剩余中文仅为约定不译项：prompt 正文、日志、业务枚举/数据值、注释，以及少量长尾内部文案。
+
+## 7. 验证方式
+
+```bash
+cd tapcanvas/apps/web
+./node_modules/.bin/tsc --noEmit -p tsconfig.json   # 基线 55 个历史错误，不应新增
+ALLOW_LOCALHOST_IN_PROD_BUILD=1 ./node_modules/.bin/vite build --mode production
 ```
 
-### 2. 参数插值函数 `$t()`
-
-```typescript
-// 支持参数插值
-$t('共 {{count}} 项', { count: 10 })
-// 中文: "共 10 项"
-// 英文: "10 Items"
-
-$t('节点 {{name}} 执行成功', { name: 'TextNode' })
-// 中文: "节点 TextNode 执行成功"
-// 英文: "Node TextNode executed successfully"
-```
-
-### 3. React Hook `useI18n()`
-
-```typescript
-function MyComponent() {
-  const { $, $t, currentLanguage, setLanguage, isZh, isEn } = useI18n();
-
-  const handleClick = () => {
-    // 切换语言
-    setLanguage(isZh ? 'en' : 'zh');
-  };
-
-  return (
-    <div>
-      <button onClick={handleClick}>
-        {isZh ? 'Switch to English' : '切换到中文'}
-      </button>
-      <p>{$('当前语言')}: {currentLanguage}</p>
-      <p>{$t('共 {{count}} 个节点', { count: 5 })}</p>
-    </div>
-  );
-}
-```
-
-### 4. 语言切换组件
-
-```typescript
-import { LanguageSwitcher } from '@/canvas/components/shared/LanguageSwitcher';
-
-// 直接使用
-<LanguageSwitcher />
-
-// 自定义样式
-<LanguageSwitcher
-  style={{ backgroundColor: '#f0f0f0' }}
-  className="my-language-switcher"
-/>
-```
-
-## 支持的翻译内容
-
-### 通用词汇
-- 确定、取消、保存、删除、编辑、复制、粘贴
-- 运行、停止、配置、重试、加载中、成功、失败、警告、信息
-- 设置、帮助、关于、版本、作者、描述、名称、标题
-- 类型、状态、进度、创建时间、修改时间、大小、时长
-
-### 节点相关
-- 文本节点、图像节点、视频节点、音频节点、字幕节点
-- 节点状态：空闲、排队中、运行中、已完成、错误、已取消
-- 节点操作：添加节点、配置节点、执行节点、复制节点、删除节点
-
-### 节点配置
-- 节点配置、基础配置、高级配置、参数、选项、验证
-- 提示词、温度、最大长度、尺寸、质量、分辨率、帧率
-
-### 画布相关
-- 画布、空画布、缩放、放大、缩小、适应屏幕、网格
-- 布局：自动布局、网格布局、层级布局、径向布局
-- 对齐：左对齐、居中对齐、右对齐、顶部对齐、底部对齐
-
-### 工具栏和操作
-- 工具栏、添加、移除、修改、验证、运行选中、停止运行
-- 复制配置、粘贴配置、分组、取消分组、聚焦
-
-### 错误和成功信息
-- 错误：未知错误、网络错误、节点未找到、连接失败
-- 成功：已保存、已加载、已导入、已导出、节点已创建
-
-## 在组件中使用
-
-### 按钮和标签
-
-```typescript
-// ❌ 错误方式：硬编码文本
-<button>Run</button>
-<button>确定</button>
-
-// ✅ 正确方式：使用国际化
-<button>{$('运行')}</button>
-<button>{$('确定')}</button>
-```
-
-### 模态框
-
-```typescript
-// BaseModal 会自动使用翻译文本
-<BaseModal
-  open={open}
-  title={$('节点配置')}
-  confirmText={$('保存')}
-  cancelText={__('取消')}
->
-  <div>{$('基础配置')}</div>
-</BaseModal>
-```
-
-### 提示信息
-
-```typescript
-// 错误信息
-const errorMessage = $(ERROR_MESSAGES.CONNECTION_FAILED);
-
-// 带参数的消息
-const successMessage = $t('节点 {{name}} 执行成功', { name: 'TextNode' });
-```
-
-### 工具提示
-
-```typescript
-<div title={$('配置节点')}>
-  <span>⚙️</span>
-</div>
-```
-
-## 语言设置
-
-### 自动检测
-
-系统会按以下优先级检测语言：
-1. URL参数 `?locale=en`
-2. 本地存储 `localStorage.getItem('tapcanvas-language')`
-3. 浏览器语言 `navigator.language`
-
-### 手动切换
-
-```typescript
-import { setLanguage } from '@/canvas/i18n';
-
-// 切换到英文
-setLanguage('en');
-
-// 切换到中文
-setLanguage('zh');
-```
-
-### 持久化
-
-语言设置会自动保存到本地存储，下次访问时自动恢复。
-
-## 添加新翻译
-
-### 1. 添加中文文本
-
-直接在源码中使用中文：
-
-```typescript
-const newMessage = $('新建画布');
-```
-
-### 2. 添加英文翻译
-
-在 `i18n/index.ts` 的 `enTranslations` 对象中添加：
-
-```typescript
-const enTranslations = {
-  // ... 现有翻译
-  '新建画布': 'New Canvas',
-};
-```
-
-### 3. 支持参数插值
-
-```typescript
-// 使用
-$t('画布 "{{name}}" 已创建', { name: 'My Canvas' });
-
-// 添加翻译
-'画布 "{{name}}" 已创建': 'Canvas "{{name}}" created',
-```
-
-## 最佳实践
-
-### 1. 统一使用 `$()` 和 `$t()`
-
-```typescript
-// ✅ 推荐
-const title = $('节点配置');
-const message = $t('共 {{count}} 个节点', { count: 5 });
-
-// ❌ 不推荐
-const title = 'Node Configuration'; // 硬编码英文
-const title = '节点配置'; // 硬编码中文
-```
-
-### 2. 组件Props默认值
-
-```typescript
-interface Props {
-  title?: string;
-  confirmText?: string;
-}
-
-const MyComponent: React.FC<Props> = ({
-  title = $('标题'),
-  confirmText = $('确定')
-}) => {
-  // ...
-};
-```
-
-### 3. 错误消息和提示
-
-```typescript
-// 统一使用常量
-const errorMessage = $(ERROR_MESSAGES.NODE_NOT_FOUND);
-
-// 或者直接翻译
-const errorMessage = $('节点未找到');
-```
-
-### 4. 复数和数量
-
-```typescript
-// 使用插值处理数量
-$t('共 {{count}} 个节点', { count: 1 });  // "共 1 个节点"
-$t('共 {{count}} 个节点', { count: 5 });  // "共 5 个节点"
-```
-
-## 测试
-
-### 单元测试
-
-```typescript
-import { $, setLanguage } from '@/canvas/i18n';
-
-test('translation works correctly', () => {
-  setLanguage('zh');
-  expect($('确定')).toBe('确定');
-
-  setLanguage('en');
-  expect($('确定')).toBe('OK');
-});
-```
-
-### 组件测试
-
-```typescript
-import { renderHook } from '@testing-library/react';
-import { useI18n } from '@/canvas/i18n';
-
-test('useI18n hook works', () => {
-  const { result } = renderHook(() => useI18n());
-
-  expect(result.current.$('确定')).toBe('确定');
-  expect(result.current.isZh).toBe(true);
-});
-```
-
-## 注意事项
-
-1. **默认中文**：所有源码默认使用中文，英文作为可选翻译
-2. **回退机制**：如果英文翻译不存在，自动回退到中文
-3. **性能考虑**：翻译函数非常轻量，没有性能问题
-4. **类型安全**：TypeScript会检查，避免拼写错误
-5. **扩展性**：需要添加新语言时，只需扩展翻译包
-
-这个国际化系统设计简洁实用，完全满足中文项目的基本需求，同时为国际化提供了良好的支持。
+构建产物同步到 lens 后端（在 lens 仓库根执行）：`bash ./dev-canvas.sh`（或手动 `cp -R dist/. zsapps-admin/src/main/resources/templates/canvas/` 后 `mvn -pl zsapps-admin compile`），然后强刷 `/canvas/`。

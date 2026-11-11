@@ -16,6 +16,7 @@ import {
 } from '../api/server'
 import { toast } from './toast'
 import type { AgentTraceContextSelection } from './AgentDiagnosticsContent'
+import { $, $t } from '../canvas/i18n'
 
 type AgentProjectContextContentProps = {
   className?: string
@@ -68,7 +69,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
         return current && available.some((item) => item.path === current) ? current : nextActivePath
       })
     } catch (error) {
-      toast(error instanceof Error ? error.message : '加载项目上下文失败', 'error')
+      toast(error instanceof Error ? error.message : $('加载项目上下文失败'), 'error')
     } finally {
       setLoading(false)
     }
@@ -98,7 +99,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
   )
   const fileOptions = React.useMemo<ContextFileOption[]>(() => allFiles.map((item) => ({
     value: item.path,
-    label: `${item.layer === 'global' ? '[全局]' : '[项目]'} ${item.path}`,
+    label: `${item.layer === 'global' ? $('[全局]') : $('[项目]')} ${item.path}`,
   })), [allFiles])
 
   React.useEffect(() => {
@@ -119,12 +120,12 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
       const fileName = getFileNameFromPath(activeFile.path)
       if (activeFile.layer === 'global') {
         if (fileName !== 'GLOBAL_RULES.md') {
-          throw new Error('仅支持保存 GLOBAL_RULES.md')
+          throw new Error($('仅支持保存 GLOBAL_RULES.md'))
         }
         await updateAdminGlobalWorkspaceContextFile({ fileName, content: draftContent })
       } else {
         if (!isProjectEditableFileName(fileName)) {
-          throw new Error('不支持保存该项目上下文文件')
+          throw new Error($('不支持保存该项目上下文文件'))
         }
         await updateProjectWorkspaceContextFile({
           projectId,
@@ -132,10 +133,10 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
           content: draftContent,
         })
       }
-      toast('保存成功', 'success')
+      toast($('保存成功'), 'success')
       await load(false)
     } catch (error) {
-      toast(error instanceof Error ? error.message : '保存上下文失败', 'error')
+      toast(error instanceof Error ? error.message : $('保存上下文失败'), 'error')
     } finally {
       setSaving(false)
     }
@@ -148,17 +149,17 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
     setVersionModalOpen(true)
     try {
       if (activeFile.layer === 'global') {
-        if (fileName !== 'GLOBAL_RULES.md') throw new Error('仅支持查看 GLOBAL_RULES.md 版本')
+        if (fileName !== 'GLOBAL_RULES.md') throw new Error($('仅支持查看 GLOBAL_RULES.md 版本'))
         const result = await fetchAdminGlobalWorkspaceContextFileVersion({ fileName, versionId })
         setVersionData(result)
       } else {
-        if (!isProjectEditableFileName(fileName)) throw new Error('不支持查看该项目上下文文件版本')
+        if (!isProjectEditableFileName(fileName)) throw new Error($('不支持查看该项目上下文文件版本'))
         const result = await fetchProjectWorkspaceContextFileVersion({ projectId, fileName, versionId })
         setVersionData(result)
       }
     } catch (error) {
       setVersionData(null)
-      toast(error instanceof Error ? error.message : '加载历史版本失败', 'error')
+      toast(error instanceof Error ? error.message : $('加载历史版本失败'), 'error')
     } finally {
       setVersionLoading(false)
     }
@@ -167,25 +168,25 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
   const handleRollbackVersion = React.useCallback(async (versionId: string) => {
     if (!activeFile || !projectId) return
     if (!canEditActiveFile) {
-      toast('当前无权限回滚该文件', 'error')
+      toast($('当前无权限回滚该文件'), 'error')
       return
     }
-    const ok = window.confirm(`确定回滚当前文件到版本 ${versionId.slice(0, 16)}？这会覆盖当前内容，但会自动生成一条新的历史记录。`)
+    const ok = window.confirm($t('确定回滚当前文件到版本 {{version}}？它会覆盖当前内容，但会自动生成一条新的历史记录。', { version: versionId.slice(0, 16) }))
     if (!ok) return
     setSaving(true)
     try {
       const fileName = getFileNameFromPath(activeFile.path)
       if (activeFile.layer === 'global') {
-        if (fileName !== 'GLOBAL_RULES.md') throw new Error('仅支持回滚 GLOBAL_RULES.md')
+        if (fileName !== 'GLOBAL_RULES.md') throw new Error($('仅支持回滚 GLOBAL_RULES.md'))
         await rollbackAdminGlobalWorkspaceContextFile({ fileName, versionId })
       } else {
-        if (!isProjectEditableFileName(fileName)) throw new Error('不支持回滚该项目上下文文件')
+        if (!isProjectEditableFileName(fileName)) throw new Error($('不支持回滚该项目上下文文件'))
         await rollbackProjectWorkspaceContextFile({ projectId, fileName, versionId })
       }
-      toast('回滚成功', 'success')
+      toast($('回滚成功'), 'success')
       await load(false)
     } catch (error) {
-      toast(error instanceof Error ? error.message : '回滚失败', 'error')
+      toast(error instanceof Error ? error.message : $('回滚失败'), 'error')
     } finally {
       setSaving(false)
     }
@@ -200,7 +201,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
       setVerifyData(result)
     } catch (error) {
       setVerifyData(null)
-      toast(error instanceof Error ? error.message : '规则自检失败', 'error')
+      toast(error instanceof Error ? error.message : $('规则自检失败'), 'error')
     } finally {
       setVerifyLoading(false)
     }
@@ -209,40 +210,40 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
   return (
     <Stack className={className} gap="md">
       <Group className="agent-project-context-panel-filters" gap="sm" align="flex-end" wrap="wrap">
-        <TextInput className="agent-project-context-panel-project-input" label="项目 ID" value={projectId || ''} readOnly w={220} />
-        <TextInput className="agent-project-context-panel-book-input" label="书籍 ID" placeholder="可选" value={bookId} onChange={(event) => setBookId(event.currentTarget.value)} w={220} />
-        <TextInput className="agent-project-context-panel-chapter-input" label="章节" placeholder="可选" value={chapter} onChange={(event) => setChapter(event.currentTarget.value)} w={120} />
-        <Button className="agent-project-context-panel-load-button" variant="light" onClick={() => void load(false)} loading={loading}>查看</Button>
-        <Button className="agent-project-context-panel-refresh-button" variant="light" color="grape" onClick={() => void load(true)} loading={loading}>刷新生成</Button>
+        <TextInput className="agent-project-context-panel-project-input" label={ $('项目 ID') } value={projectId || ''} readOnly w={220} />
+        <TextInput className="agent-project-context-panel-book-input" label={ $('书籍 ID') } placeholder={ $('可选') } value={bookId} onChange={(event) => setBookId(event.currentTarget.value)} w={220} />
+        <TextInput className="agent-project-context-panel-chapter-input" label={ $('章节') } placeholder={ $('可选') } value={chapter} onChange={(event) => setChapter(event.currentTarget.value)} w={120} />
+        <Button className="agent-project-context-panel-load-button" variant="light" onClick={() => void load(false)} loading={loading}>{ $('查看') }</Button>
+        <Button className="agent-project-context-panel-refresh-button" variant="light" color="grape" onClick={() => void load(true)} loading={loading}>{ $('刷新生成') }</Button>
         <Button className="agent-project-context-panel-verify-button" variant="light" color="teal" onClick={() => void handleVerify()} loading={verifyLoading}>
-          规则自检
+          { $('规则自检') }
         </Button>
       </Group>
 
       <Group className="agent-project-context-panel-summary" gap="xs" wrap="wrap">
-        <Text className="agent-project-context-panel-root" size="sm" c="dimmed">全局：{data?.globalContextDir || '.tapcanvas/context'}</Text>
-        <Text className="agent-project-context-panel-root" size="sm" c="dimmed">项目：{data?.projectContextDir || '暂无项目上下文目录'}</Text>
-        <Badge className="agent-project-context-panel-global-count" variant="light" color="gray">全局 {data?.globalFiles.length || 0}</Badge>
-        <Badge className="agent-project-context-panel-project-count" variant="light" color="blue">项目 {data?.projectFiles.length || 0}</Badge>
+        <Text className="agent-project-context-panel-root" size="sm" c="dimmed">{ $t('全局：{{dir}}', { dir: data?.globalContextDir || '.tapcanvas/context' }) }</Text>
+        <Text className="agent-project-context-panel-root" size="sm" c="dimmed">{ $t('项目：{{dir}}', { dir: data?.projectContextDir || $('暂无项目上下文目录') }) }</Text>
+        <Badge className="agent-project-context-panel-global-count" variant="light" color="gray">{ $t('全局 {{count}}', { count: data?.globalFiles.length || 0 }) }</Badge>
+        <Badge className="agent-project-context-panel-project-count" variant="light" color="blue">{ $t('项目 {{count}}', { count: data?.projectFiles.length || 0 }) }</Badge>
         {selection?.traceId ? <Badge className="agent-project-context-panel-trace-badge" variant="light" color="blue">trace {selection.traceId.slice(0, 8)}</Badge> : null}
         {selection?.label ? <Badge className="agent-project-context-panel-label-badge" variant="light" color="grape">{selection.label}</Badge> : null}
       </Group>
 
-      <Select className="agent-project-context-panel-file-select" label="上下文文件" placeholder="选择文件" data={fileOptions} value={activeFile?.path || null} onChange={(value) => setActivePath(value || '')} searchable nothingFoundMessage="暂无文件" />
+      <Select className="agent-project-context-panel-file-select" label={ $('上下文文件') } placeholder={ $('选择文件') } data={fileOptions} value={activeFile?.path || null} onChange={(value) => setActivePath(value || '')} searchable nothingFoundMessage={ $('暂无文件') } />
 
       <ContextLayerHint activeFile={activeFile} canEditGlobal={canEditGlobal} canEditProject={canEditProject} />
 
       {activeFile ? (
         <Group className="agent-project-context-panel-meta" gap="xs" wrap="wrap">
-          <Badge className="agent-project-context-panel-updated-at" variant="light" color="teal">更新时间 {activeFile.updatedAt || '—'}</Badge>
-          <Badge className="agent-project-context-panel-updated-by" variant="light" color="cyan">修改人 {activeFile.updatedBy || '—'}</Badge>
-          <Badge className="agent-project-context-panel-history-count" variant="light" color="violet">历史 {activeFile.history.length}</Badge>
+          <Badge className="agent-project-context-panel-updated-at" variant="light" color="teal">{ $t('更新时间 {{time}}', { time: activeFile.updatedAt || '—' }) }</Badge>
+          <Badge className="agent-project-context-panel-updated-by" variant="light" color="cyan">{ $t('修改人 {{name}}', { name: activeFile.updatedBy || '—' }) }</Badge>
+          <Badge className="agent-project-context-panel-history-count" variant="light" color="violet">{ $t('历史 {{count}}', { count: activeFile.history.length }) }</Badge>
         </Group>
       ) : null}
 
       <Group className="agent-project-context-panel-actions" gap="sm" justify="space-between" wrap="wrap">
-        <Text className="agent-project-context-panel-editability" size="sm" c="dimmed">{canEditActiveFile ? '当前文件可编辑' : '当前文件只读'}</Text>
-        <Button className="agent-project-context-panel-save-button" variant="light" color="blue" onClick={() => void handleSave()} loading={saving} disabled={!canEditActiveFile || !hasDraftChanged}>保存修改</Button>
+        <Text className="agent-project-context-panel-editability" size="sm" c="dimmed">{canEditActiveFile ? $('当前文件可编辑') : $('当前文件只读')}</Text>
+        <Button className="agent-project-context-panel-save-button" variant="light" color="blue" onClick={() => void handleSave()} loading={saving} disabled={!canEditActiveFile || !hasDraftChanged}>{ $('保存修改') }</Button>
       </Group>
 
       {activeFile?.history.length ? (
@@ -254,7 +255,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
                 <Text className="agent-project-context-panel-history-time" size="xs" c="dimmed">{item.updatedAt}</Text>
                 <Text className="agent-project-context-panel-history-user" size="xs" c="dimmed">{item.updatedBy}</Text>
                 <Button className="agent-project-context-panel-history-view" size="compact-xs" variant="subtle" onClick={() => void handleViewVersion(item.versionId)}>
-                  查看
+                  { $('查看') }
                 </Button>
                 <Button
                   className="agent-project-context-panel-history-rollback"
@@ -264,7 +265,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
                   disabled={!canEditActiveFile}
                   onClick={() => void handleRollbackVersion(item.versionId)}
                 >
-                  回滚
+                  { $('回滚') }
                 </Button>
               </Group>
             ))}
@@ -276,7 +277,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
         className="agent-project-context-panel-version-modal"
         opened={versionModalOpen}
         onClose={() => setVersionModalOpen(false)}
-        title="历史版本"
+        title={ $('历史版本') }
         centered={false}
         size="xl"
         padding="md"
@@ -301,7 +302,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
                     setVersionModalOpen(false)
                   }}
                 >
-                  载入到编辑器
+                  { $('载入到编辑器') }
                 </Button>
                 <Button
                   className="agent-project-context-panel-version-rollback"
@@ -310,7 +311,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
                   disabled={!canEditActiveFile}
                   onClick={() => void handleRollbackVersion(versionData.versionId)}
                 >
-                  回滚为当前
+                  { $('回滚为当前') }
                 </Button>
               </Group>
               <Code className="agent-project-context-panel-version-content" block style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, padding: 12 }}>
@@ -323,7 +324,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
               ) : null}
             </>
           ) : (
-            !versionLoading ? <Text className="agent-project-context-panel-version-empty" c="dimmed" size="sm">暂无版本内容</Text> : null
+            !versionLoading ? <Text className="agent-project-context-panel-version-empty" c="dimmed" size="sm">{ $('暂无版本内容') }</Text> : null
           )}
         </Stack>
       </Modal>
@@ -332,7 +333,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
         className="agent-project-context-panel-verify-modal"
         opened={verifyModalOpen}
         onClose={() => setVerifyModalOpen(false)}
-        title="规则自检（将被注入的有效上下文）"
+        title={ $('规则自检（将被注入的有效上下文）') }
         centered={false}
         size="xl"
         padding="md"
@@ -376,7 +377,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
               </ScrollArea>
             </>
           ) : (
-            !verifyLoading ? <Text className="agent-project-context-panel-verify-empty" c="dimmed" size="sm">暂无自检数据</Text> : null
+            !verifyLoading ? <Text className="agent-project-context-panel-verify-empty" c="dimmed" size="sm">{ $('暂无自检数据') }</Text> : null
           )}
         </Stack>
       </Modal>
@@ -384,7 +385,7 @@ export default function AgentProjectContextContent(props: AgentProjectContextCon
       <ScrollArea className="agent-project-context-panel-scroll" h={360} offsetScrollbars>
         <Stack className="agent-project-context-panel-content" gap="sm">
           {loading ? <Loader className="agent-project-context-panel-loader" size="sm" /> : null}
-          {!loading && allFiles.length === 0 ? <Text className="agent-project-context-panel-empty" c="dimmed" size="sm">暂无上下文文件</Text> : null}
+          {!loading && allFiles.length === 0 ? <Text className="agent-project-context-panel-empty" c="dimmed" size="sm">{ $('暂无上下文文件') }</Text> : null}
           {activeFile ? (
             <>
               <Textarea className="agent-project-context-panel-editor" value={draftContent} onChange={(event) => setDraftContent(event.currentTarget.value)} autosize minRows={14} maxRows={24} readOnly={!canEditActiveFile} />
@@ -401,9 +402,9 @@ function ContextLayerHint(props: { activeFile: ProjectWorkspaceContextFileDto | 
   const { activeFile, canEditGlobal, canEditProject } = props
   if (!activeFile) return null
   if (activeFile.layer === 'global') {
-    return <Text className="agent-project-context-panel-layer-hint" size="sm" c="dimmed">当前查看的是平台全局规则：对所有项目生效。{canEditGlobal ? '你具备管理员权限，可编辑。' : '仅平台管理员可编辑。'}</Text>
+    return <Text className="agent-project-context-panel-layer-hint" size="sm" c="dimmed">{ $('当前查看的是平台全局规则：对所有项目生效。') }{canEditGlobal ? $('你具备管理员权限，可编辑。') : $('仅平台管理员可编辑。')}</Text>
   }
-  return <Text className="agent-project-context-panel-layer-hint" size="sm" c="dimmed">当前查看的是项目专属上下文：只对当前项目生效。{canEditProject ? '你具备项目编辑权限，可保存修改。' : '仅项目 owner 或管理员可编辑。'}</Text>
+  return <Text className="agent-project-context-panel-layer-hint" size="sm" c="dimmed">{ $('当前查看的是项目专属上下文：只对当前项目生效。') }{canEditProject ? $('你具备项目编辑权限，可保存修改。') : $('仅项目 owner 或管理员可编辑。')}</Text>
 }
 
 function getFileNameFromPath(filePath: string): string {

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Modal } from '@mantine/core'
 import AgentProjectContextContent from './AgentProjectContextContent'
+import { $ } from '../canvas/i18n'
 
 type AgentProjectContextPanelProps = {
   className?: string
@@ -17,7 +18,7 @@ export default function AgentProjectContextPanel(props: AgentProjectContextPanel
       className={className}
       opened={opened}
       onClose={onClose}
-      title="项目上下文"
+      title={ $('项目上下文') }
       centered={false}
       size="xl"
       padding="md"

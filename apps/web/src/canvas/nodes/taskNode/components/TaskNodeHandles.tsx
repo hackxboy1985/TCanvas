@@ -2,6 +2,7 @@ import React from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { getHandleTypeLabel } from '../../../utils/handleLabels'
 import { buildHandleStyle, getHandlePositionName, HANDLE_HORIZONTAL_OFFSET } from '../../taskNodeHelpers'
+import { $t } from '../../../i18n'
 
 type HandleDef = { id: string; type: string; pos: Position }
 
@@ -42,8 +43,8 @@ export function TaskNodeHandles({
             style={buildHandleStyle(h, layout)}
             data-handle-type={h.type}
             data-handle-position={handlePositionName}
-            title={`输入: ${handleLabel}`}
-            aria-label={`输入: ${handleLabel}`}
+            title={$t('输入: {{v1}}', { v1: handleLabel })}
+            aria-label={$t('输入: {{v1}}', { v1: handleLabel })}
           />
         )
       })}
@@ -60,8 +61,8 @@ export function TaskNodeHandles({
             style={buildHandleStyle(h, layout)}
             data-handle-type={h.type}
             data-handle-position={handlePositionName}
-            title={`输出: ${handleLabel}`}
-            aria-label={`输出: ${handleLabel}`}
+            title={$t('输出: {{v1}}', { v1: handleLabel })}
+            aria-label={$t('输出: {{v1}}', { v1: handleLabel })}
           />
         )
       })}
@@ -75,8 +76,8 @@ export function TaskNodeHandles({
             style={{ ...wideHandleBase, left: -HANDLE_HORIZONTAL_OFFSET, transform: 'translate(-50%, -50%)' }}
             data-handle-type={defaultInputType}
             data-handle-position="left"
-            title={`输入: ${getHandleTypeLabel(defaultInputType)}`}
-            aria-label={`输入: ${getHandleTypeLabel(defaultInputType)}`}
+            title={$t('输入: {{v1}}', { v1: getHandleTypeLabel(defaultInputType) })}
+            aria-label={$t('输入: {{v1}}', { v1: getHandleTypeLabel(defaultInputType) })}
           />
           <Handle
             id={`out-${defaultOutputType}-wide`}
@@ -86,8 +87,8 @@ export function TaskNodeHandles({
             style={{ ...wideHandleBase, right: -HANDLE_HORIZONTAL_OFFSET, transform: 'translate(50%, -50%)' }}
             data-handle-type={defaultOutputType}
             data-handle-position="right"
-            title={`输出: ${getHandleTypeLabel(defaultOutputType)}`}
-            aria-label={`输出: ${getHandleTypeLabel(defaultOutputType)}`}
+            title={$t('输出: {{v1}}', { v1: getHandleTypeLabel(defaultOutputType) })}
+            aria-label={$t('输出: {{v1}}', { v1: getHandleTypeLabel(defaultOutputType) })}
           />
         </>
       )}

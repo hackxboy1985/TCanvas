@@ -1,3 +1,4 @@
+import { $ } from '../i18n'
 /**
  * 画布相关常量定义
  * 参考雅虎军规：常量集中管理，避免魔法数字
@@ -212,29 +213,29 @@ export const DEFAULTS = {
 
 // 错误消息
 export const ERROR_MESSAGES = {
-  INVALID_NODE_TYPE: '节点类型无效',
-  INVALID_EDGE_TYPE: '边类型无效',
-  CONNECTION_FAILED: '连接失败',
-  NODE_NOT_FOUND: '节点未找到',
-  EDGE_NOT_FOUND: '边未找到',
-  GROUP_NOT_FOUND: '分组未找到',
-  VALIDATION_FAILED: '验证失败',
-  EXECUTION_FAILED: '执行失败',
-  NETWORK_ERROR: '网络错误',
-  STORAGE_ERROR: '存储错误',
+  INVALID_NODE_TYPE: $('节点类型无效'),
+  INVALID_EDGE_TYPE: $('边类型无效'),
+  CONNECTION_FAILED: $('连接失败'),
+  NODE_NOT_FOUND: $('节点未找到'),
+  EDGE_NOT_FOUND: $('边未找到'),
+  GROUP_NOT_FOUND: $('分组未找到'),
+  VALIDATION_FAILED: $('验证失败'),
+  EXECUTION_FAILED: $('执行失败'),
+  NETWORK_ERROR: $('网络错误'),
+  STORAGE_ERROR: $('存储错误'),
 } as const;
 
 // 成功消息
 export const SUCCESS_MESSAGES = {
-  NODE_CREATED: '节点创建成功',
-  NODE_DELETED: '节点删除成功',
-  EDGE_CREATED: '连接创建成功',
-  EDGE_DELETED: '连接删除成功',
-  GROUP_CREATED: '分组创建成功',
-  GROUP_DELETED: '分组删除成功',
-  LAYOUT_APPLIED: '布局应用成功',
-  SAVED: '保存成功',
-  EXECUTION_STARTED: '开始执行',
+  NODE_CREATED: $('节点创建成功'),
+  NODE_DELETED: $('节点删除成功'),
+  EDGE_CREATED: $('连接创建成功'),
+  EDGE_DELETED: $('连接删除成功'),
+  GROUP_CREATED: $('分组创建成功'),
+  GROUP_DELETED: $('分组删除成功'),
+  LAYOUT_APPLIED: $('布局应用成功'),
+  SAVED: $('保存成功'),
+  EXECUTION_STARTED: $('开始执行'),
 } as const;
 
 // 文件类型

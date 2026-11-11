@@ -1,6 +1,7 @@
 import { API_BASE } from '../api/server'
 import { toast } from '../ui/toast'
 import { useAuth } from './store'
+import { $ } from '../canvas/i18n'
 
 const FETCH_INTERCEPTOR_FLAG = '__tapcanvas_fetch401_installed__'
 let lastUnauthorizedNotice = 0
@@ -59,7 +60,7 @@ function handleUnauthorized() {
   const now = Date.now()
   if (now - lastUnauthorizedNotice > 2000) {
     lastUnauthorizedNotice = now
-    toast('登录状态已过期，请重新登录', 'error')
+    toast($('登录状态已过期，请重新登录'), 'error')
   }
 }
 

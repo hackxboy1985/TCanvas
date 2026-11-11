@@ -16,6 +16,7 @@ import {
 } from '@mantine/core'
 import { IconUpload } from '@tabler/icons-react'
 import type { ProjectDto } from '../../api/server'
+import { $ } from '../i18n'
 
 export type TemplateSaveMode = 'create' | 'update'
 export type TemplateVisibility = 'public' | 'private'
@@ -62,7 +63,7 @@ function TemplatePreview({ previewUrl }: { previewUrl: string | null }): JSX.Ele
       <Image
         className="group-template-modal__preview-image"
         src={previewUrl}
-        alt="模板预览"
+        alt={ $('模板预览') }
         radius={24}
         h={190}
       />
@@ -72,7 +73,7 @@ function TemplatePreview({ previewUrl }: { previewUrl: string | null }): JSX.Ele
     <Image
       className="group-template-modal__preview-image"
       src={`data:image/svg+xml;charset=UTF-8,${buildPlaceholderSvg()}`}
-      alt="模板预览占位"
+      alt={ $('模板预览占位') }
       radius={24}
       h={190}
     />
@@ -147,8 +148,8 @@ export function GroupTemplateModal({
           }}
         >
           <Tabs.List className="group-template-modal__tab-list">
-            <Tabs.Tab className="group-template-modal__tab" value="create">创建新模板</Tabs.Tab>
-            <Tabs.Tab className="group-template-modal__tab" value="update">更新历史模板</Tabs.Tab>
+            <Tabs.Tab className="group-template-modal__tab" value="create">{ $('创建新模板') }</Tabs.Tab>
+            <Tabs.Tab className="group-template-modal__tab" value="update">{ $('更新历史模板') }</Tabs.Tab>
           </Tabs.List>
 
           <div className="group-template-modal__content">
@@ -173,14 +174,12 @@ export function GroupTemplateModal({
                   }}
                 >
                   <Text className="group-template-modal__history-title" size="sm" fw={700} mb="sm" c="#f3f3f6">
-                    历史模板
-                  </Text>
+                    { $('历史模板') }</Text>
                   <ScrollArea className="group-template-modal__history-scroll" h={332} scrollbarSize={6}>
                     <Stack className="group-template-modal__history-list" gap="xs">
                       {templateProjects.length === 0 ? (
                         <Text className="group-template-modal__history-empty" size="sm" c="dimmed">
-                          当前没有可更新的模板项目
-                        </Text>
+                          { $('当前没有可更新的模板项目') }</Text>
                       ) : templateProjects.map((project) => {
                         const active = project.id === selectedTemplateProjectId
                         return (
@@ -212,7 +211,7 @@ export function GroupTemplateModal({
                                 color={project.isPublic ? 'blue' : 'gray'}
                                 style={{ width: 'fit-content' }}
                               >
-                                {project.isPublic ? '公共' : '私有'}
+                                {project.isPublic ? $('公共') : $('私有')}
                               </Badge>
                             </Stack>
                           </Paper>
@@ -274,7 +273,7 @@ export function GroupTemplateModal({
                         },
                       }}
                     >
-                      {resolvedPreviewUrl ? '更换封面' : '上传封面'}
+                      {resolvedPreviewUrl ? $('更换封面') : $('上传封面')}
                     </Button>
                   </div>
                 </div>
@@ -282,12 +281,12 @@ export function GroupTemplateModal({
 
               <Stack className="group-template-modal__form" gap="lg">
                 <Stack className="group-template-modal__field-group" gap={8}>
-                  <Text className="group-template-modal__label" size="md" fw={700} c="#f5f5f7">名称</Text>
+                  <Text className="group-template-modal__label" size="md" fw={700} c="#f5f5f7">{ $('名称') }</Text>
                   <TextInput
                     className="group-template-modal__name-input"
                     value={name}
                     onChange={(event) => onNameChange(event.currentTarget.value)}
-                    placeholder="模板"
+                    placeholder={ $('模板') }
                     maxLength={200}
                     styles={{
                       input: {
@@ -305,9 +304,9 @@ export function GroupTemplateModal({
 
                 <Stack className="group-template-modal__field-group" gap={8}>
                   <Group className="group-template-modal__label-row" justify="space-between" align="center">
-                    <Text className="group-template-modal__label" size="md" fw={700} c="#f5f5f7">可见范围</Text>
+                    <Text className="group-template-modal__label" size="md" fw={700} c="#f5f5f7">{ $('可见范围') }</Text>
                     <Badge className="group-template-modal__visibility-badge" radius="md" color="gray" variant="light">
-                      {visibility === 'public' ? '公共模板' : '私有模板'}
+                      {visibility === 'public' ? $('公共模板') : $('私有模板')}
                     </Badge>
                   </Group>
                   <SegmentedControl
@@ -319,8 +318,8 @@ export function GroupTemplateModal({
                       if (value === 'public' || value === 'private') onVisibilityChange(value)
                     }}
                     data={[
-                      { label: '公共模板', value: 'public' },
-                      { label: '私有模板', value: 'private' },
+                      { label: $('公共模板'), value: 'public' },
+                      { label: $('私有模板'), value: 'private' },
                     ]}
                     styles={{
                       root: {
@@ -340,12 +339,12 @@ export function GroupTemplateModal({
                 </Stack>
 
                 <Stack className="group-template-modal__field-group" gap={8}>
-                  <Text className="group-template-modal__label" size="md" fw={700} c="#f5f5f7">备注</Text>
+                  <Text className="group-template-modal__label" size="md" fw={700} c="#f5f5f7">{ $('备注') }</Text>
                   <Textarea
                     className="group-template-modal__description-input"
                     value={description}
                     onChange={(event) => onDescriptionChange(event.currentTarget.value)}
-                    placeholder="请介绍您的模板，比如使用场景、操作步骤以及独特价值"
+                    placeholder={ $('请介绍您的模板，比如使用场景、操作步骤以及独特价值') }
                     minRows={5}
                     maxRows={7}
                     maxLength={1000}
@@ -385,8 +384,7 @@ export function GroupTemplateModal({
               },
             }}
           >
-            确认
-          </Button>
+            { $('确认') }</Button>
         </Group>
       </div>
     </Modal>

@@ -1,4 +1,5 @@
 import type { AgentsChatStreamEvent } from '../../api/server'
+import { $ } from '../../canvas/i18n'
 
 type AgentsStreamErrorPayload = Extract<AgentsChatStreamEvent, { event: 'error' }>['data']
 
@@ -29,7 +30,7 @@ function extractDetailsSummary(details: unknown): string {
 }
 
 export function formatAgentsStreamErrorMessage(payload: AgentsStreamErrorPayload): string {
-  const message = trimString(payload.message) || '对话流失败'
+  const message = trimString(payload.message) || $('对话流失败')
   const code = trimString(payload.code)
   const detailSummary = extractDetailsSummary(payload.details)
   return [

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Paper, Text } from '@mantine/core'
 import { formatErrorMessage } from '../../../utils/formatErrorMessage'
+import { $ } from '../../../i18n'
 
 type StatusBannerProps = {
   status: string
@@ -25,7 +26,7 @@ export function StatusBanner({ status, lastError, httpStatus }: StatusBannerProp
       }}
     >
       <Text className="task-node-status-banner__title" size="xs" c="red.4" style={{ fontWeight: 500 }}>
-        执行错误
+        {$('执行错误')}
       </Text>
       <Text className="task-node-status-banner__message" size="xs" c="red.3" mt={4} style={{ wordBreak: 'break-word' }}>
         {message}

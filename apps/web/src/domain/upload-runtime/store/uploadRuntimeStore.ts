@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { $ } from '../../../canvas/i18n'
 
 export type UploadRequestId = string
 
@@ -143,7 +144,7 @@ export const useUploadRuntimeStore = create<UploadRuntimeState>((set) => ({
     const nextHandle: UploadHandle = {
       id,
       requestKey: buildRequestKey(input),
-      fileName: normalizeNonEmptyString(input.fileName) || '未命名文件',
+      fileName: normalizeNonEmptyString(input.fileName) || $('未命名文件'),
       projectId: normalizeProjectId(input.projectId),
       status: existing?.status ?? 'intent-created',
       ownerNodeIds: Array.from(new Set([
@@ -263,7 +264,7 @@ export const useUploadRuntimeStore = create<UploadRuntimeState>((set) => ({
     const nextHandle: UploadHandle = {
       id,
       requestKey: buildRequestKey(input),
-      fileName: normalizeNonEmptyString(input.fileName) || '未命名文件',
+      fileName: normalizeNonEmptyString(input.fileName) || $('未命名文件'),
       projectId: normalizeProjectId(input.projectId),
       status: existing?.status ?? 'intent-created',
       ownerNodeIds: Array.from(new Set([

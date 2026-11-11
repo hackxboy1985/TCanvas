@@ -29,6 +29,7 @@ import { VendorEditModal, type VendorEditorState } from './modals/VendorEditModa
 import { IMPORT_TEMPLATE } from './modelCatalog.constants'
 import { buildModelCatalogExportPackage, buildSafeFileTimestamp, downloadTextAsFile, safeParseJson } from './modelCatalog.utils'
 import { notifyModelOptionsRefresh } from '../../../../config/useModelOptions'
+import { $, $t } from '../../../../canvas/i18n'
 
 export default function StatsModelCatalogManagement({ className }: { className?: string }): JSX.Element {
   const rootClassName = ['stats-model-catalog', className].filter(Boolean).join(' ')
@@ -58,7 +59,7 @@ export default function StatsModelCatalogManagement({ className }: { className?:
         label: `${v.name}（${v.key}）`,
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
-    return [{ value: 'all', label: '全部厂商' }, ...base]
+    return [{ value: 'all', label: $('全部厂商') }, ...base]
   }, [vendors])
 
   const vendorOptions = React.useMemo(() => {
@@ -112,19 +113,19 @@ export default function StatsModelCatalogManagement({ className }: { className?:
       if (v.status === 'fulfilled') setVendors(Array.isArray(v.value) ? v.value : [])
       else {
         setVendors([])
-        toast((v.reason as any)?.message || '加载厂商列表失败', 'error')
+        toast((v.reason as any)?.message || $('加载厂商列表失败'), 'error')
       }
 
       if (m.status === 'fulfilled') setModels(Array.isArray(m.value) ? m.value : [])
       else {
         setModels([])
-        toast((m.reason as any)?.message || '加载模型列表失败', 'error')
+        toast((m.reason as any)?.message || $('加载模型列表失败'), 'error')
       }
 
       if (mp.status === 'fulfilled') setMappings(Array.isArray(mp.value) ? mp.value : [])
       else {
         setMappings([])
-        toast((mp.reason as any)?.message || '加载映射列表失败', 'error')
+        toast((mp.reason as any)?.message || $('加载映射列表失败'), 'error')
       }
 
       notifyModelOptionsRefresh('all')
@@ -139,14 +140,14 @@ export default function StatsModelCatalogManagement({ className }: { className?:
 
   const handleDeleteVendor = React.useCallback(
     async (vendor: ModelCatalogVendorDto) => {
-      if (!window.confirm(`确定删除厂商「${vendor.name}（${vendor.key}）」？\n\n注意：若该厂商仍被模型/映射引用，数据库可能会拒绝删除。`)) return
+      if (!window.confirm($t('确定删除厂商「{{name}}（{{key}}）」？\n\n注意：若该厂商仍被模型/映射引用，数据库可能会拒绝删除。', { name: vendor.name, key: vendor.key }))) return
       try {
         await deleteModelCatalogVendor(vendor.key)
-        toast('已删除厂商', 'success')
+        toast($('已删除厂商'), 'success')
         await reloadAll()
       } catch (err: any) {
         console.error('delete vendor failed', err)
-        toast(err?.message || '删除厂商失败', 'error')
+        toast(err?.message || $('删除厂商失败'), 'error')
       }
     },
     [reloadAll],
@@ -154,14 +155,14 @@ export default function StatsModelCatalogManagement({ className }: { className?:
 
   const handleDeleteModel = React.useCallback(
     async (model: ModelCatalogModelDto) => {
-      if (!window.confirm(`确定删除模型「${model.labelZh}（${model.modelKey}）」？`)) return
+      if (!window.confirm($t('确定删除模型「{{labelZh}}（{{modelKey}}）」？', { labelZh: model.labelZh, modelKey: model.modelKey }))) return
       try {
         await deleteModelCatalogModel(model.vendorKey, model.modelKey)
-        toast('已删除模型', 'success')
+        toast($('已删除模型'), 'success')
         await reloadAll()
       } catch (err: any) {
         console.error('delete model failed', err)
-        toast(err?.message || '删除模型失败', 'error')
+        toast(err?.message || $('删除模型失败'), 'error')
       }
     },
     [reloadAll],
@@ -169,14 +170,14 @@ export default function StatsModelCatalogManagement({ className }: { className?:
 
   const handleDeleteMapping = React.useCallback(
     async (mapping: ModelCatalogMappingDto) => {
-      if (!window.confirm(`确定删除映射「${mapping.vendorKey} / ${mapping.taskKind} / ${mapping.name}」？`)) return
+      if (!window.confirm($t('确定删除映射「{{vendorKey}} / {{taskKind}} / {{name}}」？', { vendorKey: mapping.vendorKey, taskKind: mapping.taskKind, name: mapping.name }))) return
       try {
         await deleteModelCatalogMapping(mapping.id)
-        toast('已删除映射', 'success')
+        toast($('已删除映射'), 'success')
         await reloadAll()
       } catch (err: any) {
         console.error('delete mapping failed', err)
-        toast(err?.message || '删除映射失败', 'error')
+        toast(err?.message || $('删除映射失败'), 'error')
       }
     },
     [reloadAll],
@@ -186,18 +187,18 @@ export default function StatsModelCatalogManagement({ className }: { className?:
     async (pkg: unknown) => {
       if (importSubmitting) return
       if (!pkg || typeof pkg !== 'object') {
-        toast('导入内容必须是 JSON 对象', 'error')
+        toast($('导入内容必须是 JSON 对象'), 'error')
         return
       }
       setImportSubmitting(true)
       try {
         const result = await importModelCatalogPackage(pkg as any)
         setLastImportResult(result)
-        toast(`导入完成：vendors=${result.imported.vendors} models=${result.imported.models} mappings=${result.imported.mappings}`, 'success')
+        toast($t('导入完成：vendors={{vendors}} models={{models}} mappings={{mappings}}', { vendors: result.imported.vendors, models: result.imported.models, mappings: result.imported.mappings }), 'success')
         await reloadAll()
       } catch (err: any) {
         console.error('import model catalog failed', err)
-        toast(err?.message || '导入失败', 'error')
+        toast(err?.message || $('导入失败'), 'error')
       } finally {
         setImportSubmitting(false)
       }
@@ -216,7 +217,7 @@ export default function StatsModelCatalogManagement({ className }: { className?:
         listModelCatalogMappings(),
       ])
       if (!Array.isArray(v) || v.length === 0) {
-        toast('暂无厂商配置可导出', 'error')
+        toast($('暂无厂商配置可导出'), 'error')
         return
       }
 
@@ -231,10 +232,10 @@ export default function StatsModelCatalogManagement({ className }: { className?:
       const jsonStr = JSON.stringify(pkg, null, 2)
       const fileName = `tapcanvas-model-catalog-${buildSafeFileTimestamp(now)}.json`
       downloadTextAsFile(jsonStr, fileName, 'application/json')
-      toast(`已导出配置（vendors=${pkg.vendors.length}，不含任何 API Key）`, 'success')
+      toast($t('已导出配置（vendors={{length}}，不含任何 API Key）', { length: pkg.vendors.length }), 'success')
     } catch (err: any) {
       console.error('export model catalog failed', err)
-      toast(err?.message || '导出失败', 'error')
+      toast(err?.message || $('导出失败'), 'error')
     } finally {
       setExportSubmitting(false)
       setExportMode(null)
@@ -243,7 +244,7 @@ export default function StatsModelCatalogManagement({ className }: { className?:
 
   const handleExportFull = React.useCallback(async () => {
     if (exportSubmitting) return
-    const ok = window.confirm('即将导出“迁移包”（包含所有厂商配置 + API Key 明文）。\n\n注意：\n- 文件包含敏感信息，请勿上传到公开渠道\n- 建议仅用于本地 -> PRD 迁移后立即删除\n\n确定继续导出？')
+    const ok = window.confirm($('即将导出“迁移包”（包含所有厂商配置 + API Key 明文）。\n\n注意：\n- 文件包含敏感信息，请勿上传到公开渠道\n- 建议仅用于本地 -> PRD 迁移后立即删除\n\n确定继续导出？'))
     if (!ok) return
 
     setExportMode('full')
@@ -252,7 +253,7 @@ export default function StatsModelCatalogManagement({ className }: { className?:
       const pkg = await exportModelCatalogPackage({ includeApiKeys: true })
       const vendorCount = Array.isArray(pkg?.vendors) ? pkg.vendors.length : 0
       if (!vendorCount) {
-        toast('暂无厂商配置可导出', 'error')
+        toast($('暂无厂商配置可导出'), 'error')
         return
       }
       const apiKeyCount = (pkg?.vendors || []).reduce((acc, b: any) => {
@@ -264,10 +265,10 @@ export default function StatsModelCatalogManagement({ className }: { className?:
       const jsonStr = JSON.stringify(pkg, null, 2)
       const fileName = `tapcanvas-model-catalog-full-${buildSafeFileTimestamp(now)}.json`
       downloadTextAsFile(jsonStr, fileName, 'application/json')
-      toast(`已导出迁移包（vendors=${vendorCount}，apiKeys=${apiKeyCount}）`, 'success')
+      toast($t('已导出迁移包（vendors={{vendorCount}}，apiKeys={{apiKeyCount}}）', { vendorCount: vendorCount, apiKeyCount: apiKeyCount }), 'success')
     } catch (err: any) {
       console.error('export model catalog full failed', err)
-      toast(err?.message || '导出失败', 'error')
+      toast(err?.message || $('导出失败'), 'error')
     } finally {
       setExportSubmitting(false)
       setExportMode(null)
@@ -276,23 +277,23 @@ export default function StatsModelCatalogManagement({ className }: { className?:
 
   const fillTemplate = React.useCallback(() => {
     setImportText(JSON.stringify(IMPORT_TEMPLATE, null, 2))
-    toast('已填充导入模板（请按需修改）', 'success')
+    toast($('已填充导入模板（请按需修改）'), 'success')
   }, [])
 
   const submitImport = React.useCallback(async () => {
     const parsed = safeParseJson(importText)
     if (!parsed.ok) {
-      toast(`导入 JSON 无效：${parsed.error}`, 'error')
+      toast($t('导入 JSON 无效：{{error}}', { error: parsed.error }), 'error')
       return
     }
     if (!parsed.value || typeof parsed.value !== 'object') {
-      toast('导入内容必须是 JSON 对象', 'error')
+      toast($('导入内容必须是 JSON 对象'), 'error')
       return
     }
 
     const vendorsArr = Array.isArray((parsed.value as any).vendors) ? (parsed.value as any).vendors : null
     if (!vendorsArr || vendorsArr.length === 0) {
-      toast('导入 JSON 缺少 vendors 或为空', 'error')
+      toast($('导入 JSON 缺少 vendors 或为空'), 'error')
       return
     }
 
@@ -301,7 +302,12 @@ export default function StatsModelCatalogManagement({ className }: { className?:
       return typeof raw === 'string' && raw.trim().length > 0 ? acc + 1 : acc
     }, 0)
     const ok = window.confirm(
-      `确定导入 vendors=${vendorsArr.length} 的配置？\n\n注意：\n- 会覆盖同 Key 的厂商/模型/映射配置\n- ${apiKeyCount > 0 ? `会覆盖同 Key 的厂商 API Key（明文导入，apiKeys=${apiKeyCount}）` : '不包含 API Key（不会改动现有 API Key）'}`,
+      $t('确定导入 vendors={{vendors}} 的配置？\n\n注意：\n- 会覆盖同 Key 的厂商/模型/映射配置\n- {{apiKeyNote}}', {
+        vendors: vendorsArr.length,
+        apiKeyNote: apiKeyCount > 0
+          ? $t('会覆盖同 Key 的厂商 API Key（明文导入，apiKeys={{count}}）', { count: apiKeyCount })
+          : $('不包含 API Key（不会改动现有 API Key）'),
+      }),
     )
     if (!ok) return
 
@@ -312,9 +318,9 @@ export default function StatsModelCatalogManagement({ className }: { className?:
     <Stack className={rootClassName} gap="md">
       <Group className="stats-model-catalog-toolbar" justify="space-between" align="flex-start" gap="md" wrap="wrap">
         <div className="stats-model-catalog-toolbar-left">
-          <Text className="stats-model-catalog-title" size="sm" fw={700}>模型管理（系统级全局配置）</Text>
+          <Text className="stats-model-catalog-title" size="sm" fw={700}>{ $('模型管理（系统级全局配置）') }</Text>
           <Text className="stats-model-catalog-subtitle" size="xs" c="dimmed">
-            维护厂商、模型、价格与请求策略；支持直接导入 request_profile V2，企业（团队）只是你的用户，不做隔离。
+            { $('维护厂商、模型、价格与请求策略；支持直接导入 request_profile V2，企业（团队）只是你的用户，不做隔离。') }
           </Text>
         </div>
         <Group className="stats-model-catalog-toolbar-actions" gap={6} wrap="wrap">
@@ -325,7 +331,7 @@ export default function StatsModelCatalogManagement({ className }: { className?:
             leftSection={<IconDatabaseCog className="stats-model-catalog-toolbar-vendors-icon" size={14} />}
             onClick={() => setVendorsModalOpened(true)}
           >
-            厂商管理
+            { $('厂商管理') }
           </Button>
           <Button
             className="stats-model-catalog-toolbar-export"
@@ -335,7 +341,7 @@ export default function StatsModelCatalogManagement({ className }: { className?:
             onClick={() => void handleExport()}
             loading={exportSubmitting && exportMode === 'safe'}
           >
-            导出配置
+            { $('导出配置') }
           </Button>
           <Button
             className="stats-model-catalog-toolbar-export-full"
@@ -345,10 +351,10 @@ export default function StatsModelCatalogManagement({ className }: { className?:
             onClick={() => void handleExportFull()}
             loading={exportSubmitting && exportMode === 'full'}
           >
-            导出迁移包
+            { $('导出迁移包') }
           </Button>
-          <Tooltip className="stats-model-catalog-refresh-tooltip" label="刷新" withArrow>
-            <ActionIcon className="stats-model-catalog-refresh" size="sm" variant="subtle" aria-label="刷新" onClick={() => void reloadAll()} loading={loading}>
+          <Tooltip className="stats-model-catalog-refresh-tooltip" label={ $('刷新') } withArrow>
+            <ActionIcon className="stats-model-catalog-refresh" size="sm" variant="subtle" aria-label={ $('刷新') } onClick={() => void reloadAll()} loading={loading}>
               <IconRefresh className="stats-model-catalog-refresh-icon" size={14} />
             </ActionIcon>
           </Tooltip>
@@ -388,14 +394,14 @@ export default function StatsModelCatalogManagement({ className }: { className?:
         className="stats-model-catalog-vendors-modal"
         opened={vendorsModalOpened}
         onClose={() => setVendorsModalOpened(false)}
-        title="厂商管理"
+        title={ $('厂商管理') }
         size="xl"
         centered
         lockScroll={false}
       >
         <Stack className="stats-model-catalog-vendors-modal-body" gap="sm">
           <Text className="stats-model-catalog-vendors-modal-desc" size="xs" c="dimmed">
-            这里维护系统级厂商、API Key 和鉴权信息；模型与映射仍在主页面管理。
+            { $('这里维护系统级厂商、API Key 和鉴权信息；模型与映射仍在主页面管理。') }
           </Text>
           <ModelCatalogVendorsSection
             loading={loading}

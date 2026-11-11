@@ -19,6 +19,7 @@ import imageViewControlsModule, {
 
 import { toast } from '../../../ui/toast'
 import { isRemoteUrl } from './utils'
+import { $, $t } from '../../i18n'
 
 const {
   IMAGE_CAMERA_PRESETS,
@@ -336,7 +337,7 @@ function ImageViewPreviewLite(input: {
           <img
             className="tc-image-view-editor__lite-image"
             src={input.baseImageUrl}
-            alt="当前图片"
+            alt={$("当前图片")}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
           <div
@@ -374,7 +375,7 @@ function ImageViewPreviewLite(input: {
           fontWeight: 700,
         }}
       >
-        {input.mode === 'camera' ? '机位预览' : `${input.activeLightSlot === 'main' ? '主光' : '辅光'}预览`}
+        {input.mode === 'camera' ? $('机位预览') : $t('{{v1}}预览', { v1: input.activeLightSlot === 'main' ? $('主光') : $('辅光') })}
       </div>
       <div
         className="tc-image-view-editor__lite-hint"
@@ -389,7 +390,7 @@ function ImageViewPreviewLite(input: {
           opacity: 0.76,
         }}
       >
-        拖动{input.mode === 'camera' ? '旋转机位' : '调整灯位'} / 滚轮{input.mode === 'camera' ? '推拉远近' : '改强度'}
+        {$('拖动')}{input.mode === 'camera' ? $('旋转机位') : $('调整灯位')} {$('/ 滚轮')}{input.mode === 'camera' ? $('推拉远近') : $('改强度')}
       </div>
       <div
         className="tc-image-view-editor__lite-chip-row"
@@ -403,9 +404,9 @@ function ImageViewPreviewLite(input: {
           flexWrap: 'wrap',
         }}
       >
-        <LiteChip label="环绕" value={formatAngle(input.cameraControl.azimuthDeg)} isDarkUi={input.isDarkUi} />
-        <LiteChip label="垂直" value={formatAngle(input.cameraControl.elevationDeg)} isDarkUi={input.isDarkUi} />
-        <LiteChip label="远近" value={formatDistance(input.cameraControl.distance)} isDarkUi={input.isDarkUi} />
+        <LiteChip label={$("环绕")} value={formatAngle(input.cameraControl.azimuthDeg)} isDarkUi={input.isDarkUi} />
+        <LiteChip label={$("垂直")} value={formatAngle(input.cameraControl.elevationDeg)} isDarkUi={input.isDarkUi} />
+        <LiteChip label={$("远近")} value={formatDistance(input.cameraControl.distance)} isDarkUi={input.isDarkUi} />
       </div>
       {input.mode === 'camera' ? (
         <div
@@ -474,7 +475,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
 
   const openEditor = React.useCallback((nextMode: ViewEditorMode) => {
     if (!options.hasImages || !isRemoteUrl(options.baseImageUrl)) {
-      toast('请先上传或生成图片', 'warning')
+      toast($('请先上传或生成图片'), 'warning')
       return
     }
     const normalizedCamera = normalizeImageCameraControl(options.cameraControl)
@@ -530,7 +531,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
       onClose={closeEditor}
       centered
       size="xl"
-      title={mode === 'camera' ? '调整角度' : '调整灯光'}
+      title={mode === 'camera' ? $('调整角度') : $('调整灯光')}
       styles={{
         content: {
           background: options.isDarkUi ? 'rgba(10,12,18,0.96)' : 'rgba(245,247,252,0.98)',
@@ -585,7 +586,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                   <Group className="tc-image-view-editor__section-title" gap={8}>
                     <IconCamera size={16} />
                     <Text className="tc-image-view-editor__section-title-text" size="sm" fw={700}>
-                      摄像机
+                      {$('摄像机')}
                     </Text>
                   </Group>
                   <Switch
@@ -600,7 +601,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                         enabled: nextChecked,
                       }))
                     }}
-                    label="启用角度控制"
+                    label={$("启用角度控制")}
                   />
                 </Group>
                 <Group className="tc-image-view-editor__preset-grid" gap={8} wrap="wrap">
@@ -626,7 +627,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </Group>
                 <div className="tc-image-view-editor__slider-block">
                   <Group className="tc-image-view-editor__slider-header" justify="space-between" gap="xs">
-                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>环绕</Text>
+                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>{$('环绕')}</Text>
                     <Text className="tc-image-view-editor__slider-value" size="xs" c="dimmed">
                       {Math.round(cameraControl.azimuthDeg)}°
                     </Text>
@@ -648,7 +649,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </div>
                 <div className="tc-image-view-editor__slider-block">
                   <Group className="tc-image-view-editor__slider-header" justify="space-between" gap="xs">
-                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>垂直</Text>
+                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>{$('垂直')}</Text>
                     <Text className="tc-image-view-editor__slider-value" size="xs" c="dimmed">
                       {Math.round(cameraControl.elevationDeg)}°
                     </Text>
@@ -670,7 +671,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </div>
                 <div className="tc-image-view-editor__slider-block">
                   <Group className="tc-image-view-editor__slider-header" justify="space-between" gap="xs">
-                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>远近</Text>
+                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>{$('远近')}</Text>
                     <Text className="tc-image-view-editor__slider-value" size="xs" c="dimmed">
                       {cameraControl.distance.toFixed(2)}
                     </Text>
@@ -697,7 +698,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                   <Group className="tc-image-view-editor__section-title" gap={8}>
                     <IconBulb size={16} />
                     <Text className="tc-image-view-editor__section-title-text" size="sm" fw={700}>
-                      灯光
+                      {$('灯光')}
                     </Text>
                   </Group>
                   <SegmentedControl
@@ -706,8 +707,8 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                     value={activeLightSlot}
                     onChange={(value) => setActiveLightSlot(value as ActiveLightSlot)}
                     data={[
-                      { value: 'main', label: '主光' },
-                      { value: 'fill', label: '辅光' },
+                      { value: 'main', label: $('主光') },
+                      { value: 'fill', label: $('辅光') },
                     ]}
                   />
                 </Group>
@@ -722,7 +723,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                       updateLightSlot(current, activeLightSlot, { enabled: nextChecked }),
                     )
                   }}
-                  label={`启用${activeLightSlot === 'main' ? '主光' : '辅光'}`}
+                  label={$t('启用{{v1}}', { v1: activeLightSlot === 'main' ? $('主光') : $('辅光') })}
                 />
                 <Group className="tc-image-view-editor__preset-grid" gap={8} wrap="wrap">
                   {IMAGE_LIGHT_PRESETS.map((preset) => (
@@ -748,7 +749,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </Group>
                 <div className="tc-image-view-editor__slider-block">
                   <Group className="tc-image-view-editor__slider-header" justify="space-between" gap="xs">
-                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>水平环绕</Text>
+                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>{$('水平环绕')}</Text>
                     <Text className="tc-image-view-editor__slider-value" size="xs" c="dimmed">
                       {Math.round(activeLight.azimuthDeg)}°
                     </Text>
@@ -771,7 +772,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </div>
                 <div className="tc-image-view-editor__slider-block">
                   <Group className="tc-image-view-editor__slider-header" justify="space-between" gap="xs">
-                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>高度</Text>
+                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>{$('高度')}</Text>
                     <Text className="tc-image-view-editor__slider-value" size="xs" c="dimmed">
                       {Math.round(activeLight.elevationDeg)}°
                     </Text>
@@ -794,7 +795,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </div>
                 <div className="tc-image-view-editor__slider-block">
                   <Group className="tc-image-view-editor__slider-header" justify="space-between" gap="xs">
-                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>强度</Text>
+                    <Text className="tc-image-view-editor__slider-label" size="xs" fw={700}>{$('强度')}</Text>
                     <Text className="tc-image-view-editor__slider-value" size="xs" c="dimmed">
                       {Math.round(activeLight.intensity)}%
                     </Text>
@@ -817,7 +818,7 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 </div>
                 <TextInput
                   className="tc-image-view-editor__color-input"
-                  label="灯光颜色"
+                  label={$("灯光颜色")}
                   value={activeLight.colorHex}
                   onChange={(event) => {
                     setLightingRig((current) =>
@@ -849,13 +850,13 @@ export function useImageViewEditor(options: UseImageViewEditorOptions) {
                 variant="subtle"
                 onClick={closeEditor}
               >
-                取消
+                {$('取消')}
               </Button>
               <Button
                 className="tc-image-view-editor__apply"
                 onClick={handleApply}
               >
-                应用
+                {$('应用')}
               </Button>
             </Group>
           </Stack>

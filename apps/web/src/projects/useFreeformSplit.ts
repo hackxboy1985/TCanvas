@@ -23,6 +23,7 @@ import {
   type FreeformSplitCanvasPlan,
 } from './freeformSplitNodes'
 
+import { $, $t } from '../canvas/i18n'
 /** 拆分镜兜底时长（秒）：剧配置未给出 maxVideoDuration 时与后端默认值一致 */
 const DEFAULT_SPLIT_VALUE_SECONDS = 15
 
@@ -114,7 +115,7 @@ export function useFreeformSplit(): FreeformSplitActions {
     if (busyRef.current) return
     const text = String(content || '').trim()
     if (!text) {
-      toast('节点正文为空，无法拆分镜', 'warning')
+      toast($('节点正文为空，无法拆分镜'), 'warning')
       return
     }
     busyRef.current = true
@@ -135,12 +136,12 @@ export function useFreeformSplit(): FreeformSplitActions {
         const { nodes, edges } = materializePlan(plan, origin)
         const createdIds = useRFStore.getState().appendGraph(nodes, edges)
         if (createdIds.length === 0) {
-          throw new Error('拆分镜结果未能写入画布（节点为空或与已有节点冲突）')
+          throw new Error($('拆分镜结果未能写入画布（节点为空或与已有节点冲突）'))
         }
         toast(describeFreeformSplitPlan(plan, result.chargedCredit), 'success')
       } catch (error) {
         // 后端错误码会拼在 msg 里（如「（错误码：ERR-xxx）」），直接展示便于用户反馈
-        toast(`拆分镜失败：${lensErrorReason(error)}`, 'error')
+        toast($t('拆分镜失败：{{error}}', { error: lensErrorReason(error) }), 'error')
       } finally {
         busyRef.current = false
         setSplitting(false)

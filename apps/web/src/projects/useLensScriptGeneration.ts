@@ -34,6 +34,7 @@ import type { LensScriptGenerationActions, LensScriptTextKind } from '../canvas/
 import { useUIStore } from '../ui/uiStore'
 import { toast } from '../ui/toast'
 
+import { $, $t } from '../canvas/i18n'
 /** 轮询间隔（毫秒）：与分镜板 scene.vue / EpisodeContent.vue 的 5000ms 一致 */
 const POLL_INTERVAL_MS = 5000
 /** 单次任务最多轮询次数：120 次 ≈ 10 分钟，与 EpisodeContent._pollScriptGenResult 一致 */
@@ -104,7 +105,7 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
       await onRefresh()
       toast(successText, 'success')
     } catch (error) {
-      toast(`任务已完成，但画布刷新失败：${errorMessage(error, '未知错误')}`, 'error')
+      toast($t('任务已完成，但画布刷新失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
     }
   }, [onRefresh])
 
@@ -122,14 +123,14 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
       setScriptGenEnabled(status.enableScriptGen)
       setHasScript(status.hasScript)
       if (status.hasScript) {
-        await refreshAfterDone('台本生成完成，画布已刷新')
+        await refreshAfterDone($('台本生成完成，画布已刷新'))
         return
       }
       if (!status.hasRunningTask) {
-        throw new Error('任务已结束但未生成台本，请到分镜板查看任务详情')
+        throw new Error($('任务已结束但未生成台本，请到分镜板查看任务详情'))
       }
     }
-    throw new Error('轮询超时（超过 10 分钟），请稍后到分镜板查看结果')
+    throw new Error($('轮询超时（超过 10 分钟），请稍后到分镜板查看结果'))
   }, [dramaId, episodeNum, refreshAfterDone])
 
   /**
@@ -151,17 +152,17 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         if (task.taskCategory === 'scriptGen') continue
         const pendingShots = task.confirmStatus === 'PENDING' && Array.isArray(task.shots) && task.shots.length > 0
         if (pendingShots) {
-          throw new Error('拆分镜完成但分镜未写入业务表（任务待确认），请到分镜板预览确认')
+          throw new Error($('拆分镜完成但分镜未写入业务表（任务待确认），请到分镜板预览确认'))
         }
-        await refreshAfterDone('拆分镜完成，画布已刷新')
+        await refreshAfterDone($('拆分镜完成，画布已刷新'))
         return
       }
       if (task.status === 'FAILED') {
-        throw new Error(task.message || '拆分镜任务失败，后端未返回原因')
+        throw new Error(task.message || $('拆分镜任务失败，后端未返回原因'))
       }
       // QUEUED / RUNNING：继续轮询
     }
-    throw new Error('轮询超时（超过 10 分钟），请稍后到分镜板查看结果')
+    throw new Error($('轮询超时（超过 10 分钟），请稍后到分镜板查看结果'))
   }, [dramaId, episodeNum, refreshAfterDone])
 
   /** 生台本：提交任务并轮询到台本生成完成 */
@@ -177,11 +178,11 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         setScriptGenEnabled(status.enableScriptGen)
         setHasScript(status.hasScript)
         if (!status.enableScriptGen) {
-          toast('当前剧未开启台本功能，请先在剧配置里开启「台本功能」', 'warning')
+          toast($('当前剧未开启台本功能，请先在剧配置里开启「台本功能」'), 'warning')
           return
         }
         if (status.hasRunningTask) {
-          toast('本集台本任务正在执行中，请等待完成后再操作', 'warning')
+          toast($('本集台本任务正在执行中，请等待完成后再操作'), 'warning')
           return
         }
         // 先校验剧本原文再谈覆盖：原文为空时没有任何可生成的内容，不该先弹「覆盖台本」确认
@@ -189,14 +190,14 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         if (pollTokenRef.current !== token) return
         const content = String(script.content || '').trim()
         if (!content) {
-          toast('本集剧本原文为空，无法生成台本', 'warning')
+          toast($('本集剧本原文为空，无法生成台本'), 'warning')
           return
         }
         if (status.hasScript) {
           const confirmed = await confirmCanvasAction({
-            title: '覆盖台本',
-            message: '本集已有台本，重新生成会覆盖现有台本内容（不影响已生成分镜）。是否继续？',
-            confirmText: '覆盖生成',
+            title: $('覆盖台本'),
+            message: $('本集已有台本，重新生成会覆盖现有台本内容（不影响已生成分镜）。是否继续？'),
+            confirmText: $('覆盖生成'),
             danger: true,
           })
           if (!confirmed) return
@@ -204,12 +205,12 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         }
         setScriptRunning(true)
         const result = await submitScriptGen({ dramaId, episodeNum, content })
-        if (!result?.taskQueueId) throw new Error('后端未返回 taskQueueId')
-        toast('台本生成任务已提交，完成后会自动刷新画布')
+        if (!result?.taskQueueId) throw new Error($('后端未返回 taskQueueId'))
+        toast($('台本生成任务已提交，完成后会自动刷新画布'))
         await pollScriptGen(token)
       } catch (error) {
         if (pollTokenRef.current !== token) return
-        toast(`生台本失败：${errorMessage(error, '未知错误')}`, 'error')
+        toast($t('生台本失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
       } finally {
         actionBusyRef.current = false
         if (pollTokenRef.current === token) setScriptRunning(false)
@@ -237,22 +238,22 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         const scriptContent = String(script.scriptContent || '').trim()
         const novelContent = String(script.content || '').trim()
         if (!scriptContent && !novelContent) {
-          toast('本集剧本原文与台本均为空，无法拆分镜', 'warning')
+          toast($('本集剧本原文与台本均为空，无法拆分镜'), 'warning')
           return
         }
         // 台本与剧本原文都有内容时，必须先让用户选择用哪一份拆分，不能固定台本优先
         let source: 'script' | 'novel' = scriptContent ? 'script' : 'novel'
         if (scriptContent && novelContent) {
           const picked = await confirmCanvasActionWithChoice({
-            title: '选择拆分镜内容来源',
-            message: '本集同时有台本和剧本原文，请选择用哪一份拆分镜。',
-            confirmText: '下一步',
+            title: $('选择拆分镜内容来源'),
+            message: $('本集同时有台本和剧本原文，请选择用哪一份拆分镜。'),
+            confirmText: $('下一步'),
             choices: {
-              label: '内容来源',
+              label: $('内容来源'),
               defaultValue: 'script',
               options: [
-                { value: 'script', label: '台本（默认）' },
-                { value: 'novel', label: '剧本原文' },
+                { value: 'script', label: $('台本（默认）') },
+                { value: 'novel', label: $('剧本原文') },
               ],
             },
           })
@@ -260,13 +261,13 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
           source = picked.choice === 'novel' ? 'novel' : 'script'
           if (pollTokenRef.current !== token) return
         }
-        const sourceLabel = source === 'script' ? '台本' : '剧本原文'
+        const sourceLabel = source === 'script' ? $('台本') : $('剧本原文')
         if (storyboards.length > 0) {
           // 覆盖确认里提示实际来源，避免用户误以为拆的是另一份内容
           const confirmed = await confirmCanvasAction({
-            title: '覆盖分镜',
-            message: `本集已有 ${storyboards.length} 个分镜，拆分镜会重新生成并覆盖分镜表（同序号已选图会保留）。本次使用${sourceLabel}拆分。是否继续？`,
-            confirmText: '覆盖并拆分镜',
+            title: $('覆盖分镜'),
+            message: $t('本集已有 {{count}} 个分镜，拆分镜会重新生成并覆盖分镜表（同序号已选图会保留）。本次使用{{sourceLabel}}拆分。是否继续？', { count: storyboards.length, sourceLabel: sourceLabel }),
+            confirmText: $('覆盖并拆分镜'),
             danger: true,
           })
           if (!confirmed) return
@@ -288,12 +289,12 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
           linkSubScene: true,
           source,
         })
-        if (!result?.taskQueueId) throw new Error('后端未返回 taskQueueId')
-        toast(`拆分镜任务已提交（${sourceLabel}，每段 ${splitValue} 秒，自动保存），完成后会自动刷新画布`)
+        if (!result?.taskQueueId) throw new Error($('后端未返回 taskQueueId'))
+        toast($t('拆分镜任务已提交（{{sourceLabel}}，每段 {{splitValue}} 秒，自动保存），完成后会自动刷新画布', { sourceLabel: sourceLabel, splitValue: splitValue }))
         await pollSplitShots(token)
       } catch (error) {
         if (pollTokenRef.current !== token) return
-        toast(`拆分镜失败：${errorMessage(error, '未知错误')}`, 'error')
+        toast($t('拆分镜失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
       } finally {
         actionBusyRef.current = false
         if (pollTokenRef.current === token) setSplitRunning(false)
@@ -321,13 +322,13 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         if (kind === '台本') {
           await saveScriptContent({ dramaId, episodeNum, scriptContent: text })
           setHasScript(text.trim().length > 0)
-          toast('台本已保存到业务表', 'success')
+          toast($('台本已保存到业务表'), 'success')
         } else {
           await saveNovelContent({ dramaId, episodeNum, content: text })
-          toast('剧本原文已保存到业务表', 'success')
+          toast($('剧本原文已保存到业务表'), 'success')
         }
       } catch (error) {
-        toast(`保存失败：${errorMessage(error, '未知错误')}`, 'error')
+        toast($t('保存失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
       } finally {
         actionBusyRef.current = false
         setSaveRunning(false)
@@ -367,11 +368,11 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         setHasScript(status.hasScript)
         if (status.hasRunningTask) {
           setScriptRunning(true)
-          toast('检测到本集台本生成任务执行中，完成后会自动刷新画布')
+          toast($('检测到本集台本生成任务执行中，完成后会自动刷新画布'))
           try {
             await pollScriptGen(token)
           } catch (error) {
-            if (pollTokenRef.current === token) toast(`生台本失败：${errorMessage(error, '未知错误')}`, 'error')
+            if (pollTokenRef.current === token) toast($t('生台本失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
           } finally {
             if (pollTokenRef.current === token) setScriptRunning(false)
           }
@@ -388,22 +389,22 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
         if (!task || (task.status !== 'RUNNING' && task.status !== 'QUEUED')) return
         if (task.taskCategory === 'scriptGen') {
           setScriptRunning(true)
-          toast('检测到本集台本生成任务执行中，完成后会自动刷新画布')
+          toast($('检测到本集台本生成任务执行中，完成后会自动刷新画布'))
           try {
             await pollScriptGen(token)
           } catch (error) {
-            if (pollTokenRef.current === token) toast(`生台本失败：${errorMessage(error, '未知错误')}`, 'error')
+            if (pollTokenRef.current === token) toast($t('生台本失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
           } finally {
             if (pollTokenRef.current === token) setScriptRunning(false)
           }
           return
         }
         setSplitRunning(true)
-        toast('检测到本集拆分镜任务执行中，完成后会自动刷新画布')
+        toast($('检测到本集拆分镜任务执行中，完成后会自动刷新画布'))
         try {
           await pollSplitShots(token)
         } catch (error) {
-          if (pollTokenRef.current === token) toast(`拆分镜失败：${errorMessage(error, '未知错误')}`, 'error')
+          if (pollTokenRef.current === token) toast($t('拆分镜失败：{{value}}', { value: errorMessage(error, $('未知错误')) }), 'error')
         } finally {
           if (pollTokenRef.current === token) setSplitRunning(false)
         }

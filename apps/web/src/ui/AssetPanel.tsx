@@ -47,6 +47,7 @@ import { ASSET_REFRESH_EVENT } from './assetEvents'
 import { calculateSafeMaxHeight } from './utils/panelPosition'
 import { toast } from './toast'
 import { PanelCard } from './PanelCard'
+import { $, $t } from '../canvas/i18n'
 import {
   confirmProjectBookStyle,
   confirmProjectBookRoleCard,
@@ -454,7 +455,7 @@ function isWorkflowAsset(asset: ServerAssetDto): boolean {
 
 function getWorkflowAssetMeta(asset: ServerAssetDto): { title: string; description: string; coverUrl: string } {
   const data = (asset?.data || {}) as Record<string, unknown>
-  const title = String(data?.title || asset?.name || '').trim() || asset.name || '未命名工作流'
+  const title = String(data?.title || asset?.name || '').trim() || asset.name || $('未命名工作流')
   const description = String(data?.description || '').trim()
   const coverUrl = String(data?.coverUrl || '').trim()
   return { title, description, coverUrl }
@@ -480,8 +481,9 @@ function getProjectMaterialData(asset: ServerAssetDto): ProjectMaterialAssetData
   }
 }
 
-const PROJECT_TEXT_REQUIRED_MESSAGE = '当前项目还没有上传文本，请先上传或替换项目文本。'
-const PROJECT_TEXT_INVALID_MESSAGE = '当前项目文本索引不存在或已失效，请重新上传项目文本后再操作。'
+// 模块级常量：语言在模块加载时确定，切换语言需刷新页面
+const PROJECT_TEXT_REQUIRED_MESSAGE = $('当前项目还没有上传文本，请先上传或替换项目文本。')
+const PROJECT_TEXT_INVALID_MESSAGE = $('当前项目文本索引不存在或已失效，请重新上传项目文本后再操作。')
 
 function summarizeUserFacingText(raw: string, maxLines = 3): string {
   const normalizedLines = String(raw || '')
@@ -1017,7 +1019,7 @@ export default function AssetPanel(): JSX.Element | null {
       setHasMoreAssets(Boolean(data.cursor))
     } catch (err: unknown) {
       console.error(err)
-      toast(err instanceof Error ? err.message : '加载资产失败', 'error')
+      toast(err instanceof Error ? err.message : $('加载资产失败'), 'error')
       setAssets([])
       setProjectRoleCardAssets([])
       setAssetCursor(null)
@@ -1143,7 +1145,7 @@ export default function AssetPanel(): JSX.Element | null {
     handledBookUploadJobIdsRef.current.add(job.id)
     writeAssetPanelSeenUploadToastJobId(currentProject.id, job.id)
     if (job.status === 'failed') {
-      toast(String(job.error?.message || '小说解析任务失败'), 'error')
+      toast(String(job.error?.message || $('小说解析任务失败')), 'error')
       return
     }
     const bookId = String(job.result?.bookId || '').trim()
@@ -1373,7 +1375,7 @@ export default function AssetPanel(): JSX.Element | null {
     () => books.find((item) => item.bookId === selectedBookId) || pickPrimaryProjectBook(books),
     [books, selectedBookId],
   )
-  const currentProjectTextActionLabel = hasCurrentProjectText ? '替换文本' : '上传文本'
+  const currentProjectTextActionLabel = hasCurrentProjectText ? $('替换文本') : $('上传文本')
   const materialChapterOptions = React.useMemo(() => {
     const set = new Set<number>()
     for (const asset of projectMaterialAssets) {
@@ -1690,17 +1692,17 @@ export default function AssetPanel(): JSX.Element | null {
     }
   }, [getVisibleFlowRect])
   const handleApplyAiCharacterLibraryToCanvas = React.useCallback(async (character: AiCharacterLibraryCharacterDto) => {
-    const roleName = String(character.identity_hint || character.character_id || 'AI角色').trim() || 'AI角色'
+    const roleName = String(character.identity_hint || character.character_id || $('AI角色')).trim() || $('AI角色')
     const basePosition = resolveRoleCardsGroupPosition(useRFStore.getState().nodes, { w: 1080, h: 760 })
     const items = [
-      { slot: 'full-body', label: '角色立绘', url: String(character.full_body_image_url || '').trim() },
-      { slot: 'closeup', label: '肖像特写', url: String(character.closeup_image_url || '').trim() },
-      { slot: 'expression', label: '表情九宫格', url: String(character.expression_image_url || '').trim() },
-      { slot: 'three-view', label: '三视图', url: String(character.three_view_image_url || '').trim() },
+      { slot: 'full-body', label: $('角色立绘'), url: String(character.full_body_image_url || '').trim() },
+      { slot: 'closeup', label: $('肖像特写'), url: String(character.closeup_image_url || '').trim() },
+      { slot: 'expression', label: $('表情九宫格'), url: String(character.expression_image_url || '').trim() },
+      { slot: 'three-view', label: $('三视图'), url: String(character.three_view_image_url || '').trim() },
     ].filter((item) => item.url)
 
     if (!items.length) {
-      throw new Error('当前角色没有可用图片，无法应用到画布')
+      throw new Error($('当前角色没有可用图片，无法应用到画布'))
     }
 
     const promptBase = [
@@ -1739,7 +1741,7 @@ export default function AssetPanel(): JSX.Element | null {
       })
     })
 
-    toast(`AI角色库已加入画布：${roleName}（${items.length} 张）`, 'success')
+    toast($t('AI角色库已加入画布：{{name}}（{{count}} 张）', { name: roleName, count: items.length }), 'success')
     setActivePanel(null)
   }, [addNode, resolveRoleCardsGroupPosition, setActivePanel])
   const graphPreviewChapterNo = React.useMemo(() => {
@@ -1964,33 +1966,33 @@ export default function AssetPanel(): JSX.Element | null {
   const handleCopy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      toast('已复制链接', 'success')
+      toast($('已复制链接'), 'success')
     } catch (err) {
       console.error(err)
-      toast('复制失败，请手动复制', 'error')
+      toast($('复制失败，请手动复制'), 'error')
     }
   }
 
   const handleDelete = async (asset: ServerAssetDto) => {
-    if (!confirm(`确定删除「${asset.name}」吗？`)) return
+    if (!confirm($t('确定删除「{{name}}」吗？', { name: asset.name }))) return
     try {
       await deleteServerAsset(asset.id)
       setAssets((prev) => prev.filter((a) => a.id !== asset.id))
     } catch (err: any) {
       console.error(err)
-      toast(err?.message || '删除失败', 'error')
+      toast(err?.message || $('删除失败'), 'error')
     }
   }
 
   const handleRename = async (asset: ServerAssetDto) => {
-    const next = prompt('重命名：', asset.name)?.trim()
+    const next = prompt($('重命名：'), asset.name)?.trim()
     if (!next || next === asset.name) return
     try {
       await renameServerAsset(asset.id, next)
       setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, name: next } : a)))
     } catch (err: any) {
       console.error(err)
-      toast(err?.message || '重命名失败', 'error')
+      toast(err?.message || $('重命名失败'), 'error')
     }
   }
 
@@ -2175,7 +2177,7 @@ export default function AssetPanel(): JSX.Element | null {
   }) => {
     const { isVideo, data, cover, label } = input
     if (isVideo) {
-      if (!data.url) return <PlaceholderImage label="视频" />
+      if (!data.url) return <PlaceholderImage label={$('视频')} />
       return (
         <div className="asset-panel-card-media">
           <video
@@ -2215,7 +2217,7 @@ export default function AssetPanel(): JSX.Element | null {
     const hasUrl = Boolean(data.url)
     return (
       <Group className="asset-panel-card-actions" justify="flex-end" gap={4}>
-        <Tooltip className="asset-panel-card-preview-tooltip" label="预览" withArrow>
+        <Tooltip className="asset-panel-card-preview-tooltip" label={$('预览')} withArrow>
           <ActionIcon
             className="asset-panel-card-preview-action"
             size="sm"
@@ -2229,7 +2231,7 @@ export default function AssetPanel(): JSX.Element | null {
           </ActionIcon>
         </Tooltip>
         {hasUrl && (
-          <Tooltip className="asset-panel-card-add-tooltip" label="加入画布" withArrow>
+          <Tooltip className="asset-panel-card-add-tooltip" label={$('加入画布')} withArrow>
             <ActionIcon
               className="asset-panel-card-add-action"
               size="sm"
@@ -2244,18 +2246,18 @@ export default function AssetPanel(): JSX.Element | null {
           </Tooltip>
         )}
         {hasUrl && (
-          <Tooltip className="asset-panel-card-copy-tooltip" label="复制链接" withArrow>
+          <Tooltip className="asset-panel-card-copy-tooltip" label={$('复制链接')} withArrow>
             <ActionIcon className="asset-panel-card-copy-action" size="sm" variant="subtle" onClick={() => handleCopy(data.url || '')}>
               <IconCopy className="asset-panel-card-copy-icon" size={16} />
             </ActionIcon>
           </Tooltip>
         )}
-        <Tooltip className="asset-panel-card-rename-tooltip" label="重命名" withArrow>
+        <Tooltip className="asset-panel-card-rename-tooltip" label={$('重命名')} withArrow>
           <ActionIcon className="asset-panel-card-rename-action" size="sm" variant="subtle" onClick={() => handleRename(asset)}>
             <IconPencil className="asset-panel-card-rename-icon" size={16} />
           </ActionIcon>
         </Tooltip>
-        <Tooltip className="asset-panel-card-delete-tooltip" label="删除" withArrow>
+        <Tooltip className="asset-panel-card-delete-tooltip" label={$('删除')} withArrow>
           <ActionIcon className="asset-panel-card-delete-action" size="sm" variant="subtle" color="red" onClick={() => handleDelete(asset)}>
             <IconTrash className="asset-panel-card-delete-icon" size={16} />
           </ActionIcon>
@@ -2269,14 +2271,14 @@ export default function AssetPanel(): JSX.Element | null {
     const isVideo = data.type === 'video'
     const generated = generatedThumbs[asset.id] || null
     const cover: string | null = isVideo ? generated || data.thumbnailUrl || null : data.thumbnailUrl || data.url || null
-    const label = asset.name || (isVideo ? '视频' : '图片')
+    const label = asset.name || (isVideo ? $('视频') : $('图片'))
     return (
       <PanelCard className="asset-panel-card" key={asset.id}>
         {renderGenerationMedia({ isVideo, data, cover, label })}
         <Stack className="asset-panel-card-body" gap={6} mt="sm">
           <Group className="asset-panel-card-badges" gap="xs">
             <Badge className="asset-panel-card-type" size="xs" color={isVideo ? 'violet' : 'teal'} leftSection={isVideo ? <IconVideo className="asset-panel-card-type-icon" size={12} /> : <IconPhoto className="asset-panel-card-type-icon" size={12} />}>
-              {isVideo ? '视频' : '图片'}
+              {isVideo ? $('视频') : $('图片')}
             </Badge>
             {data.vendor && (
               <Badge className="asset-panel-card-vendor" size="xs" variant="light">
@@ -2328,7 +2330,7 @@ export default function AssetPanel(): JSX.Element | null {
           {formatDate(asset.updatedAt)}
         </Text>
         <Group className="asset-panel-card-actions" justify="flex-end" gap={4}>
-          <Tooltip className="asset-panel-card-add-tooltip" label="添加到画布" withArrow>
+          <Tooltip className="asset-panel-card-add-tooltip" label={$('添加到画布')} withArrow>
             <ActionIcon
               className="asset-panel-card-add-action"
               size="sm"
@@ -2342,12 +2344,12 @@ export default function AssetPanel(): JSX.Element | null {
               <IconPlus className="asset-panel-card-add-icon" size={16} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip className="asset-panel-card-rename-tooltip" label="重命名" withArrow>
+          <Tooltip className="asset-panel-card-rename-tooltip" label={$('重命名')} withArrow>
             <ActionIcon className="asset-panel-card-rename-action" size="sm" variant="subtle" onClick={() => handleRename(asset)}>
               <IconPencil className="asset-panel-card-rename-icon" size={16} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip className="asset-panel-card-delete-tooltip" label="删除" withArrow>
+          <Tooltip className="asset-panel-card-delete-tooltip" label={$('删除')} withArrow>
             <ActionIcon className="asset-panel-card-delete-action" size="sm" variant="subtle" color="red" onClick={() => handleDelete(asset)}>
               <IconTrash className="asset-panel-card-delete-icon" size={16} />
             </ActionIcon>
@@ -2362,10 +2364,10 @@ export default function AssetPanel(): JSX.Element | null {
     const data = getProjectMaterialData(asset)
     const kindLabel =
       data.kind === 'novelDoc'
-        ? '小说'
+        ? $('小说')
         : data.kind === 'scriptDoc'
-          ? '剧本'
-          : '文档'
+          ? $('剧本')
+          : $('文档')
     const content = (data.content || data.prompt || '').trim()
     const summary = summarizeUserFacingText(content)
     return (
@@ -2377,7 +2379,7 @@ export default function AssetPanel(): JSX.Element | null {
             </Badge>
             {typeof data.chapter === 'number' && data.chapter > 0 && (
               <Badge className="asset-panel-card-chapter" size="xs" color="violet" variant="light">
-                第{data.chapter}章
+                {$t('第{{chapter}}章', { chapter: data.chapter })}
               </Badge>
             )}
           </Group>
@@ -2385,20 +2387,20 @@ export default function AssetPanel(): JSX.Element | null {
             {asset.name}
           </Text>
           <Text className="asset-panel-card-prompt asset-panel-card-material-summary" size="xs" c="dimmed" lineClamp={4}>
-            {summary || '暂无可展示内容'}
+            {summary || $('暂无可展示内容')}
           </Text>
           <Text className="asset-panel-card-date" size="xs" c="dimmed">
             {formatDate(asset.updatedAt)}
           </Text>
           <Group className="asset-panel-card-actions" justify="flex-end" gap={4}>
             {content && (
-              <Tooltip className="asset-panel-card-copy-tooltip" label="复制内容" withArrow>
+              <Tooltip className="asset-panel-card-copy-tooltip" label={$('复制内容')} withArrow>
                 <ActionIcon className="asset-panel-card-copy-action" size="sm" variant="subtle" onClick={() => handleCopy(content)}>
                   <IconCopy className="asset-panel-card-copy-icon" size={16} />
                 </ActionIcon>
               </Tooltip>
             )}
-            <Tooltip className="asset-panel-card-add-tooltip" label="加入画布" withArrow>
+            <Tooltip className="asset-panel-card-add-tooltip" label={$('加入画布')} withArrow>
               <ActionIcon
                 className="asset-panel-card-add-action"
                 size="sm"
@@ -2419,12 +2421,12 @@ export default function AssetPanel(): JSX.Element | null {
                 <IconPlus className="asset-panel-card-add-icon" size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip className="asset-panel-card-rename-tooltip" label="重命名" withArrow>
+            <Tooltip className="asset-panel-card-rename-tooltip" label={$('重命名')} withArrow>
               <ActionIcon className="asset-panel-card-rename-action" size="sm" variant="subtle" onClick={() => handleRename(asset)}>
                 <IconPencil className="asset-panel-card-rename-icon" size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip className="asset-panel-card-delete-tooltip" label="删除" withArrow>
+            <Tooltip className="asset-panel-card-delete-tooltip" label={$('删除')} withArrow>
               <ActionIcon className="asset-panel-card-delete-action" size="sm" variant="subtle" color="red" onClick={() => handleDelete(asset)}>
                 <IconTrash className="asset-panel-card-delete-icon" size={16} />
               </ActionIcon>
@@ -2435,7 +2437,7 @@ export default function AssetPanel(): JSX.Element | null {
     )
   }
   const renderRoleCard = (card: RoleCardAssetData) => {
-    const roleName = String(card?.roleName || '').trim() || '未命名角色'
+    const roleName = String(card?.roleName || '').trim() || $('未命名角色')
     const imageUrl = resolveRoleCardExecutableImageUrl(card)
     const prompt = String(card?.prompt || '').trim()
     const summary = summarizeUserFacingText(prompt, 2)
@@ -2455,50 +2457,50 @@ export default function AssetPanel(): JSX.Element | null {
         {imageUrl ? (
           <Image className="asset-panel-role-card-image" src={imageUrl} alt={roleName} radius="sm" h={92} fit="cover" />
         ) : (
-          <PlaceholderImage label={`角色卡 · ${roleName}`} />
+          <PlaceholderImage label={$t('角色卡 · {{name}}', { name: roleName })} />
         )}
         <Stack className="asset-panel-card-body" gap={6} mt="sm">
           <Group className="asset-panel-card-badges" gap="xs">
             <Badge className="asset-panel-card-type" size="xs" color="grape" variant="light">
-              角色卡
+              {$('角色卡')}
             </Badge>
             <Badge className="asset-panel-card-role-status" size="xs" color={status === 'generated' ? 'teal' : 'orange'} variant="light">
-              {status === 'generated' ? '已生成' : '待生成'}
+              {status === 'generated' ? $('已生成') : $('待生成')}
             </Badge>
             <Badge className="asset-panel-card-role-confirm-status" size="xs" color={isConfirmed ? 'green' : 'yellow'} variant="light">
-              {isConfirmed ? '已确认' : '未确认'}
+              {isConfirmed ? $('已确认') : $('未确认')}
             </Badge>
           </Group>
           <Text className="asset-panel-card-title" size="sm" fw={600} lineClamp={1}>
             {roleName}
           </Text>
           <Text className="asset-panel-card-prompt asset-panel-card-role-summary" size="xs" c="dimmed" lineClamp={2}>
-            {summary || '角色设定信息已保存'}
+            {summary || $('角色设定信息已保存')}
           </Text>
           <Text className="asset-panel-card-date" size="xs" c="dimmed">
             {formatDate(card.updatedAt)}
           </Text>
           <Group className="asset-panel-card-actions" justify="flex-end" gap={4}>
             {imageUrl && (
-              <Tooltip className="asset-panel-card-preview-tooltip" label="预览角色卡" withArrow>
+              <Tooltip className="asset-panel-card-preview-tooltip" label={$('预览角色卡')} withArrow>
                 <ActionIcon
                   className="asset-panel-card-preview-action"
                   size="sm"
                   variant="light"
-                  onClick={() => openPreview({ url: imageUrl, kind: 'image', name: `角色卡 · ${roleName}` })}
+                  onClick={() => openPreview({ url: imageUrl, kind: 'image', name: $t('角色卡 · {{name}}', { name: roleName }) })}
                 >
                   <IconEye className="asset-panel-card-preview-icon" size={16} />
                 </ActionIcon>
               </Tooltip>
             )}
             {prompt && (
-              <Tooltip className="asset-panel-card-copy-tooltip" label="复制提示词" withArrow>
+              <Tooltip className="asset-panel-card-copy-tooltip" label={$('复制提示词')} withArrow>
                 <ActionIcon className="asset-panel-card-copy-action" size="sm" variant="subtle" onClick={() => handleCopy(prompt)}>
                   <IconCopy className="asset-panel-card-copy-icon" size={16} />
                 </ActionIcon>
               </Tooltip>
             )}
-            <Tooltip className="asset-panel-card-add-tooltip" label="加入画布" withArrow>
+            <Tooltip className="asset-panel-card-add-tooltip" label={$('加入画布')} withArrow>
               <ActionIcon
                 className="asset-panel-card-add-action"
                 size="sm"
@@ -2510,7 +2512,7 @@ export default function AssetPanel(): JSX.Element | null {
                     currentImageUrl: imageUrl || '',
                   })
                   const mergedReferences = Array.from(new Set([...selectedStyleReferenceImages, ...references])).slice(0, 12)
-                  addNode('taskNode', `角色卡 · ${roleName}`, {
+                  addNode('taskNode', $t('角色卡 · {{name}}', { name: roleName }), {
                     kind: 'image',
                     autoLabel: false,
                     prompt: withRoleStylePrefix(
@@ -2551,7 +2553,7 @@ export default function AssetPanel(): JSX.Element | null {
               </ActionIcon>
             </Tooltip>
             {status === 'generated' && (
-              <Tooltip className="asset-panel-card-confirm-tooltip" label={isConfirmed ? '取消确认' : '确认角色卡'} withArrow>
+              <Tooltip className="asset-panel-card-confirm-tooltip" label={isConfirmed ? $('取消确认') : $('确认角色卡')} withArrow>
                 <ActionIcon
                   className="asset-panel-card-confirm-action"
                   size="sm"
@@ -2564,7 +2566,7 @@ export default function AssetPanel(): JSX.Element | null {
                 </ActionIcon>
               </Tooltip>
             )}
-            <Tooltip className="asset-panel-card-delete-tooltip" label="删除角色卡" withArrow>
+            <Tooltip className="asset-panel-card-delete-tooltip" label={$('删除角色卡')} withArrow>
               <ActionIcon
                 className="asset-panel-card-delete-action"
                 size="sm"
@@ -2594,9 +2596,9 @@ export default function AssetPanel(): JSX.Element | null {
         setBooks(sortProjectBooksByUpdatedAt(Array.isArray(list) ? list : []))
       }
       if (showExtraAssetTabs && tab === 'workflow') await reloadWorkflowLibrary()
-      toast('已刷新项目素材与文本索引', 'success')
+      toast($('已刷新项目素材与文本索引'), 'success')
     } catch (err: any) {
-      toast(err?.message || '刷新失败', 'error')
+      toast(err?.message || $('刷新失败'), 'error')
     } finally {
       setRefreshing(false)
     }
@@ -2605,7 +2607,7 @@ export default function AssetPanel(): JSX.Element | null {
   const openProjectMaterialsFullscreen = React.useCallback(() => {
     const projectId = String(currentProject?.id || '').trim()
     if (!projectId) {
-      toast('请先选择项目', 'warning')
+      toast($('请先选择项目'), 'warning')
       return
     }
     setProjectAssetsViewerOpen(true)
@@ -2613,11 +2615,11 @@ export default function AssetPanel(): JSX.Element | null {
 
   const openMaterialUpload = React.useCallback(() => {
     if (!currentProject?.id) {
-      toast('请先选择项目，再上传项目素材', 'warning')
+      toast($('请先选择项目，再上传项目素材'), 'warning')
       return
     }
     if (isBookUploadLocked) {
-      toast('当前项目有小说上传任务进行中，请等待完成后再上传', 'warning')
+      toast($('当前项目有小说上传任务进行中，请等待完成后再上传'), 'warning')
       return
     }
     materialUploadInputRef.current?.click()
@@ -2630,7 +2632,7 @@ export default function AssetPanel(): JSX.Element | null {
   }): Promise<{ createdCount: number; nextIndex: ProjectBookIndexDto }> => {
     const roles = listRolesFromBookIndex(input.bookIndex)
     if (!roles.length) {
-      throw new Error('全书深度重建完成，但未识别到角色档案')
+      throw new Error($('全书深度重建完成，但未识别到角色档案'))
     }
     const latestMap = new Map<string, RoleCardAssetData>()
     const existingCards = Array.isArray((input.bookIndex as any)?.assets?.roleCards)
@@ -2696,7 +2698,7 @@ export default function AssetPanel(): JSX.Element | null {
       })
       const mergedReferenceImages = Array.from(new Set([...selectedStyleReferenceImages, ...referenceImages])).slice(0, 12)
       const beforeCount = useRFStore.getState().nodes.length
-      addNode('taskNode', `角色设定 · ${roleName}`, {
+      addNode('taskNode', $t('角色设定 · {{name}}', { name: roleName }), {
         kind: 'image',
         autoLabel: false,
         prompt: withRoleStylePrefix(rolePrompt),
@@ -2804,7 +2806,7 @@ export default function AssetPanel(): JSX.Element | null {
     e.currentTarget.value = ''
     if (!file) return
     if (!currentProject?.id) {
-      toast('请先选择项目', 'warning')
+      toast($('请先选择项目'), 'warning')
       return
     }
     setMaterialUploading(true)
@@ -2817,15 +2819,15 @@ export default function AssetPanel(): JSX.Element | null {
         uploadMode: 'auto',
         onChunkProgress: (completed, total) => {
           if (completed % 5 === 0 || completed === total) {
-            toast(`分块上传进度：${completed}/${total}`, 'info')
+            toast($t('分块上传进度：{{completed}}/{{total}}', { completed, total }), 'info')
           }
         },
       })
       if (result.mode === 'book') {
-        toast('小说上传成功，开始分块上传并进入异步任务队列…', 'info')
+        toast($('小说上传成功，开始分块上传并进入异步任务队列…'), 'info')
         setBookUploadJob(result.job)
-        toast('已进入后台队列，正在拆分任务处理小说…', 'info')
-        toast('已开始处理小说', 'success')
+        toast($('已进入后台队列，正在拆分任务处理小说…'), 'info')
+        toast($('已开始处理小说'), 'success')
         await reloadAssets()
         if (currentProject?.id) {
           const list = await listProjectBooks(currentProject.id).catch(() => [])
@@ -2833,14 +2835,14 @@ export default function AssetPanel(): JSX.Element | null {
         }
         return
       }
-      toast('已替换当前项目文本', 'success')
+      toast($('已替换当前项目文本'), 'success')
       await reloadAssets()
       if (currentProject?.id) {
         const list = await listProjectBooks(currentProject.id).catch(() => [])
         setBooks(sortProjectBooksByUpdatedAt(Array.isArray(list) ? list : []))
       }
     } catch (err: any) {
-      toast(err?.message || '素材上传失败', 'error')
+      toast(err?.message || $('素材上传失败'), 'error')
     } finally {
       setMaterialUploading(false)
     }
@@ -2853,12 +2855,12 @@ export default function AssetPanel(): JSX.Element | null {
     }
     const chapter = Number(selectedBookChapter)
     if (!Number.isFinite(chapter) || chapter <= 0) {
-      toast('请选择章节', 'warning')
+      toast($('请选择章节'), 'warning')
       return
     }
     try {
       const payload = await getProjectBookChapter(currentProject.id, selectedBookId, Math.trunc(chapter))
-      const chapterTitle = payload?.title || `第${Math.trunc(chapter)}章`
+      const chapterTitle = payload?.title || $t('第{{chapter}}章', { chapter: Math.trunc(chapter) })
       addNode('taskNode', chapterTitle, {
         kind: 'novelDoc',
         autoLabel: false,
@@ -2878,7 +2880,7 @@ export default function AssetPanel(): JSX.Element | null {
       })
       setActivePanel(null)
     } catch (err: any) {
-      toast(err?.message || '读取章节失败', 'error')
+      toast(err?.message || $('读取章节失败'), 'error')
     }
   }, [addNode, currentProject?.id, selectedBookChapter, selectedBookId, selectedChapterMeta, setActivePanel])
 
@@ -2901,7 +2903,7 @@ export default function AssetPanel(): JSX.Element | null {
     }
     const url = String(referenceUrl || '').trim()
     if (!url) {
-      toast('未找到可用参考图', 'warning')
+      toast($('未找到可用参考图'), 'warning')
       return
     }
     const next = await persistStyleReferenceImageShared({
@@ -2913,8 +2915,8 @@ export default function AssetPanel(): JSX.Element | null {
       confirmProjectBookStyle,
     })
     setSelectedBookIndex(next)
-    toast(sourceLabel ? `画风参考图已更新（来自${sourceLabel}）` : '画风参考图已更新', 'success')
-    toast('已根据参考图自动提炼风格规则，并应用到角色卡', 'info')
+    toast(sourceLabel ? $t('画风参考图已更新（来自{{source}}）', { source: sourceLabel }) : $('画风参考图已更新'), 'success')
+    toast($('已根据参考图自动提炼风格规则，并应用到角色卡'), 'info')
   }, [currentProject?.id, deriveStyleHintsFromReferenceImage, selectedBookId])
 
   const handleStyleReferenceUploadInputChange = React.useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2927,7 +2929,7 @@ export default function AssetPanel(): JSX.Element | null {
     }
     const imageFile = files.find((file) => String(file.type || '').startsWith('image/'))
     if (!imageFile) {
-      toast('请选择图片文件', 'warning')
+      toast($('请选择图片文件'), 'warning')
       return
     }
     setStyleReferenceUploading(true)
@@ -2940,10 +2942,10 @@ export default function AssetPanel(): JSX.Element | null {
         String((uploaded as any)?.data?.url || '').trim()
         || String((uploaded as any)?.data?.imageUrl || '').trim()
         || String((uploaded as any)?.data?.thumbnailUrl || '').trim()
-      if (!url) throw new Error('上传成功但未返回可用图片地址')
+      if (!url) throw new Error($('上传成功但未返回可用图片地址'))
       await persistStyleReferenceImage(url)
     } catch (err: any) {
-      toast(err?.message || '上传画风参考图失败', 'error')
+      toast(err?.message || $('上传画风参考图失败'), 'error')
     } finally {
       setStyleReferenceUploading(false)
     }
@@ -2958,14 +2960,14 @@ export default function AssetPanel(): JSX.Element | null {
     }
     const candidate = canvasStyleReferenceCandidates[0]
     if (!candidate?.url) {
-      toast('画布里还没有可用图片，请先生成一张图', 'warning')
+      toast($('画布里还没有可用图片，请先生成一张图'), 'warning')
       return
     }
     setStyleReferenceUploading(true)
     try {
-      await persistStyleReferenceImage(candidate.url, `画布「${candidate.label}」`)
+      await persistStyleReferenceImage(candidate.url, $t('画布「{{label}}」', { label: candidate.label }))
     } catch (err: any) {
-      toast(err?.message || '使用画布图片失败', 'error')
+      toast(err?.message || $('使用画布图片失败'), 'error')
     } finally {
       setStyleReferenceUploading(false)
     }
@@ -3053,7 +3055,7 @@ export default function AssetPanel(): JSX.Element | null {
         continue
       }
       const beforeIds = new Set(useRFStore.getState().nodes.map((node) => String(node.id || '').trim()))
-      addNode('taskNode', `角色卡 · ${roleName}`, {
+      addNode('taskNode', $t('角色卡 · {{name}}', { name: roleName }), {
         kind: 'image',
         autoLabel: false,
         prompt: rolePrompt,
@@ -3144,7 +3146,7 @@ export default function AssetPanel(): JSX.Element | null {
         continue
       }
       const beforeIds = new Set(useRFStore.getState().nodes.map((node) => String(node.id || '').trim()))
-      addNode('taskNode', `场景参考 · ${refName}`, {
+      addNode('taskNode', $t('场景参考 · {{name}}', { name: refName }), {
         kind: 'image',
         autoLabel: false,
         prompt: scenePrompt,
@@ -3191,7 +3193,7 @@ export default function AssetPanel(): JSX.Element | null {
     if (!projectId) return
     const cardId = String(card?.cardId || '').trim()
     if (!cardId) {
-      toast('角色卡ID缺失，无法确认', 'error')
+      toast($('角色卡ID缺失，无法确认'), 'error')
       return
     }
     if (assetConfirming) return
@@ -3215,11 +3217,11 @@ export default function AssetPanel(): JSX.Element | null {
       })
       const syncMsg =
         nextConfirmed && (syncStats.created > 0 || syncStats.updated > 0)
-          ? `，已同步到画布（新增 ${syncStats.created}，更新 ${syncStats.updated}）`
+          ? $t('，已同步到画布（新增 {{created}}，更新 {{updated}}）', { created: syncStats.created, updated: syncStats.updated })
           : ''
-      toast(nextConfirmed ? `角色卡已确认${syncMsg}` : '角色卡已取消确认', 'success')
+      toast(nextConfirmed ? $t('角色卡已确认{{sync}}', { sync: syncMsg }) : $('角色卡已取消确认'), 'success')
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '角色卡确认失败'
+      const msg = err instanceof Error ? err.message : $('角色卡确认失败')
       toast(msg, 'error')
     } finally {
       setAssetConfirming(false)
@@ -3251,9 +3253,9 @@ export default function AssetPanel(): JSX.Element | null {
         )
       }
       let idx = selectedBookIndex || (await getProjectBookIndex(currentProject.id, selectedBookId).catch(() => null))
-      if (!idx) throw new Error('读取项目文本索引失败，请重试')
+      if (!idx) throw new Error($('读取项目文本索引失败，请重试'))
       let chapters = Array.isArray((idx as any)?.chapters) ? ((idx as any).chapters as any[]) : []
-      if (!chapters.length) throw new Error('小说章节为空，无法完善角色关系')
+      if (!chapters.length) throw new Error($('小说章节为空，无法完善角色关系'))
       const selectedChapterNo = Math.max(1, Math.trunc(Number(selectedBookChapter || 1)))
       const selectedChapter = chapters.find((chapter) => Number((chapter as any)?.chapter) === selectedChapterNo) || null
       const firstIncomplete = chapters.find((chapter) => !isChapterMetadataComplete(chapter)) || null
@@ -3261,7 +3263,7 @@ export default function AssetPanel(): JSX.Element | null {
         ? selectedChapter
         : firstIncomplete
       if (!targetChapter) {
-        toast('章节元数据已完善，无需继续处理', 'success')
+        toast($('章节元数据已完善，无需继续处理'), 'success')
         const latest = await getProjectBookIndex(currentProject.id, selectedBookId).catch(() => null)
         if (latest) setSelectedBookIndex(latest)
         return
@@ -3274,16 +3276,16 @@ export default function AssetPanel(): JSX.Element | null {
       })
       const latest = await getProjectBookIndex(currentProject.id, selectedBookId).catch(() => null)
       if (latest) setSelectedBookIndex(latest)
-      toast(`已完善第${chapterNo}章元数据与角色关系`, 'success')
+      toast($t('已完善第{{chapter}}章元数据与角色关系', { chapter: chapterNo }), 'success')
     } catch (err: unknown) {
       const errorCode = typeof err === 'object' && err && 'code' in err && typeof err.code === 'string'
         ? err.code
         : ''
       const message = err instanceof Error ? err.message : ''
       if (errorCode === 'BOOK_METADATA_ENSURE_WINDOW_BUSY') {
-        toast('当前项目文本已有完善任务在执行，请稍候再试', 'info')
+        toast($('当前项目文本已有完善任务在执行，请稍候再试'), 'info')
       } else {
-        toast(message || '完善角色关系失败', 'error')
+        toast(message || $('完善角色关系失败'), 'error')
       }
     } finally {
       setGraphRebuilding(false)
@@ -3297,7 +3299,7 @@ export default function AssetPanel(): JSX.Element | null {
     }
     const selected = books.find((b) => b.bookId === selectedBookId)
     const title = selected?.title || selectedBookId
-    if (!window.confirm(`确定删除当前文本「${title}」吗？会同时删除该文本的索引与关系网。`)) return
+    if (!window.confirm($t('确定删除当前文本「{{title}}」吗？会同时删除该文本的索引与关系网。', { title }))) return
     try {
       await deleteProjectBook(currentProject.id, selectedBookId)
       const latest = await listProjectBooks(currentProject.id).catch(() => [])
@@ -3311,30 +3313,30 @@ export default function AssetPanel(): JSX.Element | null {
         setSelectedBookIndex(idx)
       }
       if ((Array.isArray(latest) ? latest : []).some((b) => b.bookId === selectedBookId)) {
-        toast('删除请求已提交，但服务端列表仍包含当前文本，请稍后刷新重试', 'warning')
+        toast($('删除请求已提交，但服务端列表仍包含当前文本，请稍后刷新重试'), 'warning')
       } else {
-        toast('当前文本已删除', 'success')
+        toast($('当前文本已删除'), 'success')
       }
       await reloadAssets()
     } catch (err: any) {
-      toast(err?.message || '删除当前文本失败', 'error')
+      toast(err?.message || $('删除当前文本失败'), 'error')
     }
   }, [currentProject?.id, reloadAssets, selectedBookId])
 
   const handleDeleteRoleCard = React.useCallback(async (card: RoleCardAssetData) => {
     if (!currentProject?.id) {
-      toast('请先选择项目', 'warning')
+      toast($('请先选择项目'), 'warning')
       return
     }
     const roleName = String(card?.roleName || '').trim() || card.cardId
-    if (!window.confirm(`确定删除角色卡「${roleName}」吗？`)) return
+    if (!window.confirm($t('确定删除角色卡「{{name}}」吗？', { name: roleName }))) return
     try {
       const projectId = String(currentProject.id || '').trim()
       const targetAssetId = String(card?.assetId || '').trim()
       const targetCardId = String(card?.cardId || '').trim()
       const canDeleteBookCard = !!(selectedBookId && targetCardId && bookRoleCards.some((item) => String(item?.cardId || '').trim() === targetCardId))
       if (!targetAssetId && !canDeleteBookCard) {
-        throw new Error('角色卡既没有项目资产ID，也没有书籍角色卡ID，无法删除')
+        throw new Error($('角色卡既没有项目资产ID，也没有书籍角色卡ID，无法删除'))
       }
       if (canDeleteBookCard) {
         const result = await deleteProjectBookRoleCard(projectId, selectedBookId, targetCardId)
@@ -3360,9 +3362,9 @@ export default function AssetPanel(): JSX.Element | null {
         )
       }
       await reloadAssets()
-      toast('角色卡已删除', 'success')
+      toast($('角色卡已删除'), 'success')
     } catch (err: any) {
-      toast(err?.message || '删除角色卡失败', 'error')
+      toast(err?.message || $('删除角色卡失败'), 'error')
     }
   }, [bookRoleCards, currentProject?.id, reloadAssets, selectedBookId])
 
@@ -3372,19 +3374,19 @@ export default function AssetPanel(): JSX.Element | null {
       return
     }
     if (!selectedStyleReferenceImages.length) {
-      toast('请先上传至少 1 张风格参考图，再生成角色卡', 'warning')
+      toast($('请先上传至少 1 张风格参考图，再生成角色卡'), 'warning')
       return
     }
     if (roleCardGenerating) return
     const roles = availableCharacterPool
     if (!roles.length) {
-      toast('当前没有可用角色元数据（请先上传并解析项目文本）', 'warning')
+      toast($('当前没有可用角色元数据（请先上传并解析项目文本）'), 'warning')
       return
     }
     const maxCount = 12
     const targets = roles.slice(0, maxCount)
-    const scope = selectedChapterMeta?.chapter ? `第${selectedChapterMeta.chapter}章` : '全书'
-    if (!window.confirm(`将为${scope}生成 ${targets.length} 个角色图像节点，继续吗？`)) {
+    const scope = selectedChapterMeta?.chapter ? $t('第{{chapter}}章', { chapter: selectedChapterMeta.chapter }) : $('全书')
+    if (!window.confirm($t('将为{{scope}}生成 {{count}} 个角色图像节点，继续吗？', { scope, count: targets.length }))) {
       return
     }
     setRoleCardGenerating(true)
@@ -3446,7 +3448,7 @@ export default function AssetPanel(): JSX.Element | null {
         })
         const mergedReferenceImages = Array.from(new Set([...selectedStyleReferenceImages, ...referenceImages])).slice(0, 12)
         const beforeCount = useRFStore.getState().nodes.length
-        addNode('taskNode', `角色设定 · ${roleName}`, {
+        addNode('taskNode', $t('角色设定 · {{name}}', { name: roleName }), {
           kind: 'image',
           autoLabel: false,
           prompt: withRoleStylePrefix(rolePrompt),
@@ -3543,7 +3545,7 @@ export default function AssetPanel(): JSX.Element | null {
         }
       }
       setActivePanel(null)
-      toast(`已创建 ${targets.length} 个角色图像节点`, 'success')
+      toast($t('已创建 {{count}} 个角色图像节点', { count: targets.length }), 'success')
     } finally {
       setRoleCardGenerating(false)
     }
@@ -3562,26 +3564,26 @@ export default function AssetPanel(): JSX.Element | null {
             >
               <div className="asset-panel-arrow panel-arrow" />
               <Group className="asset-panel-header" justify="space-between" mb={8}>
-                <Title className="asset-panel-title" order={6}>我的资产</Title>
+                <Title className="asset-panel-title" order={6}>{$('我的资产')}</Title>
                 <Group className="asset-panel-header-actions" gap="xs">
-                  <Tooltip className="asset-panel-fullscreen-tooltip" label="弹窗查看当前项目素材" withArrow>
+                  <Tooltip className="asset-panel-fullscreen-tooltip" label={$('弹窗查看当前项目素材')} withArrow>
                     <ActionIcon
                       className="asset-panel-fullscreen-action"
                       size="sm"
                       variant="subtle"
-                      aria-label="弹窗查看当前项目素材"
+                      aria-label={$('弹窗查看当前项目素材')}
                       onClick={openProjectMaterialsFullscreen}
                     >
                       <IconPlayerPlay className="asset-panel-fullscreen-icon" size={16} />
                     </ActionIcon>
                   </Tooltip>
-                  <Tooltip className="asset-panel-refresh-tooltip" label="刷新" withArrow>
+                  <Tooltip className="asset-panel-refresh-tooltip" label={$('刷新')} withArrow>
                     <ActionIcon className="asset-panel-refresh-action" size="sm" variant="light" onClick={handleRefresh} loading={refreshing || loading}>
                       <IconRefresh className="asset-panel-refresh-icon" size={16} />
                     </ActionIcon>
                   </Tooltip>
                   <Button className="asset-panel-close" size="xs" variant="subtle" onClick={() => setActivePanel(null)}>
-                    关闭
+                    {$('关闭')}
                   </Button>
                 </Group>
               </Group>
@@ -3595,26 +3597,26 @@ export default function AssetPanel(): JSX.Element | null {
                 />
                 <Tabs className="asset-panel-tabs" value={tab} onChange={(v) => setTab((v as any) || 'materials')}>
                   <Tabs.List className="asset-panel-tab-list">
-                    <Tabs.Tab className="asset-panel-tab" value="materials">项目素材</Tabs.Tab>
-                    {showExtraAssetTabs ? <Tabs.Tab className="asset-panel-tab" value="generated">生成内容</Tabs.Tab> : null}
-                    {showExtraAssetTabs ? <Tabs.Tab className="asset-panel-tab" value="workflow">工作流片段</Tabs.Tab> : null}
+                    <Tabs.Tab className="asset-panel-tab" value="materials">{$('项目素材')}</Tabs.Tab>
+                    {showExtraAssetTabs ? <Tabs.Tab className="asset-panel-tab" value="generated">{$('生成内容')}</Tabs.Tab> : null}
+                    {showExtraAssetTabs ? <Tabs.Tab className="asset-panel-tab" value="workflow">{$('工作流片段')}</Tabs.Tab> : null}
                   </Tabs.List>
                   <Tabs.Panel className="asset-panel-tab-panel" value="materials" pt="xs">
                     <Stack className="asset-panel-section" gap="sm">
                       <Text className="asset-panel-section-desc" size="sm" c="dimmed">
                         {currentProject?.id
-                          ? `当前项目素材：${currentProject.name || currentProject.id}`
-                          : '当前显示全部项目素材（建议先选择项目）'}
+                          ? $t('当前项目素材：{{name}}', { name: currentProject.name || currentProject.id })
+                          : $('当前显示全部项目素材（建议先选择项目）')}
                       </Text>
                       {isBookUploadLocked ? (
                         <Text className="asset-panel-book-upload-status" size="xs" c="yellow">
-                          小说任务进行中（{bookUploadJob?.status === 'queued' ? '排队中' : '处理中'}）
+                          {$t('小说任务进行中（{{status}}）', { status: bookUploadJob?.status === 'queued' ? $('排队中') : $('处理中') })}
                           {typeof bookUploadJob?.progress?.percent === 'number' ? ` ${bookUploadJob.progress.percent}%` : ''}
                           {typeof bookUploadJob?.progress?.processedChapters === 'number' && typeof bookUploadJob?.progress?.totalChapters === 'number'
-                            ? `（章节 ${bookUploadJob.progress.processedChapters}/${bookUploadJob.progress.totalChapters}）`
+                            ? $t('（章节 {{processed}}/{{total}}）', { processed: bookUploadJob.progress.processedChapters, total: bookUploadJob.progress.totalChapters })
                             : ''}
                           {bookUploadJob?.progress?.message ? ` ${bookUploadJob.progress.message}` : ''}
-                          ，当前项目暂不可再次上传
+                          {$('，当前项目暂不可再次上传')}
                         </Text>
                       ) : null}
                       <Group className="asset-panel-material-actions" gap="xs" wrap="wrap">
@@ -3637,7 +3639,7 @@ export default function AssetPanel(): JSX.Element | null {
                           disabled={!hasCurrentProjectText}
                           onClick={() => setActivePanel('nanoComic')}
                         >
-                          工作台
+                          {$('工作台')}
                         </Button>
                         <SegmentedControl
                           className="asset-panel-material-chapter-filter"
@@ -3645,8 +3647,8 @@ export default function AssetPanel(): JSX.Element | null {
                           value={materialChapterFilter}
                           onChange={setMaterialChapterFilter}
                           data={[
-                            { value: 'all', label: '全部章节' },
-                            ...materialChapterOptions.slice(0, 6).map((c) => ({ value: String(c), label: `第${c}章` })),
+                            { value: 'all', label: $('全部章节') },
+                            ...materialChapterOptions.slice(0, 6).map((c) => ({ value: String(c), label: $t('第{{chapter}}章', { chapter: c }) })),
                           ]}
                         />
                         <SegmentedControl
@@ -3655,16 +3657,16 @@ export default function AssetPanel(): JSX.Element | null {
                           value={materialCategory}
                           onChange={(v) => setMaterialCategory((v as any) || 'roleCards')}
                           data={[
-                            { value: 'roleCards', label: '角色卡' },
-                            { value: 'docs', label: '文档素材' },
-                            { value: 'all', label: '全部' },
+                            { value: 'roleCards', label: $('角色卡') },
+                            { value: 'docs', label: $('文档素材') },
+                            { value: 'all', label: $('全部') },
                           ]}
                         />
                         <input
                           className="asset-panel-material-role-search asset-panel-native-input asset-panel-native-control asset-panel-native-control--180"
                           value={roleCardKeyword}
                           onChange={(e) => setRoleCardKeyword(e.currentTarget.value)}
-                          placeholder="筛选角色卡：角色名"
+                          placeholder={$('筛选角色卡：角色名')}
                         />
                         <Button
                           className="asset-panel-ai-character-library-trigger"
@@ -3673,7 +3675,7 @@ export default function AssetPanel(): JSX.Element | null {
                           leftSection={<IconPhoto size={14} />}
                           onClick={() => setAiCharacterLibraryOpened(true)}
                         >
-                          AI角色库
+                          {$('AI角色库')}
                         </Button>
                       </Group>
                       <Group className="asset-panel-book-actions" gap="xs" wrap="wrap" align="flex-end">
@@ -3683,11 +3685,11 @@ export default function AssetPanel(): JSX.Element | null {
                           c="dimmed"
                           maw={240}
                           lineClamp={1}
-                          title={activeBook ? `${activeBook.title || '未命名文本'} · ${activeBook.chapterCount}章` : '未上传'}
+                          title={activeBook ? $t('{{title}} · {{count}} 章', { title: activeBook.title || $('未命名文本'), count: activeBook.chapterCount }) : $('未上传')}
                         >
                           {activeBook
-                            ? `当前文本：${activeBook.title || '未命名文本'} · ${activeBook.chapterCount}章`
-                            : '当前文本：未上传'}
+                            ? $t('当前文本：{{title}} · {{count}} 章', { title: activeBook.title || $('未命名文本'), count: activeBook.chapterCount })
+                            : $('当前文本：未上传')}
                         </Text>
                         <Button
                           className="asset-panel-book-delete"
@@ -3699,7 +3701,7 @@ export default function AssetPanel(): JSX.Element | null {
                             void handleDeleteBook()
                           }}
                         >
-                          删除当前文本
+                          {$('删除当前文本')}
                         </Button>
                       </Group>
                       <Group className="asset-panel-book-filter-row" gap="xs" wrap="wrap" align="center">
@@ -3709,12 +3711,12 @@ export default function AssetPanel(): JSX.Element | null {
                           onChange={(e) => setBookFilterType((e.currentTarget.value as any) || 'all')}
                           disabled={!selectedBookIndex}
                         >
-                          <option value="all">筛章：全部</option>
-                          <option value="characters">按角色筛章</option>
-                          <option value="props">按道具筛章</option>
-                          <option value="scenes">按场景筛章</option>
-                          <option value="locations">按地点筛章</option>
-                          <option value="keywords">按关键词筛章</option>
+                          <option value="all">{$('筛章：全部')}</option>
+                          <option value="characters">{$('按角色筛章')}</option>
+                          <option value="props">{$('按道具筛章')}</option>
+                          <option value="scenes">{$('按场景筛章')}</option>
+                          <option value="locations">{$('按地点筛章')}</option>
+                          <option value="keywords">{$('按关键词筛章')}</option>
                         </select>
                         <select
                           className="asset-panel-book-filter-keyword asset-panel-native-select asset-panel-native-control asset-panel-native-control--180"
@@ -3722,7 +3724,7 @@ export default function AssetPanel(): JSX.Element | null {
                           onChange={(e) => setBookFilterKeyword(e.currentTarget.value)}
                           disabled={!selectedBookIndex || bookFilterType === 'all'}
                         >
-                          <option value="">选择关键字</option>
+                          <option value="">{$('选择关键字')}</option>
                           {bookQuickFilterOptions.map((item) => (
                             <option key={item} value={item}>
                               {item}
@@ -3734,22 +3736,22 @@ export default function AssetPanel(): JSX.Element | null {
                           value={bookFilterKeyword}
                           onChange={(e) => setBookFilterKeyword(e.currentTarget.value)}
                           disabled={!selectedBookIndex || bookFilterType === 'all'}
-                          placeholder="可直接输入关键词模糊筛章"
+                          placeholder={$('可直接输入关键词模糊筛章')}
                         />
                         <Text className="asset-panel-book-filter-summary" size="xs" c="dimmed">
-                          匹配范围：{filteredBookChapters.length}/{selectedBookIndex?.chapters?.length || 0}
+                          {$t('匹配范围：{{matched}}/{{total}}', { matched: filteredBookChapters.length, total: selectedBookIndex?.chapters?.length || 0 })}
                         </Text>
                         <Text className="asset-panel-book-role-summary" size="xs" c="dimmed">
-                          角色数：{availableCharacterPool.length}
+                          {$t('角色数：{{count}}', { count: availableCharacterPool.length })}
                         </Text>
                         <Text className="asset-panel-book-role-card-summary" size="xs" c="dimmed">
-                          已登记角色卡：{bookRoleCards.length}
+                          {$t('已登记角色卡：{{count}}', { count: bookRoleCards.length })}
                         </Text>
                       </Group>
                       {!!selectedBookIndex && (
                         <Stack className="asset-panel-style-lock-config" gap={6} ref={styleReferenceSectionRef}>
                           <Text className="asset-panel-style-lock-title" size="xs" fw={700}>
-                            风格参考图（必填）
+                            {$('风格参考图（必填）')}
                           </Text>
                           <Group className="asset-panel-style-lock-controls" gap="xs" wrap="wrap" align="center">
                             <Button
@@ -3763,7 +3765,7 @@ export default function AssetPanel(): JSX.Element | null {
                                 styleReferenceUploadInputRef.current?.click()
                               }}
                             >
-                              {selectedStyleReferenceImages[0] ? '替换参考图' : '上传参考图'}
+                              {selectedStyleReferenceImages[0] ? $('替换参考图') : $('上传参考图')}
                             </Button>
                             <Button
                               className="asset-panel-style-reference-use-canvas-trigger"
@@ -3776,7 +3778,7 @@ export default function AssetPanel(): JSX.Element | null {
                                 void handleUseCanvasGeneratedStyleReference()
                               }}
                             >
-                              使用画布最近图
+                              {$('使用画布最近图')}
                             </Button>
                             <input
                               className="asset-panel-hidden-input"
@@ -3787,10 +3789,10 @@ export default function AssetPanel(): JSX.Element | null {
                             />
                           </Group>
                           <Text className="asset-panel-style-reference-canvas-hint" size="xs" c="dimmed">
-                            画布可用图片：{canvasStyleReferenceCandidates.length}（点击“使用画布最近图”一键设为风格参考）
+                            {$t('画布可用图片：{{count}}（点击“使用画布最近图”一键设为风格参考）', { count: canvasStyleReferenceCandidates.length })}
                           </Text>
                           <Text className="asset-panel-style-reference-summary" size="xs" c="dimmed">
-                            已上传：{selectedStyleReferenceImages.length}/1
+                            {$t('已上传：{{count}}/1', { count: selectedStyleReferenceImages.length })}
                           </Text>
                           <Group className="asset-panel-style-reference-list" gap="xs" wrap="wrap">
                             {(() => {
@@ -3802,7 +3804,7 @@ export default function AssetPanel(): JSX.Element | null {
                                       <Image className="asset-panel-style-reference-image" src={url} h={72} radius="xs" fit="cover" />
                                     ) : (
                                       <Center className="asset-panel-style-reference-empty" h={72}>
-                                        <Text size="xs" c="dimmed">空</Text>
+                                        <Text size="xs" c="dimmed">{$('空')}</Text>
                                       </Center>
                                     )}
                                   </Stack>
@@ -3823,10 +3825,10 @@ export default function AssetPanel(): JSX.Element | null {
                               setGraph3DOpened(true)
                             }}
                           >
-                            关系网 3D预览
+                            {$('关系网 3D预览')}
                           </Button>
                           <Text className="asset-panel-book-graph-preview-summary" size="xs" c="dimmed">
-                            全书节点 {graphNodes.length} · 全书关系 {graphEdges.length} · 目标范围可见 {filteredGraphNodes.length}
+                            {$t('全书节点 {{nodes}} · 全书关系 {{edges}} · 目标范围可见 {{visible}}', { nodes: graphNodes.length, edges: graphEdges.length, visible: filteredGraphNodes.length })}
                           </Text>
                         </Group>
                       )}
@@ -3834,7 +3836,7 @@ export default function AssetPanel(): JSX.Element | null {
                         <Stack className="asset-panel-book-graph-editor" gap={6}>
                           <Group className="asset-panel-book-graph-header" gap="xs" justify="space-between">
                             <Text className="asset-panel-book-graph-title" size="xs" fw={700}>
-                              角色关系网（AI 自动维护）
+                              {$('角色关系网（AI 自动维护）')}
                             </Text>
                             <Group className="asset-panel-book-graph-header-actions" gap="xs">
                               <Button
@@ -3848,10 +3850,10 @@ export default function AssetPanel(): JSX.Element | null {
                                 }}
                               >
                                 {chapterMetadataProgress.done
-                                  ? '角色关系已完善'
+                                  ? $('角色关系已完善')
                                   : chapterMetadataProgress.nextWindowStart && chapterMetadataProgress.nextWindowEnd
-                                    ? `自动完善角色关系（从${chapterMetadataProgress.nextWindowStart}-${chapterMetadataProgress.nextWindowEnd}开始）`
-                                    : '自动完善角色关系'}
+                                    ? $t('自动完善角色关系（从{{start}}-{{end}}开始）', { start: chapterMetadataProgress.nextWindowStart, end: chapterMetadataProgress.nextWindowEnd })
+                                    : $('自动完善角色关系')}
                               </Button>
                               <Button
                                 className="asset-panel-book-graph-3d"
@@ -3862,22 +3864,22 @@ export default function AssetPanel(): JSX.Element | null {
                                   setGraph3DOpened(true)
                                 }}
                               >
-                                3D预览
+                                {$('3D预览')}
                               </Button>
                             </Group>
                           </Group>
                           <Text className="asset-panel-book-graph-desc" size="xs" c="dimmed">
-                            点击一次会自动连续处理后续 100 章窗口（如 1-100、101-200），直到全书完成或遇到错误。
+                            {$('点击一次会自动连续处理后续 100 章窗口（如 1-100、101-200），直到全书完成或遇到错误。')}
                           </Text>
                           <Text className="asset-panel-book-graph-progress" size="xs" c="dimmed">
-                            章节元数据进度：{chapterMetadataProgress.complete}/{chapterMetadataProgress.total}
+                            {$t('章节元数据进度：{{complete}}/{{total}}', { complete: chapterMetadataProgress.complete, total: chapterMetadataProgress.total })}
                             {chapterMetadataProgress.nextWindowStart && chapterMetadataProgress.nextWindowEnd
-                              ? ` · 下一段 ${chapterMetadataProgress.nextWindowStart}-${chapterMetadataProgress.nextWindowEnd}`
+                              ? $t(' · 下一段 {{start}}-{{end}}', { start: chapterMetadataProgress.nextWindowStart, end: chapterMetadataProgress.nextWindowEnd })
                               : ''}
                           </Text>
                           <Group className="asset-panel-book-graph-toolbar" gap="xs" wrap="wrap" align="center">
                             <Text className="asset-panel-book-graph-toolbar-summary" size="xs" c="dimmed">
-                              全书节点 {graphNodes.length} · 全书关系 {graphEdges.length} · 目标范围可见 {filteredGraphNodes.length}
+                              {$t('全书节点 {{nodes}} · 全书关系 {{edges}} · 目标范围可见 {{visible}}', { nodes: graphNodes.length, edges: graphEdges.length, visible: filteredGraphNodes.length })}
                             </Text>
                           </Group>
                         </Stack>
@@ -3885,7 +3887,7 @@ export default function AssetPanel(): JSX.Element | null {
                       {!!selectedChapterMeta && (
                         <Stack className="asset-panel-book-meta" gap={4}>
                           <Text className="asset-panel-book-meta-title" size="xs" fw={600}>
-                            第{selectedChapterMeta.chapter}章 · {selectedChapterMeta.title}
+                            {$t('第{{chapter}}章', { chapter: selectedChapterMeta.chapter })} · {selectedChapterMeta.title}
                           </Text>
                           {!!selectedChapterMeta.summary && (
                             <Text className="asset-panel-book-meta-summary" size="xs" c="dimmed" lineClamp={3}>
@@ -3894,22 +3896,22 @@ export default function AssetPanel(): JSX.Element | null {
                           )}
                           {!!selectedChapterMeta.keywords?.length && (
                             <Text className="asset-panel-book-meta-keywords" size="xs" c="dimmed" lineClamp={2}>
-                              关键词：{selectedChapterMeta.keywords.join('、')}
+                              {$t('关键词：{{items}}', { items: selectedChapterMeta.keywords.join($('、')) })}
                             </Text>
                           )}
                           {!!selectedChapterMeta.characters?.length && (
                             <Text className="asset-panel-book-meta-characters" size="xs" c="dimmed" lineClamp={2}>
-                              角色：{selectedChapterMeta.characters.map((x) => x.name).join('、')}
+                              {$t('角色：{{items}}', { items: selectedChapterMeta.characters.map((x) => x.name).join($('、')) })}
                             </Text>
                           )}
                           {!!selectedChapterMeta.props?.length && (
                             <Text className="asset-panel-book-meta-props" size="xs" c="dimmed" lineClamp={2}>
-                              道具：{selectedChapterMeta.props.map((x) => x.name).join('、')}
+                              {$t('道具：{{items}}', { items: selectedChapterMeta.props.map((x) => x.name).join($('、')) })}
                             </Text>
                           )}
                           {!!selectedChapterMeta.scenes?.length && (
                             <Text className="asset-panel-book-meta-scenes" size="xs" c="dimmed" lineClamp={2}>
-                              场景：{selectedChapterMeta.scenes.map((x) => x.name).join('、')}
+                              {$t('场景：{{items}}', { items: selectedChapterMeta.scenes.map((x) => x.name).join($('、')) })}
                             </Text>
                           )}
                         </Stack>
@@ -3919,14 +3921,14 @@ export default function AssetPanel(): JSX.Element | null {
                           <Group className="asset-panel-loading-group" gap="xs">
                             <Loader className="asset-panel-loading-icon" size="sm" />
                             <Text className="asset-panel-loading-text" size="xs" c="dimmed">
-                              加载中…
+                              {$('加载中…')}
                             </Text>
                           </Group>
                         </Center>
                       ) : materialCategory === 'roleCards' ? (
                         filteredRoleCardAssets.length === 0 ? (
                           <Text className="asset-panel-empty" size="xs" c="dimmed">
-                            暂无角色卡素材
+                            {$('暂无角色卡素材')}
                           </Text>
                         ) : (
                           <SimpleGrid className="asset-panel-grid asset-panel-role-card-grid" cols={{ base: 1, sm: 2, xl: 3 }} spacing="sm">
@@ -3942,7 +3944,7 @@ export default function AssetPanel(): JSX.Element | null {
                       ) : materialCategory === 'docs' ? (
                         filteredProjectMaterialAssets.length === 0 ? (
                           <Text className="asset-panel-empty" size="xs" c="dimmed">
-                            暂无文档素材
+                            {$('暂无文档素材')}
                           </Text>
                         ) : (
                           <SimpleGrid className="asset-panel-grid" cols={{ base: 1, sm: 2 }} spacing="sm">
@@ -3957,7 +3959,7 @@ export default function AssetPanel(): JSX.Element | null {
                         )
                       ) : (filteredRoleCardAssets.length + filteredProjectMaterialAssets.length) === 0 ? (
                         <Text className="asset-panel-empty" size="xs" c="dimmed">
-                          暂无项目素材
+                          {$('暂无项目素材')}
                         </Text>
                       ) : (
                         <SimpleGrid className="asset-panel-grid asset-panel-role-card-grid" cols={{ base: 1, sm: 2, xl: 3 }} spacing="sm">
@@ -3984,7 +3986,7 @@ export default function AssetPanel(): JSX.Element | null {
                     <Stack className="asset-panel-section" gap="sm">
                       <Group className="asset-panel-section-header" justify="space-between" align="center" wrap="wrap" gap="xs">
                         <Text className="asset-panel-section-desc" size="sm" c="dimmed">
-                          已自动保存的生成结果（默认显示视频，可切换图片）
+                          {$('已自动保存的生成结果（默认显示视频，可切换图片）')}
                         </Text>
                         <Group className="asset-panel-generated-toolbar" gap="xs" wrap="wrap" justify="flex-end">
                           <TextInput
@@ -3992,7 +3994,7 @@ export default function AssetPanel(): JSX.Element | null {
                             size="sm"
                             radius="md"
                             leftSection={<IconSearch size={14} />}
-                            placeholder="搜索：名称 / vendor / model / url"
+                            placeholder={$('搜索：名称 / vendor / model / url')}
                             value={assetQuery}
                             onChange={(e) => setAssetQuery(e.currentTarget.value)}
                           />
@@ -4002,9 +4004,9 @@ export default function AssetPanel(): JSX.Element | null {
                             radius="md"
                             leftSection={<IconSortDescending size={14} />}
                             data={[
-                              { value: 'updated_desc', label: '按更新时间（新->旧）' },
-                              { value: 'created_desc', label: '按创建时间（新->旧）' },
-                              { value: 'name_asc', label: '按名称（A->Z）' },
+                              { value: 'updated_desc', label: $('按更新时间（新->旧）') },
+                              { value: 'created_desc', label: $('按创建时间（新->旧）') },
+                              { value: 'name_asc', label: $('按名称（A->Z）') },
                             ]}
                             value={assetSort}
                             onChange={(v) => setAssetSort((v as any) || 'updated_desc')}
@@ -4019,9 +4021,9 @@ export default function AssetPanel(): JSX.Element | null {
                             value={mediaFilter}
                             onChange={(v) => setMediaFilter(v as any)}
                             data={[
-                              { value: 'video', label: '视频' },
-                              { value: 'image', label: '图片' },
-                              { value: 'all', label: '全部' },
+                              { value: 'video', label: $('视频') },
+                              { value: 'image', label: $('图片') },
+                              { value: 'all', label: $('全部') },
                             ]}
                           />
                         </Group>
@@ -4031,13 +4033,13 @@ export default function AssetPanel(): JSX.Element | null {
                           <Group className="asset-panel-loading-group" gap="xs">
                             <Loader className="asset-panel-loading-icon" size="sm" />
                             <Text className="asset-panel-loading-text" size="xs" c="dimmed">
-                              加载中…
+                              {$('加载中…')}
                             </Text>
                           </Group>
                         </Center>
                       ) : filteredGenerationAssets.length === 0 ? (
                         <Text className="asset-panel-empty" size="xs" c="dimmed">
-                          暂无生成内容
+                          {$('暂无生成内容')}
                         </Text>
                       ) : (
                         <SimpleGrid className="asset-panel-grid" cols={{ base: 1, sm: 2 }} spacing="sm">
@@ -4057,20 +4059,20 @@ export default function AssetPanel(): JSX.Element | null {
                   <Tabs.Panel className="asset-panel-tab-panel" value="workflow" pt="xs">
                     <Stack className="asset-panel-section" gap="sm">
                       <Text className="asset-panel-section-desc" size="sm" c="dimmed">
-                        个人工作流资产（跨项目可复用）
+                        {$('个人工作流资产（跨项目可复用）')}
                       </Text>
                       {workflowLibraryLoading ? (
                         <Center className="asset-panel-loading" py="md">
                           <Group className="asset-panel-loading-group" gap="xs">
                             <Loader className="asset-panel-loading-icon" size="sm" />
                             <Text className="asset-panel-loading-text" size="xs" c="dimmed">
-                              加载中…
+                              {$('加载中…')}
                             </Text>
                           </Group>
                         </Center>
                       ) : workflowAssets.length === 0 ? (
                         <Text className="asset-panel-empty" size="xs" c="dimmed">
-                          暂无工作流片段
+                          {$('暂无工作流片段')}
                         </Text>
                       ) : (
                         <SimpleGrid className="asset-panel-grid" cols={{ base: 1, sm: 2 }} spacing="sm">
@@ -4096,7 +4098,7 @@ export default function AssetPanel(): JSX.Element | null {
         className="asset-panel-book-graph-3d-modal"
         opened={graph3DOpened}
         onClose={() => setGraph3DOpened(false)}
-        title={`角色关系网 3D 预览${typeof graphPreviewChapterNo === 'number' ? ` · 第${graphPreviewChapterNo}章` : ''}`}
+        title={$t('角色关系网 3D 预览{{chapter}}', { chapter: typeof graphPreviewChapterNo === 'number' ? $t(' · 第{{chapter}}章', { chapter: graphPreviewChapterNo }) : '' })}
         size="xl"
         centered
       >

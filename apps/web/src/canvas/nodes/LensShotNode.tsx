@@ -56,6 +56,7 @@ import {
   resolveModelDurationRange,
   resolveModelResolutionOptions,
 } from '../utils/lensShotModelParams'
+import { $, $t } from '../i18n'
 
 /** 上游参考卡片底部名称最多显示的字数，超出部分直接截断并补一个「.」 */
 const REF_NAME_MAX_CHARS = 5
@@ -103,11 +104,11 @@ export interface LensShotRef {
  * @returns 角标中文文案
  */
 export function refBadgeLabel(ref: { category: number; parentId?: string }): string {
-  if (ref.category === 1) return ref.parentId ? '子角色' : '角色'
-  if (ref.category === 2) return ref.parentId ? '子场景' : '场景'
-  if (ref.category === 3) return '道具'
-  if (ref.category === 4) return '站位参考'
-  return '引用'
+  if (ref.category === 1) return ref.parentId ? $('子角色') : $('角色')
+  if (ref.category === 2) return ref.parentId ? $('子场景') : $('场景')
+  if (ref.category === 3) return $('道具')
+  if (ref.category === 4) return $('站位参考')
+  return $('引用')
 }
 
 /** 分镜节点数据 */
@@ -152,12 +153,12 @@ function formatSeconds(sec: number): string {
   const s = Math.max(0, Math.round(sec))
   if (s < 60) return `${s}s`
   const m = Math.floor(s / 60)
-  return `${m}分${s % 60}s`
+  return $t('{{v1}}分{{v2}}s', { v1: m, v2: s % 60 })
 }
 
 /** 引用类别顺序：场景、道具、角色、站位 */
 const REF_ORDER: Record<number, number> = { 2: 0, 3: 1, 1: 2, 4: 3 }
-const REF_LABEL: Record<number, string> = { 1: '角色', 2: '场景', 3: '道具', 4: '站位参考' }
+const REF_LABEL: Record<number, string> = { 1: $('角色'), 2: $('场景'), 3: $('道具'), 4: $('站位参考') }
 
 /** OSS 缩略图：小图展示追加 x-oss-process 缩放参数（与 lens 前端口径一致，避免拉原图） */
 function ossThumb(url: string | undefined, width = 100): string {
@@ -179,22 +180,22 @@ function StatusDot({ data }: { data: LensShotNodeData }): JSX.Element {
 
   if (generating) {
     return (
-      <span className="lens-shot-status-dot lens-shot-status-dot--generating" title="生成中" />
+      <span className="lens-shot-status-dot lens-shot-status-dot--generating" title={$("生成中")} />
     )
   }
   if (failed) {
-    return <span className="lens-shot-status-dot lens-shot-status-dot--failed" title="失败" />
+    return <span className="lens-shot-status-dot lens-shot-status-dot--failed" title={$("失败")} />
   }
   if (success) {
     return (
-      <span className="lens-shot-status-dot lens-shot-status-dot--success" title="成功">
+      <span className="lens-shot-status-dot lens-shot-status-dot--success" title={$("成功")}>
         {analyzeState === ANALYZE_STATE_PROCESSING && <i className="lens-shot-status-ring lens-shot-status-ring--analyze" />}
         {lineArtStatus === LINE_ART_STATUS_PROCESSING && <i className="lens-shot-status-ring lens-shot-status-ring--lineart" />}
         {(analyzeState === ANALYZE_STATE_FAILED || lineArtStatus === LINE_ART_STATUS_FAILED) && <i className="lens-shot-status-ring lens-shot-status-ring--failed" />}
       </span>
     )
   }
-  return <span className="lens-shot-status-dot lens-shot-status-dot--idle" title="未生成" />
+  return <span className="lens-shot-status-dot lens-shot-status-dot--idle" title={$("未生成")} />
 }
 
 /**
@@ -296,14 +297,14 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, ref: LensShotRef)
   const store = useRFStore.getState()
   const dramaId = String(data.sourceProjectId || '')
   const shotId = String(data.entityId || '')
-  if (!shotId) return '缺少分镜身份，无法设置说话者'
+  if (!shotId) return $('缺少分镜身份，无法设置说话者')
 
   // 说话者身份统一用完整名（含子造型），与分镜板、后端音色匹配口径一致
   const roleName = String(ref.name || '').trim()
-  if (!roleName) return '角色名称缺失，无法设置说话者'
+  if (!roleName) return $('角色名称缺失，无法设置说话者')
   const wasSpeaker = String(data.speakerName || '').split(',').map((s) => s.trim()).includes(roleName)
   const next = getNextSpeakerList(data.speakerName, roleName)
-  if (!next) return `最多只允许${DEFAULT_MAX_SPEAKERS}个不同说话者`
+  if (!next) return $t('最多只允许{{v1}}个不同说话者', { v1: DEFAULT_MAX_SPEAKERS })
   const nextSpeakerName = next.join(',')
 
   // 更新节点显示（乐观更新）
@@ -315,7 +316,7 @@ function toggleSpeaker(nodeId: string, data: LensShotNodeData, ref: LensShotRef)
   } else {
     clearStoryboardSpeaker(shotId, dramaId).catch(() => undefined)
   }
-  return wasSpeaker ? `已取消说话者：${roleName}` : `已设为说话者：${roleName}`
+  return wasSpeaker ? $t('已取消说话者：{{v1}}', { v1: roleName }) : $t('已设为说话者：{{v1}}', { v1: roleName })
 }
 
 /**
@@ -401,7 +402,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       blockedSourceNodeIds: store.edges.filter((edge) => edge.target === id).map((edge) => edge.source),
       onSelect: async (sourceId) => {
         const source = useRFStore.getState().nodes.find((node) => node.id === sourceId)
-        if (!source) throw new Error('参考节点已不存在')
+        if (!source) throw new Error($('参考节点已不存在'))
         await connectShotReferences(id, [referenceFromNode(source)], sourceId)
       },
     })
@@ -561,7 +562,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     if (!video || !video.paused) return
     void video.play().catch((error: unknown) => {
       setIsPlaying(!video.paused)
-      setSaveState(`视频播放失败：${error instanceof Error ? error.message : String(error)}`)
+      setSaveState($t('视频播放失败：{{v1}}', { v1: error instanceof Error ? error.message : String(error) }))
     })
   }, [])
 
@@ -614,7 +615,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       category: ReferenceCategory.Staging,
       // 带 edgeId，删除时可直接定位连线
       id: 'upstream:' + item.edgeId,
-      name: item.label || '站位参考图',
+      name: item.label || $('站位参考图'),
       imgUrl: item.previewUrl,
     }))
     return [...refs, ...upstreamAsRefs]
@@ -646,15 +647,15 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     const storyboardId = String(data.entityId ?? '')
     const dramaId = String(data.sourceProjectId ?? '')
     if (!storyboardId || !dramaId) {
-      setSaveState('缺少分镜身份，无法保存')
+      setSaveState($('缺少分镜身份，无法保存'))
       return
     }
     try {
       await editStoryboard({ id: storyboardId, dramaId, ...patch })
-      setSaveState('分镜已保存')
+      setSaveState($('分镜已保存'))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '未知错误'
-      setSaveState('保存失败：' + msg)
+      const msg = err instanceof Error ? err.message : $('未知错误')
+      setSaveState($('保存失败：') + msg)
     }
   }, [id, data.entityId, data.sourceProjectId, promptDraft, scriptDraft, timeDraft, durationValue, minDuration, maxDuration])
 
@@ -674,7 +675,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     const ownScript = String(scriptDraft || data.scriptContent || '').trim()
     const contextText = upstreamContext.combinedText.trim() || ownScript
     if (!contextText) {
-      toast('请先填写分镜剧本或连接上游文本节点，再智能生成分镜提示词', 'warning')
+      toast($('请先填写分镜剧本或连接上游文本节点，再智能生成分镜提示词'), 'warning')
       return
     }
 
@@ -715,7 +716,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       const apiKey = (ui.publicApiKey || '').trim()
       const token = getAuthToken()
       if (!apiKey && !token) {
-        toast('请先登录后再试', 'error')
+        toast($('请先登录后再试'), 'error')
         return
       }
       // 精修模型沿用节点当前选择的模型（lens 模型 value 即应用ID，接口接受该标识）
@@ -734,16 +735,16 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         },
       })
       const nextPrompt = extractTextFromTaskResult(taskRes.result).trim()
-      if (!nextPrompt) throw new Error('模型未返回视频提示词')
+      if (!nextPrompt) throw new Error($('模型未返回视频提示词'))
       if (nextPrompt.indexOf('ERROR') === 0 || nextPrompt.indexOf('ERROR:') === 0) {
-        throw new Error(nextPrompt.replace(/^ERROR\s*:\s*/i, '').trim() || '上游文本不足，无法生成视频提示词')
+        throw new Error(nextPrompt.replace(/^ERROR\s*:\s*/i, '').trim() || $('上游文本不足，无法生成视频提示词'))
       }
       setPromptDraft(nextPrompt)
       // 写回 node data.prompt（与 lens 分镜 prompt 同口径，生成时直接下发）
       useRFStore.getState().updateNodeData(id, { prompt: nextPrompt })
-      toast('已根据上下文生成分镜提示词', 'success')
+      toast($('已根据上下文生成分镜提示词'), 'success')
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : '生成视频提示词失败'
+      const message = error instanceof Error && error.message ? error.message : $('生成视频提示词失败')
       toast(message, 'error')
     } finally {
       setSmartPromptLoading(false)
@@ -781,7 +782,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     const newVal = ref.hasHuman ? 0 : 1
     const imageId = Number(ref.id)
     if (!Number.isFinite(imageId) || imageId <= 0) {
-      setSaveState('标记失败：资产图片ID无效')
+      setSaveState($('标记失败：资产图片ID无效'))
       return
     }
 
@@ -796,10 +797,10 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       )
       useRFStore.getState().updateNodeData(id, { refs: updatedRefs })
 
-      setSaveState(newVal ? '已标记为有真人' : '已标记为无人')
+      setSaveState(newVal ? $('已标记为有真人') : $('已标记为无人'))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setSaveState('标记失败：' + msg)
+      setSaveState($('标记失败：') + msg)
     }
   }, [data.refs, id])
 
@@ -809,12 +810,12 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     const dramaId = String(data.sourceProjectId ?? '')
     if (!storyboardId || !dramaId) return
     if (!modelValue) {
-      setSaveState('请先选择生视频模型')
+      setSaveState($('请先选择生视频模型'))
       return
     }
     // 检查模型列表是否加载完成
     if (models.length === 0) {
-      setSaveState('模型列表加载中，请稍后重试')
+      setSaveState($('模型列表加载中，请稍后重试'))
       return
     }
     // 时长：按秒/按时长计费模型的必填参数，缺失时后端 /api/storyboardTask/submit
@@ -822,17 +823,17 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     // 取节点上显式选择的时长（默认回填分镜自身时长），并夹到所选模型的 min~max 区间内。
     const duration = clampDuration(durationValue, minDuration, maxDuration)
     if (duration === null) {
-      setSaveState('请先选择生成时长')
+      setSaveState($('请先选择生成时长'))
       return
     }
-    setSaveState('任务提交中…')
+    setSaveState($('任务提交中…'))
     // 获取所选模型的 channel（后端 StoryboardTaskController.submit 必填参数）
     const selectedModelChannel = selectedModel?.channel || ''
     if (!selectedModelChannel) {
       // 调试信息：列出所有模型的 value 和 channel，便于排查
       const modelDebug = models.map((m) => ({ value: m.value, label: m.label, channel: m.channel }))
       console.warn('[LensShotNode] channel 缺失调试:', { modelValue, models: modelDebug })
-      setSaveState(`提交失败：模型 ${modelValue} 缺少 channel 配置`)
+      setSaveState($t('提交失败：模型 {{v1}} 缺少 channel 配置', { v1: modelValue }))
       return
     }
     try {
@@ -887,10 +888,10 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         duration,
         refImages: JSON.stringify(refImagesArray),
       })
-      setSaveState('已提交生视频任务')
+      setSaveState($('已提交生视频任务'))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '未知错误'
-      setSaveState('提交失败：' + msg)
+      const msg = err instanceof Error ? err.message : $('未知错误')
+      setSaveState($('提交失败：') + msg)
     }
   }, [data.entityId, data.sourceProjectId, data.episodeNum, effectivePrompt, modelValue, selectedModel, refs, upstreamExtraRefs, aspectValue, resolutionValue, durationValue, minDuration, maxDuration])
 
@@ -903,7 +904,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   const handleClip = useCallback(() => {
     const src = String(data.selectedImageUrl || '').trim()
     if (!src) {
-      toast('当前分镜没有可剪辑的视频', 'error')
+      toast($('当前分镜没有可剪辑的视频'), 'error')
       return
     }
     const baseTitle = '分镜' + String(data.storyboardOrder ?? '-')
@@ -922,7 +923,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             type: 'taskNode' as const,
             position: { x: Number(basePosition.x) + 520, y: Number(basePosition.y) },
             data: {
-              label: baseTitle + '-剪辑',
+              label: baseTitle + $('-剪辑'),
               kind: 'video',
               videoUrl: result.url,
               videoResults: [{ url: result.url, thumbnailUrl: result.thumbnailUrl || null, title: baseTitle }],
@@ -936,10 +937,10 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         }))
         const created = useRFStore.getState().nodes.some((node) => node.id === newNodeId)
         if (!created) {
-          toast('剪辑已上传，但未能创建新视频节点', 'error')
+          toast($('剪辑已上传，但未能创建新视频节点'), 'error')
           return
         }
-        toast('剪辑结果已生成新视频节点', 'success')
+        toast($('剪辑结果已生成新视频节点'), 'success')
       },
     })
   }, [data.selectedImageUrl, data.storyboardOrder, id])
@@ -955,7 +956,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
    */
   const handleViewHistory = useCallback(() => {
     if (!onOpenTaskResult) {
-      toast('当前画布未提供任务结果入口', 'error')
+      toast($('当前画布未提供任务结果入口'), 'error')
       return
     }
     onOpenTaskResult(id)
@@ -1010,7 +1011,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       {/* 顶部栏：分镜号 + 时长（紧跟序号左侧）+ 状态圆点（时长取分镜 time 字段或视频实际时长） */}
       <div className="lens-shot-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 44, padding: '0 12px', borderBottom: '1px solid rgba(127,127,127,0.18)', fontSize: 30, fontWeight: 600, lineHeight: 1 }}>
         <span className="lens-shot-order" style={{ display: 'inline-flex', alignItems: 'baseline' }}>
-          分镜{data.storyboardOrder ?? '-'}
+          {$('分镜')}{data.storyboardOrder ?? '-'}
           {mediaSeconds != null && (
             <span className="lens-shot-duration" style={{ fontWeight: 600, marginLeft: 14, fontSize: 22, color: '#8ab4ff', background: 'rgba(91,141,239,0.16)', padding: '1px 9px', borderRadius: 999, lineHeight: 1.2 }}>
               {formatSeconds(mediaSeconds)}
@@ -1020,12 +1021,12 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {/* 任务结果入口：只读查看该分镜的历史生视频任务（懒加载，点开才查） */}
           {onOpenTaskResult && (
-            <Tooltip label="任务结果" position="top" withArrow>
+            <Tooltip label={$("任务结果")} position="top" withArrow>
               <ActionIcon
                 className="lens-shot-task-result-btn"
                 variant="subtle"
                 size="sm"
-                aria-label="任务结果"
+                aria-label={$("任务结果")}
                 onClick={(e) => {
                   e.stopPropagation()
                   onOpenTaskResult(id)
@@ -1062,7 +1063,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             >
               <Group className="video-content-header" justify="space-between" gap={4}>
                 <Text className="video-content-header-text" size="xs" c="dimmed">
-                  共 1 个视频（主视频：第 1 个）
+                  {$('共 1 个视频（主视频：第 1 个）')}
                 </Text>
                 <Group className="video-content-header-actions" gap={2}>
                   {/* 剪辑：复用视频节点的 WebCut 剪辑入口，结果落到新的画布视频节点 */}
@@ -1073,7 +1074,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     onClick={handleClip}
                     leftSection={<IconScissors className="video-content-clip-icon" size={12} />}
                   >
-                    剪辑
+                    {$('剪辑')}
                   </Button>
                   {/* 查看历史：打开该分镜的历史生视频任务（与视频节点「查看历史」等价） */}
                   <Button
@@ -1083,7 +1084,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     onClick={handleViewHistory}
                     leftSection={<IconClock className="video-content-history-icon" size={12} />}
                   >
-                    查看历史
+                    {$('查看历史')}
                   </Button>
                 </Group>
               </Group>
@@ -1130,7 +1131,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                   style={{ position: 'absolute', left: 6, right: 6, bottom: 6, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 8, background: 'rgba(10,14,20,0.66)', backdropFilter: 'blur(8px)', zIndex: 2 }}
                   onDoubleClick={(evt) => { evt.stopPropagation(); zoomToSelf(evt) }}
                 >
-                  <Tooltip label={isPlaying ? '暂停' : '播放'} position="top" withArrow>
+                  <Tooltip label={isPlaying ? $('暂停') : $('播放')} position="top" withArrow>
                     <span
                       className="lens-shot-video-toggle"
                       onClick={(evt) => { evt.stopPropagation(); togglePlay() }}
@@ -1165,7 +1166,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             <img
               className="lens-shot-media"
               src={data.selectedImageUrl}
-              alt="分镜图"
+              alt={$("分镜图")}
               style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6, display: 'block' }}
               onLoad={(e) => {
                 const img = e.currentTarget
@@ -1177,7 +1178,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
           )
         ) : (
           <div className="lens-shot-script" style={{ fontSize: 24, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', height: '100%', overflow: 'auto' }}>
-            {data.scriptContent || '（暂无脚本）'}
+            {data.scriptContent || $('（暂无脚本）')}
           </div>
         )}
       </div>
@@ -1202,7 +1203,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                   <span
                     className={['lens-shot-speaker', isSpeakerRef ? 'is-speaker' : ''].filter(Boolean).join(' ')}
                     onClick={(e) => { e.stopPropagation(); toggleSpeaker(id, data, ref) }}
-                    title={isSpeakerRef ? '取消说话者' : '设为说话者'}
+                    title={isSpeakerRef ? $('取消说话者') : $('设为说话者')}
                     style={{
                       position: 'absolute', right: -4, top: -4, width: 14, height: 14, borderRadius: '50%',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -1252,8 +1253,8 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
             <div className="tc-task-node__toolbar-content tc-task-node__toolbar-content--media">
               {/* 弹窗标题行：左侧「上游参考」，中间「分镜#N」真正居中（三列 grid：1fr auto 1fr） */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', marginBottom: 10 }}>
-                <Text size="xs" fw={600} c="dimmed" style={{ letterSpacing: 0.4, whiteSpace: 'nowrap' }}>上游参考</Text>
-                <Text size="md" fw={700} style={{ textAlign: 'center', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>分镜#{data.storyboardOrder ?? '-'}</Text>
+                <Text size="xs" fw={600} c="dimmed" style={{ letterSpacing: 0.4, whiteSpace: 'nowrap' }}>{$('上游参考')}</Text>
+                <Text size="md" fw={700} style={{ textAlign: 'center', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>{$('分镜#')}{data.storyboardOrder ?? '-'}</Text>
                 {/* 与标题同一行，固定在编辑工具栏右上角。 */}
                 <Group className="lens-shot-task-toolbar-actions" justify="flex-end" wrap="nowrap">
                   {onOpenTaskResult && (
@@ -1263,7 +1264,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       leftSection={<IconListSearch className="lens-shot-task-results-icon" size={14} />}
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => { event.stopPropagation(); onOpenTaskResult(id) }}
-                    >任务结果</Button>
+                    >{$('任务结果')}</Button>
                   )}
                 </Group>
               </div>
@@ -1304,7 +1305,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                           textOverflow: 'ellipsis',
                         }}
                       >
-                        {variantName || (ref.category === 4 ? '站位参考' : '\u00A0')}
+                        {variantName || (ref.category === 4 ? $('站位参考') : '\u00A0')}
                       </Text>
                       {/*
                        * 参考图卡片：单击打开站内大图预览（用原图，与任务结果参考图一致）。
@@ -1313,7 +1314,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       <span
                         className="lens-shot-toolbar-reference"
                         role={ref.imgUrl ? 'button' : undefined}
-                        aria-label={ref.imgUrl ? '预览参考图 ' + ref.name : undefined}
+                        aria-label={ref.imgUrl ? $('预览参考图 ') + ref.name : undefined}
                         style={{ position: 'relative', display: 'inline-flex', cursor: ref.imgUrl ? 'zoom-in' : 'default', flexDirection: 'column' }}
                         onClick={(event) => {
                           if (!ref.imgUrl) return
@@ -1348,13 +1349,13 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                               event.stopPropagation()
                               void toggleHasHuman(ref)
                             }}
-                            title={ref.hasHuman ? '点击标记为无人' : '点击标记为真人'}
+                            title={ref.hasHuman ? $('点击标记为无人') : $('点击标记为真人')}
                           >
                             <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
                               <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                             </svg>
                             {/* 角标文案精简为「真人」/「无人」，避免小尺寸下折行遮挡图片 */}
-                            <span>{ref.hasHuman ? '真人' : '无人'}</span>
+                            <span>{ref.hasHuman ? $('真人') : $('无人')}</span>
                           </span>
                         )}
                         
@@ -1372,8 +1373,8 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                           <span
                             className="nodrag nopan"
                             role="button"
-                            aria-label={isSpeakerRef ? '取消说话者' : '设为说话者'}
-                            title={isSpeakerRef ? '取消说话者' : '设为说话者'}
+                            aria-label={isSpeakerRef ? $('取消说话者') : $('设为说话者')}
+                            title={isSpeakerRef ? $('取消说话者') : $('设为说话者')}
                             style={{
                               position: 'absolute',
                               left: 2,
@@ -1410,7 +1411,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                         <ActionIcon
                           className="lens-shot-toolbar-reference-remove nodrag nopan"
                           size={18} variant="filled" color="dark"
-                          aria-label={'删除 ' + ref.name + ' 引用及连线'}
+                          aria-label={$('删除 ') + ref.name + $(' 引用及连线')}
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -1422,7 +1423,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                             }
                             void disconnectShotReference(id, ref).catch((error: unknown) => {
                               const msg = error instanceof Error ? error.message : String(error)
-                              setSaveState('删除参考失败：' + msg)
+                              setSaveState($('删除参考失败：') + msg)
                             })
                           }}
                           /* 容器已取消 overflow 裁剪，按钮可轻微出界并浮在图片上层（zIndex 3） */
@@ -1437,7 +1438,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     </div>
                   )
                 }) : (
-                  <Text size="xs" c="dimmed">暂无引用资产</Text>
+                  <Text size="xs" c="dimmed">{$('暂无引用资产')}</Text>
                 )}
                 {/*
                  * 添加参考按钮：复用生图节点上游参考的「+」样式（tc-task-node__upstream-reference-add：虚线框 + IconPlus 居中），
@@ -1450,7 +1451,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       <button
                         type="button"
                         className="tc-task-node__upstream-reference-add lens-shot-reference-add nodrag nopan"
-                        aria-label="添加参考"
+                        aria-label={$("添加参考")}
                         // 生图节点该样式只按暗色设计（浅色图标），亮色下改用深色图标，避免看不清
                         style={{ width: REF_CARD_SIZE, height: REF_CARD_SIZE, borderRadius: 8, ...(isDark ? null : { color: '#4e5969', background: 'rgba(148,163,184,0.12)' }) }}
                       >
@@ -1458,8 +1459,8 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       </button>
                     </Menu.Target>
                     <Menu.Dropdown className="lens-shot-reference-menu nodrag nopan">
-                      <Menu.Item className="lens-shot-reference-menu__canvas" onClick={openCanvasPicker}>从画布选择参考</Menu.Item>
-                      <Menu.Item className="lens-shot-reference-menu__library" onClick={() => { useUIStore.getState().closeCanvasReferencePicker(); setAssetPickerOpened(true) }}>从资产库选择参考</Menu.Item>
+                      <Menu.Item className="lens-shot-reference-menu__canvas" onClick={openCanvasPicker}>{$('从画布选择参考')}</Menu.Item>
+                      <Menu.Item className="lens-shot-reference-menu__library" onClick={() => { useUIStore.getState().closeCanvasReferencePicker(); setAssetPickerOpened(true) }}>{$('从资产库选择参考')}</Menu.Item>
                     </Menu.Dropdown>
                   </Menu>
                   <Text size="xs" style={{ lineHeight: 1.2 }}>{'\u00A0'}</Text>
@@ -1468,7 +1469,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
               {/* 编辑区：时长 + 分镜提示词/剧本 切换 + 智能提示词 + 保存；提示词为分镜生视频提示词 data.prompt */}
               <Group justify="space-between" align="center" mb={6} style={{ marginTop: 10 }}>
                 <Group gap={8} align="center" wrap="nowrap">
-                  <Text size="sm" fw={600}>{promptMode === 'prompt' ? '分镜提示词' : '分镜剧本'}</Text>
+                  <Text size="sm" fw={600}>{promptMode === 'prompt' ? $('分镜提示词') : $('分镜剧本')}</Text>
                   {/* 时长：选项范围随所选模型配置（minDuration~maxDuration），与分镜板分镜任务面板一致 */}
                   <Select
                     size="xs"
@@ -1485,31 +1486,31 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       const dramaId = String(data.sourceProjectId ?? '')
                       if (durationNext !== null && storyboardId && dramaId) {
                         void editStoryboard({ id: storyboardId, dramaId, time: durationNext }).catch((err: unknown) => {
-                          const msg = err instanceof Error ? err.message : '未知错误'
-                          setSaveState('时长同步失败：' + msg)
+                          const msg = err instanceof Error ? err.message : $('未知错误')
+                          setSaveState($('时长同步失败：') + msg)
                         })
                       }
                     }}
-                    placeholder="时长"
-                    aria-label="生成时长"
+                    placeholder={$("时长")}
+                    aria-label={$("生成时长")}
                   />
                 </Group>
                 <Group className="lens-shot-prompt-header-actions" gap={8} align="center" justify="flex-end" wrap="nowrap">
                   {/* 智能提示词：迁移自视频节点底部的智能提示词；当前依赖 TapCanvas 原生接口，暂不开放 */}
-                  <Tooltip label="智能提示词（待开放）" position="top" withArrow>
+                  <Tooltip label={$("智能提示词（待开放）")} position="top" withArrow>
                     <ActionIcon
                       className="lens-shot-smart-prompt nodrag nopan"
                       variant="light"
                       color="blue"
                       size="md"
-                      aria-label="智能提示词"
+                      aria-label={$("智能提示词")}
                       loading={smartPromptLoading}
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation()
                         // 暂不开放：走 TapCanvas 原生接口（API_BASE），lens 部署下不可用
                         if (!SMART_PROMPT_AVAILABLE) {
-                          toast('待开放', 'warning')
+                          toast($('待开放'), 'warning')
                           return
                         }
                         void handleSmartGeneratePrompt()
@@ -1518,11 +1519,11 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                       <IconBrain size={16} />
                     </ActionIcon>
                   </Tooltip>
-                  <Button className="lens-shot-save-storyboard" size="xs" variant="outline" onClick={() => void handleSave()}>保存分镜</Button>
+                  <Button className="lens-shot-save-storyboard" size="xs" variant="outline" onClick={() => void handleSave()}>{$('保存分镜')}</Button>
                   <Switch
                     className="lens-shot-prompt-mode-switch"
                     size="xs"
-                    label="提示词"
+                    label={$("提示词")}
                     checked={promptMode === 'prompt'}
                     onChange={(e) => setPromptMode(e.currentTarget.checked ? 'prompt' : 'script')}
                   />
@@ -1539,7 +1540,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                   if (promptMode === 'prompt') setPromptDraft(next)
                   else setScriptDraft(next)
                 }}
-                placeholder={promptMode === 'prompt' ? '分镜提示词（生视频用，可为 JSON）' : '分镜剧本（含动作与对白）'}
+                placeholder={promptMode === 'prompt' ? $('分镜提示词（生视频用，可为 JSON）') : $('分镜剧本（含动作与对白）')}
                 mb={12}
               />
 
@@ -1554,7 +1555,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     data={models.map((m) => ({ value: m.value, label: m.label, disabled: m.disabled }))}
                     value={modelValue}
                     onChange={(v) => setModelValue(v)}
-                    placeholder={models.length ? '选择生视频模型' : '暂无可用模型'}
+                    placeholder={models.length ? $('选择生视频模型') : $('暂无可用模型')}
                   />
                   {/* 画幅：选项来自所选模型 others.supportedRatios，未配置时用通用兜底 */}
                   <Select
@@ -1563,7 +1564,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     data={aspectOptions.map((v) => ({ value: v, label: v }))}
                     value={aspectValue}
                     onChange={(v) => setAspectValue(v ?? aspectValue)}
-                    aria-label="画幅"
+                    aria-label={$("画幅")}
                   />
                   {/* 分辨率：选项来自所选模型 resolutions，未配置时用通用兜底 */}
                   <Select
@@ -1572,10 +1573,10 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     data={resolutionOptions.map((v) => ({ value: v, label: v }))}
                     value={resolutionValue}
                     onChange={(v) => setResolutionValue(v ?? resolutionValue)}
-                    aria-label="分辨率"
+                    aria-label={$("分辨率")}
                   />
-                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints === null ? '积分未配置' : String(consumePoints) + ' 积分'}</Text>
-                  <Button size="xs" variant="filled" onClick={() => void handleGenerate()}>生成</Button>
+                  <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', padding: '3px 9px', borderRadius: 999, background: 'rgba(127,127,127,0.12)' }}>{consumePoints === null ? $('积分未配置') : String(consumePoints) + $(' 积分')}</Text>
+                  <Button size="xs" variant="filled" onClick={() => void handleGenerate()}>{$('生成')}</Button>
                 </Group>
               </div>
               {saveState && <Text size="xs" c="dimmed" mt={8} style={{ textAlign: 'right' }}>{saveState}</Text>}

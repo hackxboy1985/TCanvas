@@ -8,6 +8,7 @@ import type {
   NanoComicStoryboardProductionItem,
 } from './types'
 import { getNanoComicEntityKey } from './types'
+import { $, $t } from '../../canvas/i18n'
 
 type NanoComicStoryboardRunSummary = {
   status: 'running' | 'success' | 'error'
@@ -31,11 +32,11 @@ function buildChunkCanvasPayload(chunk: NanoComicStoryboardChunkItem): NanoComic
     entityKey: getNanoComicEntityKey('asset', chunk.id),
     entityType: 'asset',
     entityId: chunk.id,
-    label: `分镜组 ${chunk.chunkIndex + 1} · 镜头 ${chunk.shotStart}-${chunk.shotEnd}`,
+    label: $t('分镜组 {{group}} · 镜头 {{start}}-{{end}}', { group: chunk.chunkIndex + 1, start: chunk.shotStart, end: chunk.shotEnd }),
     kind: 'imageEdit',
-    summary: `章节分镜产出，覆盖镜头 ${chunk.shotStart}-${chunk.shotEnd}，共 ${chunk.frameCount} 张静态帧。`,
+    summary: $t('章节分镜产出，覆盖镜头 {{shotStart}}-{{shotEnd}}，共 {{frameCount}} 张静态帧。', { shotStart: chunk.shotStart, shotEnd: chunk.shotEnd, frameCount: chunk.frameCount }),
     imageUrl: chunk.previewImageUrl,
-    statusLabel: '章节分镜产出',
+    statusLabel: $('章节分镜产出'),
   }
 }
 
@@ -57,17 +58,17 @@ export default function NanoComicStoryboardPipelinePanel({
         <Group className="nano-comic-storyboard-pipeline__header" justify="space-between" align="flex-start">
           <div className="nano-comic-storyboard-pipeline__title-wrap">
             <Text className="nano-comic-storyboard-pipeline__eyebrow" size="xs" fw={800}>
-              章节分镜流水线
+              { $('章节分镜流水线') }
             </Text>
             <Title className="nano-comic-storyboard-pipeline__title" order={4}>
-              这里直接产出 `storyboardPlans / storyboardChunks`
+              { $('这里直接产出 `storyboardPlans / storyboardChunks`') }
             </Title>
             <Text className="nano-comic-storyboard-pipeline__subtitle" size="sm" c="dimmed">
-              章节分镜改由 AI 对话驱动发起；工作台只展示进度、分组结果和入画布操作。
+              { $('章节分镜改由 AI 对话驱动发起；工作台只展示进度、分组结果和入画布操作。') }
             </Text>
             {production ? (
               <Text className="nano-comic-storyboard-pipeline__subtitle" size="xs" c="dimmed">
-                当前续写粒度：{production.groupSize} 镜 / 组
+                { $t('当前续写粒度：{{size}} 镜 / 组', { size: production.groupSize }) }
               </Text>
             ) : null}
           </div>
@@ -76,7 +77,7 @@ export default function NanoComicStoryboardPipelinePanel({
         <div className="nano-comic-storyboard-pipeline__metrics">
           <div className="nano-comic-storyboard-pipeline__metric">
             <Text className="nano-comic-storyboard-pipeline__metric-label" size="xs" c="dimmed">
-              计划镜头
+              { $('计划镜头') }
             </Text>
             <Text className="nano-comic-storyboard-pipeline__metric-value" size="lg" fw={800}>
               {production?.totalShots ?? 0}
@@ -84,7 +85,7 @@ export default function NanoComicStoryboardPipelinePanel({
           </div>
           <div className="nano-comic-storyboard-pipeline__metric">
             <Text className="nano-comic-storyboard-pipeline__metric-label" size="xs" c="dimmed">
-              已生成分组
+              { $('已生成分组') }
             </Text>
             <Text className="nano-comic-storyboard-pipeline__metric-value" size="lg" fw={800}>
               {production ? `${production.generatedChunks}/${production.totalChunks || 0}` : '0/0'}
@@ -92,7 +93,7 @@ export default function NanoComicStoryboardPipelinePanel({
           </div>
           <div className="nano-comic-storyboard-pipeline__metric">
             <Text className="nano-comic-storyboard-pipeline__metric-label" size="xs" c="dimmed">
-              下一续写范围
+              { $('下一续写范围') }
             </Text>
             <Text className="nano-comic-storyboard-pipeline__metric-value" size="lg" fw={800}>
               {production ? `${production.nextShotStart}-${production.nextShotEnd}` : '--'}
@@ -100,10 +101,10 @@ export default function NanoComicStoryboardPipelinePanel({
           </div>
           <div className="nano-comic-storyboard-pipeline__metric">
             <Text className="nano-comic-storyboard-pipeline__metric-label" size="xs" c="dimmed">
-              连续性尾帧
+              { $('连续性尾帧') }
             </Text>
             <Text className="nano-comic-storyboard-pipeline__metric-value" size="lg" fw={800}>
-              {production?.latestTailFrameUrl ? '已记录' : '缺失'}
+              {production?.latestTailFrameUrl ? $('已记录') : $('缺失')}
             </Text>
           </div>
         </div>
@@ -113,7 +114,7 @@ export default function NanoComicStoryboardPipelinePanel({
             <Stack className="nano-comic-storyboard-pipeline__runtime-stack" gap={6}>
               <Group className="nano-comic-storyboard-pipeline__runtime-top" justify="space-between" align="center">
                 <Text className="nano-comic-storyboard-pipeline__runtime-title" size="xs" fw={800}>
-                  当前执行状态
+                  { $('当前执行状态') }
                 </Text>
                 <Badge
                   className={`nano-comic-storyboard-pipeline__runtime-badge nano-comic-storyboard-pipeline__runtime-badge--${storyboardRunSummary.status}`}
@@ -121,10 +122,10 @@ export default function NanoComicStoryboardPipelinePanel({
                   variant="light"
                 >
                   {storyboardRunSummary.status === 'running'
-                    ? '执行中'
+                    ? $('执行中')
                     : storyboardRunSummary.status === 'success'
-                      ? '已完成'
-                      : '失败'}
+                      ? $('已完成')
+                      : $('失败')}
                 </Badge>
               </Group>
               <Text className="nano-comic-storyboard-pipeline__runtime-text" size="sm">
@@ -142,7 +143,7 @@ export default function NanoComicStoryboardPipelinePanel({
                   disabled={!storyboardRunSummary.canLocateGroup}
                   onClick={onLocateLatestStoryboardGroup}
                 >
-                  定位最新产出
+                  { $('定位最新产出') }
                 </Button>
               </Group>
             </Stack>
@@ -152,10 +153,10 @@ export default function NanoComicStoryboardPipelinePanel({
         <Stack className="nano-comic-storyboard-pipeline__output-list" gap="sm">
           <Group className="nano-comic-storyboard-pipeline__output-head" justify="space-between" align="center">
             <Text className="nano-comic-storyboard-pipeline__output-title" size="xs" fw={800}>
-              已产出分镜组
+              { $('已产出分镜组') }
             </Text>
             <Badge className="nano-comic-storyboard-pipeline__output-badge" variant="light" radius="sm">
-              {chunks.length} 组
+              { $t('{{count}} 组', { count: chunks.length }) }
             </Badge>
           </Group>
           {chunks.length > 0 ? chunks.slice().reverse().map((chunk) => {
@@ -168,13 +169,13 @@ export default function NanoComicStoryboardPipelinePanel({
                     <Image
                       className="nano-comic-storyboard-pipeline__output-image"
                       src={chunk.previewImageUrl}
-                      alt={`分镜组 ${chunk.chunkIndex + 1}`}
+                      alt={$t('分镜组 {{group}}', { group: chunk.chunkIndex + 1 })}
                       radius={0}
                     />
                   ) : (
                     <div className="nano-comic-storyboard-pipeline__output-image-placeholder">
                       <Text className="nano-comic-storyboard-pipeline__output-image-placeholder-text" size="xs" c="dimmed">
-                        无预览
+                        { $('无预览') }
                       </Text>
                     </div>
                   )}
@@ -183,10 +184,10 @@ export default function NanoComicStoryboardPipelinePanel({
                   <Group className="nano-comic-storyboard-pipeline__output-top" justify="space-between" align="flex-start">
                     <div className="nano-comic-storyboard-pipeline__output-copy">
                       <Text className="nano-comic-storyboard-pipeline__output-name" size="sm" fw={700}>
-                        第 {chunk.chunkIndex + 1} 组
+                        { $t('第 {{group}} 组', { group: chunk.chunkIndex + 1 }) }
                       </Text>
                       <Text className="nano-comic-storyboard-pipeline__output-range" size="xs" c="dimmed">
-                        镜头 {chunk.shotStart}-{chunk.shotEnd} · {chunk.frameCount} 张静态帧 · {chunk.groupSize} 镜/组
+                        { $t('镜头 {{start}}-{{end}} · {{count}} 张静态帧 · {{size}} 镜/组', { start: chunk.shotStart, end: chunk.shotEnd, count: chunk.frameCount, size: chunk.groupSize }) }
                       </Text>
                     </div>
                     <Badge className="nano-comic-storyboard-pipeline__output-status" variant="light" radius="sm">
@@ -201,7 +202,7 @@ export default function NanoComicStoryboardPipelinePanel({
                       variant="filled"
                       onClick={() => onAddToCanvas(buildChunkCanvasPayload(chunk))}
                     >
-                      加入画布
+                      { $('加入画布') }
                     </Button>
                     <Button
                       className="nano-comic-storyboard-pipeline__output-action"
@@ -211,7 +212,7 @@ export default function NanoComicStoryboardPipelinePanel({
                       disabled={!inCanvas}
                       onClick={() => onLocateInCanvas(entityKey)}
                     >
-                      定位画布
+                      { $('定位画布') }
                     </Button>
                     {latestChunk && latestChunk.id === chunk.id ? (
                       <Button
@@ -221,7 +222,7 @@ export default function NanoComicStoryboardPipelinePanel({
                         variant="default"
                         onClick={onLocateLatestStoryboardGroup}
                       >
-                        定位最新产出
+                        { $('定位最新产出') }
                       </Button>
                     ) : null}
                   </Group>
@@ -230,12 +231,12 @@ export default function NanoComicStoryboardPipelinePanel({
             )
           }) : (
             <Text className="nano-comic-storyboard-pipeline__empty" size="sm" c="dimmed">
-              当前章节还没有已落盘的 `storyboardChunks`。请直接通过 AI 对话发起本章分镜生产，新的 chunk 会先写入项目索引，再作为结果节点落到画布。
+              { $('当前章节还没有已落盘的 `storyboardChunks`。请直接通过 AI 对话发起本章分镜生产，新的 chunk 会先写入项目索引，再作为结果节点落到画布。') }
             </Text>
           )}
           {latestChunk && linkedEntityKeys.has(latestChunkEntityKey) ? (
             <Text className="nano-comic-storyboard-pipeline__linked-hint" size="xs" c="dimmed">
-              最新分镜组已入画布，可直接定位。
+              { $('最新分镜组已入画布，可直接定位。') }
             </Text>
           ) : null}
         </Stack>

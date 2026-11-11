@@ -2,6 +2,7 @@ import React from 'react'
 import { ActionIcon, Badge, Text, TextInput } from '@mantine/core'
 import type { IconProps } from '@tabler/icons-react'
 import { IconBrush } from '@tabler/icons-react'
+import { $ } from '../../../i18n'
 
 type TaskNodeHeaderProps = {
   NodeIcon: React.ComponentType<IconProps>
@@ -166,7 +167,7 @@ export function TaskNodeHeader({
         {actions}
         {isNew && (
           <Badge className="task-node-header-new-badge" size="xs" radius="md" color="pink" variant="light">
-            新建
+            {$('新建')}
           </Badge>
         )}
       </div>
@@ -233,17 +234,17 @@ export function TaskNodeHeader({
                         }
                       : {}),
                   }}
-                  title="双击重命名"
+                  title={$("双击重命名")}
                   onDoubleClick={onStartEdit}
                 >
                   {currentLabel}
                 </Text>
                 {isNew && (
                   <Badge className="task-node-header-new-badge" size="xs" radius="md" color="pink" variant="light">
-                    新建
+                    {$('新建')}
                   </Badge>
                 )}
-                <ActionIcon className="task-node-header-rename" size="sm" variant="subtle" color="gray" title="重命名" onClick={onStartEdit}>
+                <ActionIcon className="task-node-header-rename" size="sm" variant="subtle" color="gray" title={$("重命名")} onClick={onStartEdit}>
                   <IconBrush className="task-node-header-rename-icon" size={12} />
                 </ActionIcon>
               </div>

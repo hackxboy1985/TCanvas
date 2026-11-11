@@ -129,7 +129,7 @@ export default function FloatingNav({ className }: { className?: string }): JSX.
           <FloatingNavItem
             label={$('项目')}
             icon={<IconFolders className="floating-nav-item-icon" size={18} />}
-            tooltipLabel="项目管理"
+            tooltipLabel={$('项目管理')}
             onHover={() => { setActivePanel(null) }}
             onClick={() => { setActivePanel(null); spaNavigate('/projects') }}
             active={false}
@@ -158,7 +158,7 @@ export default function FloatingNav({ className }: { className?: string }): JSX.
           <FloatingNavItem
             label={$('漫剧工作台')}
             icon={<IconLayoutGrid className="floating-nav-item-icon" size={18} />}
-            tooltipLabel="画布内分镜工作台"
+            tooltipLabel={$('画布内分镜工作台')}
             onClick={() => {
               setActivePanel(activePanel === 'nanoComic' ? null : 'nanoComic')
             }}
@@ -186,7 +186,7 @@ export default function FloatingNav({ className }: { className?: string }): JSX.
                 variant="subtle"
                 size={28}
                 radius="md"
-                aria-label="看板"
+                aria-label={$('看板')}
                 style={activePanel === 'models' ? activeItemStyle : undefined}
                 onClick={() => {
                   try {

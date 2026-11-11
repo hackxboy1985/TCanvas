@@ -3,6 +3,7 @@ import { Badge, Button, CopyButton, Group, Stack, Text, Tooltip, useMantineColor
 import { IconCheck, IconCopy } from '@tabler/icons-react'
 import { VIDEO_REALISM_RULES, VIDEO_REALISM_PROMPT_SNIPPET } from '../../../creative/videoRealism'
 import { PanelCard } from '../../../ui/PanelCard'
+import { $ } from '../../i18n'
 
 export type VideoRealismTipsProps = {
   onInsertSnippet?: (snippet: string) => void
@@ -27,19 +28,16 @@ export function VideoRealismTips({ onInsertSnippet }: VideoRealismTipsProps) {
       <Group className="video-realism-tips__header" justify="space-between" mb="xs" align="center">
         <div className="video-realism-tips__title">
           <Text className="video-realism-tips__title-text" fw={600} size="sm">
-            AI 视频真实感九大法则
-          </Text>
+            { $('AI 视频真实感九大法则') }</Text>
           <Text className="video-realism-tips__subtitle" size="xs" c="dimmed">
-            直接应用到 composeVideo / Storyboard 提示词中，维持统一的光影与镜头语言。
-          </Text>
+            { $('直接应用到 composeVideo / Storyboard 提示词中，维持统一的光影与镜头语言。') }</Text>
         </div>
         <Group className="video-realism-tips__actions" gap={6}>
           <Button className="video-realism-tips__insert" size="xs" variant="light" onClick={handleInsert}>
-            注入模板
-          </Button>
+            { $('注入模板') }</Button>
           <CopyButton className="video-realism-tips__copy" value={VIDEO_REALISM_PROMPT_SNIPPET} timeout={1800}>
             {({ copied, copy }) => (
-              <Tooltip className="video-realism-tips__tooltip" label={copied ? '已复制' : '复制英文模板'} withArrow>
+              <Tooltip className="video-realism-tips__tooltip" label={copied ? $('已复制') : $('复制英文模板')} withArrow>
                 <Button
                   className="video-realism-tips__copy-button"
                   size="xs"
@@ -51,7 +49,7 @@ export function VideoRealismTips({ onInsertSnippet }: VideoRealismTipsProps) {
                   }
                   onClick={copy}
                 >
-                  {copied ? '已复制' : '复制'}
+                  {copied ? $('已复制') : $('复制')}
                 </Button>
               </Tooltip>
             )}

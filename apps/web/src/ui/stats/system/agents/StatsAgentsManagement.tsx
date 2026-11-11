@@ -18,6 +18,7 @@ import {
 import { captureFramesAtTimes } from '../../../../utils/videoFrameExtractor'
 import { extractTextFromTaskResult, tryParseJsonLike } from '../../../../canvas/nodes/taskNodeHelpers'
 import { toast } from '../../../toast'
+import { $ } from '../../../../canvas/i18n'
 
 const SKILL_JSON_TAG = 'tapcanvas_skill_json'
 const DEFAULT_GENERATOR_MAX_IMAGE_SIZE = 1280
@@ -110,7 +111,7 @@ async function readBlobAsDataUrl(blob: Blob): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(new Error('读取文件失败'))
+    reader.onerror = () => reject(new Error($('读取文件失败')))
     reader.readAsDataURL(blob)
   })
 }
@@ -140,7 +141,7 @@ async function downscaleImageBlob(
     if (!ctx) return blob
     ctx.drawImage(bitmap, 0, 0, dstW, dstH)
     const out = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('图片编码失败'))), mimeType, quality)
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error($('图片编码失败')))), mimeType, quality)
     })
     return out
   } finally {
@@ -280,7 +281,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
     } catch (err: any) {
       setSkills([])
       setNodePresets([])
-      toast(err?.message || '加载 skill 失败', 'error')
+      toast(err?.message || $('加载 skill 失败'), 'error')
     } finally {
       setLoading(false)
     }
@@ -301,14 +302,14 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         skills,
         skillEditor.id,
       )
-      const nextName = baseName || '默认 Skill'
+      const nextName = baseName || $('默认 Skill')
       const nextDescription =
         skillEditor.description && skillEditor.description.trim()
           ? skillEditor.description
           : inferred.description ?? null
       const nextContent = skillEditor.content.trim()
       if (!nextContent) {
-        toast('请填写 Skill 内容（可手动编写或从作品生成）', 'error')
+        toast($('请填写 Skill 内容（可手动编写或从作品生成）'), 'error')
         return
       }
       const payload = {
@@ -322,12 +323,12 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         sortOrder: 0,
       }
       await upsertAdminAgentSkill(payload)
-      toast('已保存 skill', 'success')
+      toast($('已保存 skill'), 'success')
       setSkillEditor(null)
       setSkillGeneratorOpen(false)
       await reload()
     } catch (err: any) {
-      toast(err?.message || '保存 skill 失败', 'error')
+      toast(err?.message || $('保存 skill 失败'), 'error')
     }
   }
 
@@ -336,10 +337,10 @@ export default function StatsAgentsManagement({ className }: { className?: strin
     if (!targetId) return
     try {
       await deleteAdminAgentSkill(targetId)
-      toast('已删除 skill', 'success')
+      toast($('已删除 skill'), 'success')
       await reload()
     } catch (err: any) {
-      toast(err?.message || '删除 skill 失败', 'error')
+      toast(err?.message || $('删除 skill 失败'), 'error')
     }
   }, [reload])
 
@@ -348,7 +349,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
     const title = nodePresetEditor.title.trim()
     const prompt = nodePresetEditor.prompt.trim()
     if (!title || !prompt) {
-      toast('预设名称和提示词不能为空', 'error')
+      toast($('预设名称和提示词不能为空'), 'error')
       return
     }
     try {
@@ -361,11 +362,11 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         enabled: nodePresetEditor.enabled,
         sortOrder: nodePresetEditor.sortOrder ?? null,
       })
-      toast('已保存基础预设', 'success')
+      toast($('已保存基础预设'), 'success')
       setNodePresetEditor(null)
       await reload()
     } catch (err: any) {
-      toast(err?.message || '保存基础预设失败', 'error')
+      toast(err?.message || $('保存基础预设失败'), 'error')
     }
   }, [nodePresetEditor, reload])
 
@@ -374,10 +375,10 @@ export default function StatsAgentsManagement({ className }: { className?: strin
     if (!targetId) return
     try {
       await deleteAdminLlmNodePreset(targetId)
-      toast('已删除基础预设', 'success')
+      toast($('已删除基础预设'), 'success')
       await reload()
     } catch (err: any) {
-      toast(err?.message || '删除基础预设失败', 'error')
+      toast(err?.message || $('删除基础预设失败'), 'error')
     }
   }, [reload])
 
@@ -389,7 +390,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
     const notes = String(skillEditor.description || '').trim()
 
     if (!generatorImage && !generatorVideo && !url) {
-      toast('请提供图片/视频文件或作品链接', 'error')
+      toast($('请提供图片/视频文件或作品链接'), 'error')
       return
     }
 
@@ -409,7 +410,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         const { frames } = await captureFramesAtTimes({ type: 'file', file: generatorVideo }, [1], { mimeType: 'image/jpeg', quality: 0.9 })
         const first = frames[0]
         if (!first?.blob) {
-          toast('未能从视频抽取关键帧', 'error')
+          toast($('未能从视频抽取关键帧'), 'error')
           return
         }
         try {
@@ -429,7 +430,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           const { frames } = await captureFramesAtTimes({ type: 'url', url }, [1], { mimeType: 'image/jpeg', quality: 0.9 })
           const first = frames[0]
           if (!first?.blob) {
-            toast('未能从视频链接抽帧（可能是跨域或格式不支持），建议上传视频文件', 'error')
+            toast($('未能从视频链接抽帧（可能是跨域或格式不支持），建议上传视频文件'), 'error')
             return
           }
           try {
@@ -462,7 +463,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
       const visionTask = await runTaskByVendor('openai', visionReq)
       const visionText = extractTextFromTaskResult(visionTask).trim()
       if (!visionText) {
-        toast('图片理解未返回有效文本', 'error')
+        toast($('图片理解未返回有效文本'), 'error')
         return
       }
       setGeneratorVisionPreview(visionText)
@@ -486,7 +487,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
       })()
 
       if (!agentReply) {
-        toast('Skill 生成未返回内容', 'error')
+        toast($('Skill 生成未返回内容'), 'error')
         return
       }
       setGeneratorAgentPreview(agentReply)
@@ -494,7 +495,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
       const tagged = extractTaggedText(agentReply, SKILL_JSON_TAG)
       const parsed = (tagged ? tryParseJsonLike(tagged) : tryParseJsonLike(agentReply)) as any
       if (!parsed || typeof parsed !== 'object') {
-        toast('Skill 生成结果解析失败（请查看预览并手动复制）', 'error')
+        toast($('Skill 生成结果解析失败（请查看预览并手动复制）'), 'error')
         return
       }
 
@@ -508,7 +509,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           : ''
 
       if (!nextContent) {
-        toast('Skill 生成结果缺少 skillContent（请查看预览并手动复制）', 'error')
+        toast($('Skill 生成结果缺少 skillContent（请查看预览并手动复制）'), 'error')
         return
       }
 
@@ -529,9 +530,9 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           content: nextContent,
         }
       })
-      toast('已生成并填充 Skill 内容', 'success')
+      toast($('已生成并填充 Skill 内容'), 'success')
     } catch (err: any) {
-      const message = typeof err?.message === 'string' ? err.message : '生成失败'
+      const message = typeof err?.message === 'string' ? err.message : $('生成失败')
       toast(message, 'error')
     } finally {
       setGeneratorLoading(false)
@@ -547,14 +548,14 @@ export default function StatsAgentsManagement({ className }: { className?: strin
     <Stack className={rootClassName} gap="md">
       <Group className="stats-agents-management__header" justify="space-between" align="center" wrap="wrap" gap="sm">
         <Stack className="stats-agents-management__header-left" gap={2}>
-          <Text className="stats-agents-management__title" size="sm" fw={700}>Skill（画布 AI 对话框）</Text>
+          <Text className="stats-agents-management__title" size="sm" fw={700}>{ $('Skill（画布 AI 对话框）') }</Text>
           <Text className="stats-agents-management__subtitle" size="xs" c="dimmed">
-            支持多个 Skill：可持续新增并设置别名与可见性；可见时会在画布 AI 对话框展示。
+            { $('支持多个 Skill：可持续新增并设置别名与可见性；可见时会在画布 AI 对话框展示。') }
           </Text>
         </Stack>
         <Group className="stats-agents-management__header-actions" gap={6}>
-          <Tooltip className="stats-agents-management__reload-tooltip" label="刷新" withArrow>
-            <ActionIcon className="stats-agents-management__reload" size="sm" variant="subtle" aria-label="刷新" onClick={() => void reload()} loading={loading}>
+          <Tooltip className="stats-agents-management__reload-tooltip" label={ $('刷新') } withArrow>
+            <ActionIcon className="stats-agents-management__reload" size="sm" variant="subtle" aria-label={ $('刷新') } onClick={() => void reload()} loading={loading}>
               <IconRefresh className="stats-agents-management__reload-icon" size={14} />
             </ActionIcon>
           </Tooltip>
@@ -575,7 +576,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               setSkillEditor(buildSkillEditor(null))
             }}
           >
-            新建 Skill
+            { $('新建 Skill') }
           </Button>
         </Group>
       </Group>
@@ -583,9 +584,9 @@ export default function StatsAgentsManagement({ className }: { className?: strin
       <Stack className="stats-agents-management__node-presets" gap="xs">
         <Group className="stats-agents-management__node-presets-header" justify="space-between" align="center" wrap="wrap" gap="xs">
           <Stack className="stats-agents-management__node-presets-title-wrap" gap={2}>
-            <Text className="stats-agents-management__node-presets-title" size="sm" fw={700}>基础预设能力（文本/图片/视频）</Text>
+            <Text className="stats-agents-management__node-presets-title" size="sm" fw={700}>{ $('基础预设能力（文本/图片/视频）') }</Text>
             <Text className="stats-agents-management__node-presets-subtitle" size="xs" c="dimmed">
-              供各用户节点下拉直接选择，作为全局基础预设。
+              { $('供各用户节点下拉直接选择，作为全局基础预设。') }
             </Text>
           </Stack>
           <Group className="stats-agents-management__node-presets-actions" gap={6}>
@@ -595,10 +596,10 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               w={120}
               value={nodePresetTypeFilter}
               data={[
-                { value: 'all', label: '全部类型' },
-                { value: 'text', label: '文本' },
-                { value: 'image', label: '图片' },
-                { value: 'video', label: '视频' },
+                { value: 'all', label: $('全部类型') },
+                { value: 'text', label: $('文本') },
+                { value: 'image', label: $('图片') },
+                { value: 'video', label: $('视频') },
               ]}
               onChange={(value) => setNodePresetTypeFilter(((value as any) || 'all') as 'all' | LlmNodePresetType)}
             />
@@ -610,25 +611,25 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               leftSection={<IconPlus className="stats-agents-management__node-presets-create-icon" size={14} />}
               onClick={() => setNodePresetEditor(buildNodePresetEditor(null))}
             >
-              新建基础预设
+              { $('新建基础预设') }
             </Button>
           </Group>
         </Group>
         <Table className="stats-agents-management__node-presets-table" striped highlightOnHover withTableBorder withColumnBorders>
           <Table.Thead className="stats-agents-management__node-presets-table-head">
             <Table.Tr className="stats-agents-management__node-presets-table-head-row">
-              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 120 }}>类型</Table.Th>
-              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 220 }}>名称</Table.Th>
-              <Table.Th className="stats-agents-management__node-presets-table-head-cell">提示词</Table.Th>
-              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 90 }}>启用</Table.Th>
-              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 110 }}>操作</Table.Th>
+              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 120 }}>{ $('类型') }</Table.Th>
+              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 220 }}>{ $('名称') }</Table.Th>
+              <Table.Th className="stats-agents-management__node-presets-table-head-cell">{ $('提示词') }</Table.Th>
+              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 90 }}>{ $('启用') }</Table.Th>
+              <Table.Th className="stats-agents-management__node-presets-table-head-cell" style={{ width: 110 }}>{ $('操作') }</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody className="stats-agents-management__node-presets-table-body">
             {filteredNodePresets.length === 0 ? (
               <Table.Tr className="stats-agents-management__node-presets-empty-row">
                 <Table.Td className="stats-agents-management__node-presets-empty-cell" colSpan={5}>
-                  <Text className="stats-agents-management__node-presets-empty-text" size="sm" c="dimmed">暂无基础预设</Text>
+                  <Text className="stats-agents-management__node-presets-empty-text" size="sm" c="dimmed">{ $('暂无基础预设') }</Text>
                 </Table.Td>
               </Table.Tr>
             ) : filteredNodePresets.map((preset) => (
@@ -646,7 +647,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                 </Table.Td>
                 <Table.Td className="stats-agents-management__node-presets-cell">
                   <Badge className="stats-agents-management__node-presets-enabled" variant="light" color={preset.enabled === false ? 'gray' : 'green'}>
-                    {preset.enabled === false ? '否' : '是'}
+                    {preset.enabled === false ? $('否') : $('是')}
                   </Badge>
                 </Table.Td>
                 <Table.Td className="stats-agents-management__node-presets-cell">
@@ -655,7 +656,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                       className="stats-agents-management__node-presets-edit"
                       size="sm"
                       variant="subtle"
-                      aria-label="编辑基础预设"
+                      aria-label={ $('编辑基础预设') }
                       onClick={() => setNodePresetEditor(buildNodePresetEditor(preset))}
                     >
                       <IconPencil className="stats-agents-management__node-presets-edit-icon" size={14} />
@@ -665,7 +666,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                       size="sm"
                       variant="subtle"
                       color="red"
-                      aria-label="删除基础预设"
+                      aria-label={ $('删除基础预设') }
                       onClick={() => void removeNodePreset(preset.id)}
                     >
                       <IconTrash className="stats-agents-management__node-presets-delete-icon" size={14} />
@@ -682,17 +683,17 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         <Table className="stats-agents-management__skills-table" striped highlightOnHover withTableBorder withColumnBorders>
           <Table.Thead className="stats-agents-management__skills-table-head">
             <Table.Tr className="stats-agents-management__skills-table-head-row">
-              <Table.Th className="stats-agents-management__skills-table-head-cell" style={{ width: 260 }}>别名</Table.Th>
-              <Table.Th className="stats-agents-management__skills-table-head-cell" style={{ width: 100 }}>可见</Table.Th>
-              <Table.Th className="stats-agents-management__skills-table-head-cell">说明</Table.Th>
-              <Table.Th className="stats-agents-management__skills-table-head-cell" style={{ width: 110 }}>操作</Table.Th>
+              <Table.Th className="stats-agents-management__skills-table-head-cell" style={{ width: 260 }}>{ $('别名') }</Table.Th>
+              <Table.Th className="stats-agents-management__skills-table-head-cell" style={{ width: 100 }}>{ $('可见') }</Table.Th>
+              <Table.Th className="stats-agents-management__skills-table-head-cell">{ $('说明') }</Table.Th>
+              <Table.Th className="stats-agents-management__skills-table-head-cell" style={{ width: 110 }}>{ $('操作') }</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody className="stats-agents-management__skills-table-body">
             {skills.length === 0 ? (
               <Table.Tr className="stats-agents-management__skills-table-row-empty">
                 <Table.Td className="stats-agents-management__skills-table-cell" colSpan={4}>
-                  <Text className="stats-agents-management__skills-empty" size="sm" c="dimmed">暂无 skill</Text>
+                  <Text className="stats-agents-management__skills-empty" size="sm" c="dimmed">{ $('暂无 skill') }</Text>
                 </Table.Td>
               </Table.Tr>
             ) : skills.map((skill) => (
@@ -706,7 +707,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                 </Table.Td>
                 <Table.Td className="stats-agents-management__skills-table-cell">
                   <Badge className="stats-agents-management__skills-visible" variant="light" color={skill.visible ? 'blue' : 'gray'}>
-                    {skill.visible ? '是' : '否'}
+                    {skill.visible ? $('是') : $('否')}
                   </Badge>
                 </Table.Td>
                 <Table.Td className="stats-agents-management__skills-table-cell">
@@ -716,12 +717,12 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                 </Table.Td>
                 <Table.Td className="stats-agents-management__skills-table-cell">
                   <Group className="stats-agents-management__skills-actions" gap={6} wrap="nowrap">
-                    <Tooltip className="stats-agents-management__skills-edit-tooltip" label="编辑" withArrow>
+                    <Tooltip className="stats-agents-management__skills-edit-tooltip" label={ $('编辑') } withArrow>
                       <ActionIcon
                         className="stats-agents-management__skills-edit"
                         size="sm"
                         variant="subtle"
-                        aria-label="编辑"
+                        aria-label={ $('编辑') }
                         onClick={() => {
                           setSkillGeneratorOpen(false)
                           setGeneratorUrl('')
@@ -736,13 +737,13 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                         <IconPencil className="stats-agents-management__skills-edit-icon" size={14} />
                       </ActionIcon>
                     </Tooltip>
-                    <Tooltip className="stats-agents-management__skills-delete-tooltip" label="删除" withArrow>
+                    <Tooltip className="stats-agents-management__skills-delete-tooltip" label={ $('删除') } withArrow>
                       <ActionIcon
                         className="stats-agents-management__skills-delete"
                         size="sm"
                         variant="subtle"
                         color="red"
-                        aria-label="删除"
+                        aria-label={ $('删除') }
                         onClick={() => void removeSkill(skill.id)}
                       >
                         <IconTrash className="stats-agents-management__skills-delete-icon" size={14} />
@@ -760,7 +761,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         className="stats-agents-management__node-preset-modal"
         opened={!!nodePresetEditor}
         onClose={() => setNodePresetEditor(null)}
-        title={<Text className="stats-agents-management__node-preset-modal-title" fw={700}>{nodePresetEditor?.id ? '编辑基础预设' : '新建基础预设'}</Text>}
+        title={<Text className="stats-agents-management__node-preset-modal-title" fw={700}>{nodePresetEditor?.id ? $('编辑基础预设') : $('新建基础预设')}</Text>}
         centered
         size="md"
         lockScroll={false}
@@ -768,11 +769,11 @@ export default function StatsAgentsManagement({ className }: { className?: strin
         <Stack className="stats-agents-management__node-preset-form" gap="sm">
           <Select
             className="stats-agents-management__node-preset-type"
-            label="类型"
+            label={ $('类型') }
             data={[
-              { value: 'text', label: '文本' },
-              { value: 'image', label: '图片' },
-              { value: 'video', label: '视频' },
+              { value: 'text', label: $('文本') },
+              { value: 'image', label: $('图片') },
+              { value: 'video', label: $('视频') },
             ]}
             value={nodePresetEditor?.type || 'text'}
             onChange={(value) => setNodePresetEditor((s) => (s ? { ...s, type: ((value as LlmNodePresetType) || 'text') } : s))}
@@ -780,37 +781,37 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           />
           <TextInput
             className="stats-agents-management__node-preset-title"
-            label="名称"
+            label={ $('名称') }
             value={nodePresetEditor?.title || ''}
             onChange={(e) => setNodePresetEditor((s) => (s ? { ...s, title: e.currentTarget.value } : s))}
-            placeholder="例如：剧情对白压缩"
+            placeholder={ $('例如：剧情对白压缩') }
           />
           <Textarea
             className="stats-agents-management__node-preset-prompt"
-            label="提示词"
+            label={ $('提示词') }
             minRows={6}
             autosize
             value={nodePresetEditor?.prompt || ''}
             onChange={(e) => setNodePresetEditor((s) => (s ? { ...s, prompt: e.currentTarget.value } : s))}
-            placeholder="输入预设提示词内容"
+            placeholder={ $('输入预设提示词内容') }
           />
           <TextInput
             className="stats-agents-management__node-preset-description"
-            label="描述（可选）"
+            label={ $('描述（可选）') }
             value={nodePresetEditor?.description || ''}
             onChange={(e) => setNodePresetEditor((s) => (s ? { ...s, description: e.currentTarget.value } : s))}
           />
           <Group className="stats-agents-management__node-preset-meta" grow>
             <Checkbox
               className="stats-agents-management__node-preset-enabled"
-              label="启用"
+              label={ $('启用') }
               checked={nodePresetEditor?.enabled !== false}
               onChange={(e) => setNodePresetEditor((s) => (s ? { ...s, enabled: e.currentTarget.checked } : s))}
             />
             <TextInput
               className="stats-agents-management__node-preset-sort-order"
-              label="排序（可选）"
-              placeholder="数字越小越靠前"
+              label={ $('排序（可选）') }
+              placeholder={ $('数字越小越靠前') }
               value={nodePresetEditor?.sortOrder == null ? '' : String(nodePresetEditor.sortOrder)}
               onChange={(e) => {
                 const raw = e.currentTarget.value.trim()
@@ -829,13 +830,13 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               variant="subtle"
               onClick={() => setNodePresetEditor(null)}
             >
-              取消
+              { $('取消') }
             </Button>
             <Button
               className="stats-agents-management__node-preset-save"
               onClick={() => void saveNodePreset()}
             >
-              保存
+              { $('保存') }
             </Button>
           </Group>
         </Stack>
@@ -854,7 +855,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           setGeneratorVisionPreview('')
           setGeneratorAgentPreview('')
         }}
-        title={<Text className="stats-agents-management__skill-modal-title" fw={700}>{skillEditor?.id ? '编辑 Skill' : '创建 Skill'}</Text>}
+        title={<Text className="stats-agents-management__skill-modal-title" fw={700}>{skillEditor?.id ? $('编辑 Skill') : $('创建 Skill')}</Text>}
         centered
         size="lg"
         lockScroll={false}
@@ -863,14 +864,14 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           <Group className="stats-agents-management__skill-form-title-row" gap="sm" align="flex-end" wrap="wrap">
             <TextInput
               className="stats-agents-management__skill-name"
-              label="别名（可选）"
+              label={ $('别名（可选）') }
               value={skillEditor?.name || ''}
               onChange={(e) => { const nextName = e.currentTarget.value; setSkillEditor((s) => (s ? { ...s, name: nextName } : s)) }}
-              placeholder="可留空，从内容/生成结果自动提取"
+              placeholder={ $('可留空，从内容/生成结果自动提取') }
             />
             <Checkbox
               className="stats-agents-management__skill-visible"
-              label="在画布 AI 对话框显示"
+              label={ $('在画布 AI 对话框显示') }
               checked={!!skillEditor?.visible}
               onChange={(e) => { const nextVisible = e.currentTarget.checked; setSkillEditor((s) => (s ? { ...s, visible: nextVisible } : s)) }}
             />
@@ -878,7 +879,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
 
           <Group className="stats-agents-management__skill-generator-header" justify="space-between" gap="sm" wrap="wrap">
             <Text className="stats-agents-management__skill-generator-title" size="sm" fw={600}>
-              从作品生成（可选）
+              { $('从作品生成（可选）') }
             </Text>
             <Button
               className="stats-agents-management__skill-generator-toggle"
@@ -887,24 +888,24 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               variant={skillGeneratorOpen ? 'light' : 'subtle'}
               onClick={() => setSkillGeneratorOpen((v) => !v)}
             >
-              {skillGeneratorOpen ? '收起生成器' : '打开生成器'}
+              {skillGeneratorOpen ? $('收起生成器') : $('打开生成器')}
             </Button>
           </Group>
           <Collapse className="stats-agents-management__skill-generator-collapse" in={skillGeneratorOpen}>
             <Stack className="stats-agents-management__skill-generator" gap="sm" mt="sm">
               <Textarea
                 className="stats-agents-management__skill-description"
-                label="补充说明（可选）"
+                label={ $('补充说明（可选）') }
                 autosize
                 minRows={2}
                 maxRows={6}
                 value={skillEditor?.description || ''}
                 onChange={(e) => { const nextDescription = e.currentTarget.value; setSkillEditor((s) => (s ? { ...s, description: nextDescription } : s)) }}
-                placeholder="例如：适用类目、品牌调性、必须保留/避免的元素…"
+                placeholder={ $('例如：适用类目、品牌调性、必须保留/避免的元素…') }
               />
               <TextInput
                 className="stats-agents-management__skill-generator-url"
-                label="作品链接（可选，图片/视频 URL）"
+                label={ $('作品链接（可选，图片/视频 URL）') }
                 value={generatorUrl}
                 onChange={(e) => setGeneratorUrl(e.currentTarget.value)}
                 placeholder="https://..."
@@ -912,8 +913,8 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               <Group className="stats-agents-management__skill-generator-files" gap="sm" grow wrap="wrap">
                 <FileInput
                   className="stats-agents-management__skill-generator-image"
-                  label="上传图片（可选）"
-                  placeholder="选择图片文件"
+                  label={ $('上传图片（可选）') }
+                  placeholder={ $('选择图片文件') }
                   value={generatorImage}
                   onChange={(v) => {
                     setGeneratorImage(v || null)
@@ -924,8 +925,8 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                 />
                 <FileInput
                   className="stats-agents-management__skill-generator-video"
-                  label="上传视频（可选）"
-                  placeholder="选择视频文件"
+                  label={ $('上传视频（可选）') }
+                  placeholder={ $('选择视频文件') }
                   value={generatorVideo}
                   onChange={(v) => {
                     setGeneratorVideo(v || null)
@@ -944,7 +945,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                   loading={generatorLoading}
                   onClick={() => void runGenerator()}
                 >
-                  分析并填充 Skill 内容
+                  { $('分析并填充 Skill 内容') }
                 </Button>
                 <Button
                   className="stats-agents-management__skill-generator-reset"
@@ -959,13 +960,13 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                     setGeneratorAgentPreview('')
                   }}
                 >
-                  清空
+                  { $('清空') }
                 </Button>
               </Group>
               {generatorVisionPreview ? (
                 <Textarea
                   className="stats-agents-management__skill-generator-vision-preview"
-                  label="中间结果：视觉拆解（来自 OpenAI image_to_prompt）"
+                  label={ $('中间结果：视觉拆解（来自 OpenAI image_to_prompt）') }
                   autosize
                   minRows={4}
                   maxRows={10}
@@ -976,7 +977,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
               {generatorAgentPreview ? (
                 <Textarea
                   className="stats-agents-management__skill-generator-agent-preview"
-                  label="中间结果：agents-cli 输出（含 <tapcanvas_skill_json>）"
+                  label={ $('中间结果：agents-cli 输出（含 <tapcanvas_skill_json>）') }
                   autosize
                   minRows={4}
                   maxRows={10}
@@ -988,7 +989,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
           </Collapse>
           <Textarea
             className="stats-agents-management__skill-content"
-            label="内容（会拼接进 system prompt）"
+            label={ $('内容（会拼接进 system prompt）') }
             autosize
             minRows={6}
             maxRows={16}
@@ -1010,7 +1011,7 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                 }
               })
             }}
-            placeholder="写给模型的指令/结构/约束…（也可用生成器自动生成）"
+            placeholder={ $('写给模型的指令/结构/约束…（也可用生成器自动生成）') }
           />
           <Group className="stats-agents-management__skill-form-actions" justify="flex-end" gap={8}>
             <Button
@@ -1028,14 +1029,14 @@ export default function StatsAgentsManagement({ className }: { className?: strin
                 setGeneratorAgentPreview('')
               }}
             >
-              取消
+              { $('取消') }
             </Button>
             <Button
               className="stats-agents-management__skill-save"
               variant="light"
               onClick={() => void saveSkill()}
             >
-              保存
+              { $('保存') }
             </Button>
           </Group>
         </Stack>

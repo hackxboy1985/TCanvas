@@ -2,6 +2,7 @@
  * 模型配置 - 与TaskNode保持一致
  */
 import { isAnthropicModel } from './modelSource'
+import { $ } from '../canvas/i18n'
 
 export interface ModelOptionPricingSpec {
   specKey: string
@@ -29,11 +30,12 @@ export interface ModelOption {
   channel?: string
 }
 
+// 静态兜底模型列表的展示名在模块加载时按当前语言求值（运行时切语言需刷新页面后生效）
 export const TEXT_MODELS: ModelOption[] = [
   { value: 'gpt-5.2', label: 'GPT-5.2', vendor: 'openai' },
   { value: 'gpt-5.1', label: 'GPT-5.1', vendor: 'openai' },
   { value: 'gpt-5.1-codex', label: 'GPT-5.1 Codex', vendor: 'openai' },
-  { value: 'glm-4.6', label: 'GLM-4.6 (Claude兼容)', vendor: 'anthropic' },
+  { value: 'glm-4.6', label: $('GLM-4.6 (Claude兼容)'), vendor: 'anthropic' },
   { value: 'glm-4.5', label: 'GLM-4.5', vendor: 'anthropic' },
   { value: 'glm-4.5-air', label: 'GLM-4.5-Air', vendor: 'anthropic' },
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', vendor: 'gemini' },

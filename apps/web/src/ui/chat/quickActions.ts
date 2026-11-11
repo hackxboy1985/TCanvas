@@ -1,3 +1,5 @@
+
+import { $, $t } from '../../canvas/i18n'
 export type ChatQuickActionGroup = 'context' | 'project' | 'starter'
 
 export type ChatQuickActionPreset = {
@@ -17,8 +19,6 @@ type BuildChatInspirationQuickActionsInput = {
   selectedNodeKind: string | null
   hasStoryboardContext: boolean
 }
-
-type TranslateFn = (input: string) => string
 
 function normalizeComparableString(value: string | null | undefined): string {
   return String(value || '')
@@ -52,9 +52,8 @@ function isTextNodeKind(kind: string | null): boolean {
 
 export function buildChatInspirationQuickActions(
   input: BuildChatInspirationQuickActionsInput,
-  t: TranslateFn,
 ): ChatQuickActionPreset[] {
-  const projectLabel = input.currentProjectName || input.currentProjectId || '当前项目'
+  const projectLabel = input.currentProjectName || input.currentProjectId || $('当前项目')
   const selectedLabel = clipSubjectLabel(input.selectedNodeLabel)
   const selectedKind = normalizeComparableString(input.selectedNodeKind)
   const actions: ChatQuickActionPreset[] = []
@@ -63,10 +62,10 @@ export function buildChatInspirationQuickActions(
     actions.push({
       key: 'selected-image-optimize-prompt',
       group: 'context',
-      label: t('优化当前图片提示词'),
+      label: $('优化当前图片提示词'),
       description: selectedLabel
-        ? `围绕「${selectedLabel}」读取节点上下文后直接回写原节点`
-        : t('读取当前图片节点上下文后，直接优化并回写原节点'),
+        ? $t('围绕「{{label}}」读取节点上下文后直接回写原节点', { label: selectedLabel })
+        : $('读取当前图片节点上下文后，直接优化并回写原节点'),
       prompt: [
         '请把当前选中的图片节点视为本轮唯一主目标，并直接优化它的提示词。',
         '要求：',
@@ -81,10 +80,10 @@ export function buildChatInspirationQuickActions(
     actions.push({
       key: input.hasStoryboardContext ? 'selected-shot-continue-scene' : 'selected-image-continue-scene',
       group: 'context',
-      label: input.hasStoryboardContext ? t('承接当前镜头继续') : t('围绕当前图片继续创作'),
+      label: input.hasStoryboardContext ? $('承接当前镜头继续') : $('围绕当前图片继续创作'),
       description: input.hasStoryboardContext
-        ? t('把当前选中帧当作连续性锚点，推进下一步场景')
-        : t('围绕当前图片与参考继续推进最小必要下一步'),
+        ? $('把当前选中帧当作连续性锚点，推进下一步场景')
+        : $('围绕当前图片与参考继续推进最小必要下一步'),
       prompt: [
         '请围绕当前选中的图片节点继续推进 TapCanvas 创作。',
         '要求：',
@@ -98,10 +97,10 @@ export function buildChatInspirationQuickActions(
     actions.push({
       key: 'selected-video-diagnose',
       group: 'context',
-      label: t('诊断当前视频节点'),
+      label: $('诊断当前视频节点'),
       description: selectedLabel
-        ? `围绕「${selectedLabel}」定位卡点并做最小必要修正`
-        : t('复盘当前视频节点并修正最关键问题'),
+        ? $t('围绕「{{label}}」定位卡点并做最小必要修正', { label: selectedLabel })
+        : $('复盘当前视频节点并修正最关键问题'),
       prompt: [
         '请围绕当前选中的视频节点做一次最小必要的诊断与修正。',
         '要求：',
@@ -116,8 +115,8 @@ export function buildChatInspirationQuickActions(
       actions.push({
         key: 'selected-video-continue-scene',
         group: 'context',
-        label: t('承接当前视频继续'),
-        description: t('沿用当前连续性锚点，推进下一步场景或镜头'),
+        label: $('承接当前视频继续'),
+        description: $('沿用当前连续性锚点，推进下一步场景或镜头'),
         prompt: [
           '请把当前选中的视频节点当作连续性锚点，继续推进 TapCanvas 场景创作。',
           '要求：',
@@ -131,10 +130,10 @@ export function buildChatInspirationQuickActions(
     actions.push({
       key: 'selected-text-to-workflow',
       group: 'context',
-      label: t('把当前文本推进成方案'),
+      label: $('把当前文本推进成方案'),
       description: selectedLabel
-        ? `把「${selectedLabel}」当作上游证据，推进成最小必要工作流`
-        : t('把当前文本节点推进成最小必要工作流'),
+        ? $t('把「{{label}}」当作上游证据，推进成最小必要工作流', { label: selectedLabel })
+        : $('把当前文本节点推进成最小必要工作流'),
       prompt: [
         '请把当前选中的文本/脚本节点作为上游证据，推进成最小必要的 TapCanvas 工作流。',
         '要求：',
@@ -148,10 +147,10 @@ export function buildChatInspirationQuickActions(
     actions.push({
       key: 'selected-node-next-step',
       group: 'context',
-      label: t('诊断当前节点下一步'),
+      label: $('诊断当前节点下一步'),
       description: selectedLabel
-        ? `围绕「${selectedLabel}」确认最稳妥的下一步`
-        : t('围绕当前选中节点确认最稳妥的下一步'),
+        ? $t('围绕「{{label}}」确认最稳妥的下一步', { label: selectedLabel })
+        : $('围绕当前选中节点确认最稳妥的下一步'),
       prompt: [
         '请围绕当前选中的节点做一次面向执行的诊断。',
         '要求：',
@@ -166,10 +165,10 @@ export function buildChatInspirationQuickActions(
     {
       key: 'single-video-sop',
       group: 'project',
-      label: t('根据上传文本快捷创作单个视频'),
+      label: $('根据上传文本快捷创作单个视频'),
       description: input.hasFocusedReference
-        ? t('先结合已上传文本、当前选中节点和参考图自主定位最相关进度，再选择最小必要的视频生产路径')
-        : t('先从项目文本与现有画布证据里定位最相关进度，再快速推进 1 条单视频创作'),
+        ? $('先结合已上传文本、当前选中节点和参考图自主定位最相关进度，再选择最小必要的视频生产路径')
+        : $('先从项目文本与现有画布证据里定位最相关进度，再快速推进 1 条单视频创作'),
       prompt: [
         '请进入“根据上传文本快捷创作单个视频”模式，目标是在 TapCanvas 中完成 1 条短视频。',
         '要求：',
@@ -183,10 +182,10 @@ export function buildChatInspirationQuickActions(
     {
       key: 'project-text-scene-pipeline',
       group: 'project',
-      label: t('从当前项目文本启动场景创作'),
+      label: $('从当前项目文本启动场景创作'),
       description: input.currentProjectId
-        ? `从 ${projectLabel} 的已上传文本里选一个可独立成段的小场景，直接拉起完整创作流程`
-        : t('当前未选择项目，无法读取项目文本'),
+        ? $t('从 {{project}} 的已上传文本里选一个可独立成段的小场景，直接拉起完整创作流程', { project: projectLabel })
+        : $('当前未选择项目，无法读取项目文本'),
       prompt: [
         '请直接读取当前项目已上传的文本素材，并仅基于本轮实际读取到的文本内容推进一次项目内场景创作。',
         '要求：',
@@ -200,8 +199,8 @@ export function buildChatInspirationQuickActions(
     {
       key: 'starter-prompts',
       group: 'starter',
-      label: t('推荐一组起步任务'),
-      description: t('按图片、分镜、视频、画布编排给出可直接执行的方向'),
+      label: $('推荐一组起步任务'),
+      description: $('按图片、分镜、视频、画布编排给出可直接执行的方向'),
       prompt: '请给我 6 个适合 TapCanvas 新用户直接体验的快捷创作方向，覆盖图片生成、图像改写、分镜设计、视频脚本和画布编排，并告诉我每个方向适合什么时候用、第一步该怎么开始。',
     },
   )

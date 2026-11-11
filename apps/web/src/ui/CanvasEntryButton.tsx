@@ -2,6 +2,7 @@ import React from 'react'
 import { Button, type ButtonProps } from '@mantine/core'
 import { IconVectorBezier2 } from '@tabler/icons-react'
 import { spaNavigate } from '../utils/spaNavigate'
+import { $ } from '../canvas/i18n'
 
 type CanvasEntryButtonProps = {
   href: string
@@ -20,7 +21,7 @@ export default function CanvasEntryButton({
       onClick={() => spaNavigate(href)}
       {...buttonProps}
     >
-      {label}
+      {$(label)}
     </Button>
   )
 }

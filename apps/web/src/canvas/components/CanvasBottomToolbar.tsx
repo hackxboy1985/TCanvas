@@ -1,5 +1,6 @@
 import { ActionIcon, Button, Divider, Group, Menu, Text, Tooltip } from '@mantine/core'
 import { IconMaximize, IconMap, IconRoute, IconLayoutGrid, IconBrush, IconZoomIn, IconZoomOut, IconArrowsVertical, IconArrowsHorizontal } from '@tabler/icons-react'
+import { $, $t } from '../i18n'
 
 type CanvasBottomToolbarProps = {
   /** 当前画布缩放百分比（0-800） */
@@ -47,7 +48,7 @@ export function CanvasBottomToolbar({
       onClick={(e) => e.stopPropagation()}
     >
       {/* 资产管理：暂不处理 */}
-      <Tooltip label="资产管理" position="top" withArrow>
+      <Tooltip label={ $('资产管理') } position="top" withArrow>
         <ActionIcon className="tc-canvas-bottom-toolbar__action" variant="subtle" color="gray" size="md">
           <IconBrush size={16} />
         </ActionIcon>
@@ -56,7 +57,7 @@ export function CanvasBottomToolbar({
       <Divider orientation="vertical" className="tc-canvas-bottom-toolbar__divider" />
 
       {/* 整理画布：恢复默认打开时的布局（lens 模式重新投影；否则适合屏幕） */}
-      <Tooltip label="整理画布 (⌥⌘F)" position="top" withArrow>
+      <Tooltip label={ $('整理画布 (⌥⌘F)') } position="top" withArrow>
         <ActionIcon
           className="tc-canvas-bottom-toolbar__action"
           variant="subtle"
@@ -70,7 +71,7 @@ export function CanvasBottomToolbar({
 
       {/* 排列：点击直接切换分镜组排列方向（垂直 ⇄ 水平），仅 lens 模式提供 */}
       {shotArrange && onShotArrangeChange && (
-        <Tooltip label={`排列：${shotArrange === 'column' ? '垂直（点击切水平）' : '水平（点击切垂直）'}`} position="top" withArrow>
+        <Tooltip label={$t('排列：{{dir}}', { dir: shotArrange === 'column' ? $('垂直（点击切水平）') : $('水平（点击切垂直）') })} position="top" withArrow>
           <ActionIcon
             className="tc-canvas-bottom-toolbar__arrange"
             variant="subtle"
@@ -84,7 +85,7 @@ export function CanvasBottomToolbar({
       )}
 
       {/* 画布小地图：默认隐藏，点击切换 */}
-      <Tooltip label={miniMapVisible ? '隐藏小地图' : '显示小地图'} position="top" withArrow>
+      <Tooltip label={miniMapVisible ? $('隐藏小地图') : $('显示小地图')} position="top" withArrow>
         <ActionIcon
           className="tc-canvas-bottom-toolbar__action"
           variant={miniMapVisible ? 'light' : 'subtle'}
@@ -97,7 +98,7 @@ export function CanvasBottomToolbar({
       </Tooltip>
 
       {/* 显示/隐藏连线 */}
-      <Tooltip label={edgesVisible ? '隐藏节点连线' : '显示节点连线'} position="top" withArrow>
+      <Tooltip label={edgesVisible ? $('隐藏节点连线') : $('显示节点连线')} position="top" withArrow>
         <ActionIcon
           className="tc-canvas-bottom-toolbar__action"
           variant={edgesVisible ? 'light' : 'subtle'}
@@ -110,7 +111,7 @@ export function CanvasBottomToolbar({
       </Tooltip>
 
       {/* 网格吸附：暂不处理 */}
-      <Tooltip label="网格吸附" position="top" withArrow>
+      <Tooltip label={ $('网格吸附') } position="top" withArrow>
         <ActionIcon className="tc-canvas-bottom-toolbar__action" variant="subtle" color="gray" size="md">
           <IconLayoutGrid size={16} />
         </ActionIcon>
@@ -134,27 +135,27 @@ export function CanvasBottomToolbar({
         <Menu.Dropdown>
           <Menu.Item leftSection={<IconZoomIn size={14} />} onClick={onZoomIn}>
             <Group justify="space-between" wrap="nowrap">
-              <span>放大</span>
+              <span>{ $('放大') }</span>
               <Text span size="xs" c="dimmed">⌘ +</Text>
             </Group>
           </Menu.Item>
           <Menu.Item leftSection={<IconZoomOut size={14} />} onClick={onZoomOut}>
             <Group justify="space-between" wrap="nowrap">
-              <span>缩小</span>
+              <span>{ $('缩小') }</span>
               <Text span size="xs" c="dimmed">⌘ −</Text>
             </Group>
           </Menu.Item>
           <Menu.Divider />
           <Menu.Item leftSection={<IconMaximize size={14} />} onClick={onFitView}>
             <Group justify="space-between" wrap="nowrap">
-              <span>适合屏幕</span>
+              <span>{ $('适合屏幕') }</span>
               <Text span size="xs" c="dimmed">⌘ 0</Text>
             </Group>
           </Menu.Item>
           <Menu.Divider />
-          <Menu.Item onClick={() => onZoomTo(0.5)}>缩放至 50%</Menu.Item>
-          <Menu.Item onClick={() => onZoomTo(1)}>缩放至 100%</Menu.Item>
-          <Menu.Item onClick={() => onZoomTo(4)}>缩放至 400%</Menu.Item>
+          <Menu.Item onClick={() => onZoomTo(0.5)}>{ $('缩放至 50%') }</Menu.Item>
+          <Menu.Item onClick={() => onZoomTo(1)}>{ $('缩放至 100%') }</Menu.Item>
+          <Menu.Item onClick={() => onZoomTo(4)}>{ $('缩放至 400%') }</Menu.Item>
         </Menu.Dropdown>
       </Menu>
     </div>

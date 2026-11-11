@@ -2,6 +2,7 @@ import React from 'react'
 import { create } from 'zustand'
 import { Button, Group, Modal, Radio, Stack, Text } from '@mantine/core'
 import './canvasConfirmDialog.css'
+import { $ } from '../i18n'
 
 /** 确认弹窗中的单选选项 */
 export type CanvasConfirmChoiceOption = {
@@ -93,10 +94,10 @@ export function CanvasConfirmDialogHost(): JSX.Element | null {
   const [selectedChoice, setSelectedChoice] = React.useState<string>('')
   if (!pending) return null
   const {
-    title = '确认操作',
+    title = $('确认操作'),
     message,
-    confirmText = '确定',
-    cancelText = '取消',
+    confirmText = $('确定'),
+    cancelText = $('取消'),
     danger = false,
     choices,
     resolve,

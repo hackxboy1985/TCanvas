@@ -4,6 +4,7 @@ import AgentDiagnosticsContent, { type AgentTraceContextSelection } from './Agen
 import AgentProjectContextContent from './AgentProjectContextContent'
 import AgentStateStoragePanel from './AgentStateStoragePanel'
 import { useLiveChatRunStore } from './chat/liveChatRunStore'
+import { $ } from '../canvas/i18n'
 
 type AgentAdminWorkbenchPanelProps = {
   className?: string
@@ -25,17 +26,17 @@ export default function AgentAdminWorkbenchPanel(props: AgentAdminWorkbenchPanel
       className={className}
       opened={opened}
       onClose={onClose}
-      title="AI 管理工作台"
+      title={ $('AI 管理工作台') }
       centered={false}
       size="xl"
       padding="md"
     >
       <Tabs className="agent-admin-workbench-tabs" value={tab} onChange={(value) => setTab(value || 'context')}>
         <Tabs.List className="agent-admin-workbench-tab-list">
-          <Tabs.Tab className="agent-admin-workbench-tab" value="context">项目上下文</Tabs.Tab>
+          <Tabs.Tab className="agent-admin-workbench-tab" value="context">{ $('项目上下文') }</Tabs.Tab>
           <Tabs.Tab className="agent-admin-workbench-tab" value="diagnostics">
             <Group className="agent-admin-workbench-tab-label" gap={6} wrap="nowrap">
-              <span>AI 诊断</span>
+              <span>{ $('AI 诊断') }</span>
               {activeLiveRun?.status === 'running' ? (
                 <Badge className="agent-admin-workbench-tab-live-badge" size="xs" color="orange" variant="light">
                   live
@@ -43,7 +44,7 @@ export default function AgentAdminWorkbenchPanel(props: AgentAdminWorkbenchPanel
               ) : null}
             </Group>
           </Tabs.Tab>
-          <Tabs.Tab className="agent-admin-workbench-tab" value="state">状态存储</Tabs.Tab>
+          <Tabs.Tab className="agent-admin-workbench-tab" value="state">{ $('状态存储') }</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel className="agent-admin-workbench-tab-panel" value="context" pt="md">
           <AgentProjectContextContent

@@ -3,6 +3,7 @@ import { ActionIcon, Badge, Button, Group, Modal, Stack, Text, TextInput } from 
 import { IconTrash } from '@tabler/icons-react'
 import { setTapImageDragData } from '../../../dnd/setTapImageDragData'
 import { InlinePanel } from '../../../../ui/InlinePanel'
+import { $ } from '../../../i18n'
 
 type VeoCandidateImage = { url: string; label: string; sourceType: 'image' | 'video' }
 
@@ -56,10 +57,10 @@ export function VeoImageModal({
       onClose={onClose}
       title={
         mode === 'first'
-          ? '选择首帧图片'
+          ? $('选择首帧图片')
           : mode === 'last'
-            ? '选择尾帧图片'
-            : '管理参考图'
+            ? $('选择尾帧图片')
+            : $('管理参考图')
       }
       size="lg"
       centered
@@ -71,13 +72,13 @@ export function VeoImageModal({
           <>
             {firstFrameLocked && (
               <Text className="veo-image-modal-warning" size="xs" c="red">
-                已设置首帧时无法添加或选择参考图。请先清空首帧 URL。
+                {$('已设置首帧时无法添加或选择参考图。请先清空首帧 URL。')}
               </Text>
             )}
             <Group className="veo-image-modal-input-row" gap="xs" align="flex-end">
               <TextInput
                 className="veo-image-modal-input"
-                label="添加参考图"
+                label={$("添加参考图")}
                 placeholder="https://example.com/ref.png"
                 value={veoCustomImageInput}
                 onChange={(e) => onCustomImageInputChange(e.currentTarget.value)}
@@ -90,12 +91,12 @@ export function VeoImageModal({
                 onClick={onAddCustomReferenceImage}
                 disabled={firstFrameLocked || !veoCustomImageInput.trim() || veoReferenceLimitReached}
               >
-                添加
+                {$('添加')}
               </Button>
             </Group>
             {veoReferenceImages.length === 0 ? (
               <Text className="veo-image-modal-empty" size="xs" c="dimmed">
-                未选择参考图。
+                {$('未选择参考图。')}
               </Text>
             ) : (
               <Group className="veo-image-modal-reference-list" gap={6} wrap="wrap">
@@ -115,7 +116,7 @@ export function VeoImageModal({
                       <img
                         className="veo-image-modal-reference-img"
                         src={url}
-                        alt="参考图"
+                        alt={$("参考图")}
                         draggable
                         onDragStart={(evt) => setTapImageDragData(evt, url)}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -132,7 +133,7 @@ export function VeoImageModal({
         )}
         {veoCandidateImages.length === 0 ? (
           <Text className="veo-image-modal-candidate-empty" size="sm" c="dimmed">
-            暂无可用图片，试着连接图像节点。
+            {$('暂无可用图片，试着连接图像节点。')}
           </Text>
         ) : (
           <div
@@ -185,7 +186,7 @@ export function VeoImageModal({
                           onClose()
                         }}
                       >
-                        {isFirstFrame ? '已设首帧' : '设为首帧'}
+                        {isFirstFrame ? $('已设首帧') : $('设为首帧')}
                       </Button>
                     )}
                     {mode === 'last' && (
@@ -199,7 +200,7 @@ export function VeoImageModal({
                           onClose()
                         }}
                       >
-                        {isLastFrame ? '已设尾帧' : '设为尾帧'}
+                        {isLastFrame ? $('已设尾帧') : $('设为尾帧')}
                       </Button>
                     )}
                     {mode === 'reference' && (
@@ -210,7 +211,7 @@ export function VeoImageModal({
                         disabled={firstFrameLocked || (!isSelected && veoReferenceLimitReached)}
                         onClick={() => onToggleReference(candidate.url)}
                       >
-                        {isSelected ? '已选参考' : '添加参考'}
+                        {isSelected ? $('已选参考') : $('添加参考')}
                       </Button>
                     )}
                   </Group>
@@ -221,12 +222,12 @@ export function VeoImageModal({
         )}
         {mode === 'first' && trimmedFirstFrameUrl && (
           <Button className="veo-image-modal-clear" variant="subtle" size="xs" onClick={() => onSetFirstFrameUrl('')}>
-            清除首帧
+            {$('清除首帧')}
           </Button>
         )}
         {mode === 'last' && trimmedLastFrameUrl && (
           <Button className="veo-image-modal-clear" variant="subtle" size="xs" onClick={() => onSetLastFrameUrl('')} disabled={!firstFrameLocked}>
-            清除尾帧
+            {$('清除尾帧')}
           </Button>
         )}
       </Stack>

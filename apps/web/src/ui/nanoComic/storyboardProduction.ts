@@ -4,6 +4,7 @@ import {
   normalizeStoryboardStructuredData,
   type StoryboardStructuredData,
 } from '../../storyboard/storyboardStructure'
+import { $, $t } from '../../canvas/i18n'
 
 export type StoryboardGroupSize = 1 | 4 | 9 | 25
 
@@ -65,17 +66,17 @@ export function getStoryboardProgressMapKey(groupSize: StoryboardGroupSize): Sto
 
 function formatTimeLabel(input?: string | null): string {
   const raw = typeof input === 'string' ? input.trim() : ''
-  if (!raw) return '刚刚'
+  if (!raw) return $('刚刚')
   const ts = Date.parse(raw)
   if (!Number.isFinite(ts)) return raw
   const diffMs = Date.now() - ts
   const diffMinutes = Math.max(0, Math.trunc(diffMs / 60000))
-  if (diffMinutes < 1) return '刚刚'
-  if (diffMinutes < 60) return `${diffMinutes} 分钟前`
+  if (diffMinutes < 1) return $('刚刚')
+  if (diffMinutes < 60) return $t('{{diffMinutes}} 分钟前', { diffMinutes: diffMinutes })
   const diffHours = Math.trunc(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours} 小时前`
+  if (diffHours < 24) return $t('{{diffHours}} 小时前', { diffHours: diffHours })
   const diffDays = Math.trunc(diffHours / 24)
-  if (diffDays < 7) return `${diffDays} 天前`
+  if (diffDays < 7) return $t('{{diffDays}} 天前', { diffDays: diffDays })
   return raw.slice(0, 10)
 }
 

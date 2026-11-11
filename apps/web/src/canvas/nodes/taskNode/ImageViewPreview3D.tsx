@@ -21,6 +21,7 @@ import {
   toLightControlFromPoint,
   type OrbitPoint3D,
 } from './imageView3dMath'
+import { $ } from '../../i18n'
 
 const TARGET_POINT = new THREE.Vector3(0, 0.2, 0)
 const FLOOR_Y = -1.55
@@ -512,7 +513,7 @@ export function ImageViewPreview3D(props: ImageViewPreview3DProps): JSX.Element 
       }
       renderFrame()
     } catch (error) {
-      const message = error instanceof Error ? error.message : '3D 预览初始化失败'
+      const message = error instanceof Error ? error.message : $('3D 预览初始化失败')
       setSceneError(message)
     }
 
@@ -674,7 +675,7 @@ export function ImageViewPreview3D(props: ImageViewPreview3DProps): JSX.Element 
               background: props.isDarkUi ? 'rgba(20,10,12,0.86)' : 'rgba(255,245,245,0.9)',
             }}
           >
-            3D 预览初始化失败：{sceneError}
+            {$('3D 预览初始化失败：')}{sceneError}
           </Text>
         </div>
       ) : null}

@@ -4,6 +4,7 @@ import { IconGripVertical, IconPlus, IconX } from '@tabler/icons-react'
 import type { OrderedUpstreamReferenceItem } from '../upstreamReferences'
 import { ManagedImage } from '../../../../domain/resource-runtime'
 import { useUIStore } from '../../../../ui/uiStore'
+import { $, $t } from '../../../i18n'
 
 type UpstreamReferenceStripProps = {
   targetNodeId: string
@@ -31,7 +32,7 @@ export function UpstreamReferenceStrip({
   onToggleCanvasReferencePicker,
   canvasReferencePickerActive,
   maskGuideUrl,
-  maskGuideLabel = '局部编辑引导图',
+  maskGuideLabel = $('局部编辑引导图'),
 }: UpstreamReferenceStripProps) {
   const [draggedEdgeId, setDraggedEdgeId] = React.useState<string | null>(null)
   const normalizedMaskGuideUrl = typeof maskGuideUrl === 'string' ? maskGuideUrl.trim() : ''
@@ -40,10 +41,10 @@ export function UpstreamReferenceStrip({
     <div className="tc-task-node__upstream-reference-strip">
       <div className="tc-task-node__upstream-reference-strip-header">
         <Text className="tc-task-node__upstream-reference-strip-title" size="xs" fw={600}>
-          上游参考
+          {$('上游参考')}
         </Text>
         <Text className="tc-task-node__upstream-reference-strip-meta" size="xs" c="dimmed">
-          {canvasReferencePickerActive ? '点击画布图片直接连接' : '拖动调整顺序'}
+          {canvasReferencePickerActive ? $('点击画布图片直接连接') : $('拖动调整顺序')}
         </Text>
       </div>
       <div className="tc-task-node__upstream-reference-strip-list">
@@ -108,7 +109,7 @@ export function UpstreamReferenceStrip({
                 size="xs"
                 variant="filled"
                 color="dark"
-                aria-label={`删除 ${item.label} 引用及连线`}
+                aria-label={$t('删除 {{v1}} 引用及连线', { v1: item.label })}
                 onPointerDown={(event) => event.stopPropagation()}
                 onDragStart={(event) => event.preventDefault()}
                 onClick={(event) => {
@@ -123,11 +124,11 @@ export function UpstreamReferenceStrip({
           </Tooltip>
         ))}
         {normalizedMaskGuideUrl ? (
-          <Tooltip label={`${maskGuideLabel}（只读，点击预览）`} withArrow openDelay={180}>
+          <Tooltip label={$t('{{v1}}（只读，点击预览）', { v1: maskGuideLabel })} withArrow openDelay={180}>
             <button
               type="button"
               className="tc-task-node__upstream-reference-card tc-task-node__upstream-reference-card--mask-guide"
-              aria-label={`预览${maskGuideLabel}`}
+              aria-label={$t('预览{{v1}}', { v1: maskGuideLabel })}
               onClick={(event) => {
                 // 只做预览：该图不是连线引用，不能拖拽排序，也不能删除
                 event.preventDefault()
@@ -150,12 +151,12 @@ export function UpstreamReferenceStrip({
                 fetchPriority="low"
                 referrerPolicy="no-referrer"
               />
-              <span className="tc-task-node__upstream-reference-mask-tag">圈选</span>
+              <span className="tc-task-node__upstream-reference-mask-tag">{$('圈选')}</span>
             </button>
           </Tooltip>
         ) : null}
         <Tooltip
-          label={canvasReferencePickerActive ? '退出从画布选择参考' : '从画布选择参考'}
+          label={canvasReferencePickerActive ? $('退出从画布选择参考') : $('从画布选择参考')}
           withArrow
           openDelay={180}
         >
@@ -165,7 +166,7 @@ export function UpstreamReferenceStrip({
               canvasReferencePickerActive ? 'tc-task-node__upstream-reference-add--active' : '',
             ].join(' ')}
             type="button"
-            aria-label={canvasReferencePickerActive ? '退出从画布选择参考' : '从画布选择参考'}
+            aria-label={canvasReferencePickerActive ? $('退出从画布选择参考') : $('从画布选择参考')}
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()

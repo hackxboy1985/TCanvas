@@ -5,6 +5,7 @@ import type {
   AgentsChatToolStreamPayload,
 } from '../../api/server'
 import { formatAgentsStreamErrorMessage } from './agentsStreamError'
+import { $ } from '../../canvas/i18n'
 
 const MAX_LIVE_CHAT_LOGS = 120
 const MAX_ASSISTANT_PREVIEW_CHARS = 4_000
@@ -447,7 +448,7 @@ export const useLiveChatRunStore = create<LiveChatRunStore>((set) => ({
       const run = state.activeRun
       if (!run) return state
       const finishedAt = Date.now()
-      const normalized = trimString(message) || '对话失败'
+      const normalized = trimString(message) || $('对话失败')
       return {
         activeRun: {
           ...run,

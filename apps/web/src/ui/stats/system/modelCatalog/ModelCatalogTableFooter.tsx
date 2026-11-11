@@ -1,6 +1,7 @@
 import React from 'react'
 import { Group, Pagination, Select, Text } from '@mantine/core'
 import { PAGE_SIZE_OPTIONS } from './modelCatalog.constants'
+import { $t } from '../../../../canvas/i18n'
 
 export function ModelCatalogTableFooter({
   total,
@@ -21,7 +22,7 @@ export function ModelCatalogTableFooter({
   return (
     <Group className="stats-model-catalog-table-footer" justify="space-between" align="center" mt="sm" gap="sm" wrap="wrap">
       <Text className="stats-model-catalog-table-footer-summary" size="xs" c="dimmed">
-        共 {total} 条
+        { $t('共 {{total}} 条', { total: total }) }
       </Text>
       <Group className="stats-model-catalog-table-footer-controls" gap="sm" align="center" wrap="wrap">
         <Select

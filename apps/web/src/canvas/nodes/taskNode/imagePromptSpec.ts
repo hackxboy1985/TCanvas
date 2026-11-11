@@ -1,4 +1,5 @@
 import imagePromptSpecModule, { type ImagePromptSpecV2 } from '@tapcanvas/image-prompt-spec'
+import { $, $t } from '../../i18n'
 
 const { compileImagePromptSpecV2, parseImagePromptSpecV2 } = imagePromptSpecModule
 
@@ -267,7 +268,7 @@ function resolveStructuredPrompt(record: UnknownRecord): {
   }
 
   if (sawCandidate) {
-    throw new Error(`structuredPrompt 非法：${firstError || '缺少有效结构化内容'}`)
+    throw new Error($t('structuredPrompt 非法：{{v1}}', { v1: firstError || '缺少有效结构化内容' }))
   }
 
   return null
@@ -298,7 +299,7 @@ export function resolveImagePromptExecution(data: unknown): ResolvedImagePromptE
 
   if (explicitMode === 'structured') {
     if (!resolvedStructuredPrompt?.structuredPrompt) {
-      throw new Error('structuredPrompt 模式缺少有效的 structuredPrompt')
+      throw new Error($('structuredPrompt 模式缺少有效的 structuredPrompt'))
     }
     return {
       prompt: compileImagePromptSpecV2(resolvedStructuredPrompt.structuredPrompt).trim(),

@@ -6,6 +6,8 @@
  * - 全部复用 lens 现有接口，仅 flow 读写为新增（/api/canvas/*）
  */
 
+import { $, $t } from '../canvas/i18n'
+
 /** 读 cookie（lens 的 Admin-Token 存在 cookie，同 host 共享） */
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null
@@ -772,7 +774,7 @@ export async function splitShotFreeform(params: {
   })
   // 后端保证成功时 shots 是数组；缺失说明契约被破坏，显式失败而不是拿空数组当成功
   if (!data || !Array.isArray(data.shots)) {
-    throw new Error('拆分镜接口未返回分镜明细')
+    throw new Error($('拆分镜接口未返回分镜明细'))
   }
   return {
     shots: data.shots,
@@ -1274,10 +1276,10 @@ export async function saveCanvasBasicSettings(dramaId: string, settings: LensCan
   try {
     responseBody = responseText ? (JSON.parse(responseText) as { code?: number; msg?: string }) : {}
   } catch {
-    throw new Error(`保存画布配置失败：响应非 JSON（HTTP ${response.status}）`)
+    throw new Error($t('保存画布配置失败：响应非 JSON（HTTP {{status}}）', { status: response.status }))
   }
   if (!response.ok || (responseBody.code !== 0 && responseBody.code !== 200)) {
-    throw new Error('保存画布配置失败：' + (responseBody.msg || ('code=' + String(responseBody.code))))
+    throw new Error($t('保存画布配置失败：{{detail}}', { detail: responseBody.msg || ('code=' + String(responseBody.code)) }))
   }
   try {
     window.localStorage.setItem(buildCanvasConfigStorageKey(dramaId), JSON.stringify(settings))
@@ -1576,7 +1578,7 @@ export async function listAssetImageTasks(params: {
   pageNum: number; pageSize: number; taskStatus: LensAssetTaskStatus
 }): Promise<LensTaskPage> {
   if (!params.dramaId || !params.assetId || !params.applicationIds.length) {
-    throw new Error('缺少剧ID、资产ID或可用生图应用，无法查询资产任务')
+    throw new Error($('缺少剧ID、资产ID或可用生图应用，无法查询资产任务'))
   }
   return lensFetchPage<LensTaskRecord>('/api/task/list', {
     method: 'POST',
@@ -1685,10 +1687,10 @@ export interface LensAssetTaskAdoptionTarget {
 /** 关联任务原图到当前业务资产；子资产使用自身ID，严禁走分镜采纳接口。 */
 export async function associateLensAssetTaskResult(target: LensAssetTaskAdoptionTarget, imageUrl: string): Promise<void> {
   if (!/^[1-9]\d*$/.test(target.entityId) || !/^[1-9]\d*$/.test(target.dramaId) || ![1, 2, 3].includes(target.category)) {
-    throw new Error('资产身份或剧本信息缺失，无法采纳结果')
+    throw new Error($('资产身份或剧本信息缺失，无法采纳结果'))
   }
   const url = new URL(imageUrl)
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('只能采纳已上传的图片原图地址')
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error($('只能采纳已上传的图片原图地址'))
   const isRole = target.category === 1
   await lensFetch<unknown>(isRole ? '/api/lensRole?as=lens' : '/api/lensImage?as=lens', {
     method: 'PUT',
@@ -1701,7 +1703,7 @@ export async function associateLensAssetTaskResult(target: LensAssetTaskAdoption
 /** 保存资产提示词到 Lens 业务表；资产分类和 ID 必须来自当前节点，不写入 flow。 */
 export async function saveLensAssetPrompt(params: { category: number; entityId: string; dramaId: string; prompt: string }): Promise<void> {
   if (!params.entityId || !params.dramaId || ![1, 2, 3].includes(params.category)) {
-    throw new Error('资产身份或剧本信息缺失，无法保存提示词')
+    throw new Error($('资产身份或剧本信息缺失，无法保存提示词'))
   }
   const endpoint = params.category === 1 ? '/api/lensRole' : '/api/lensImage'
   await lensFetch<unknown>(endpoint, {
@@ -1841,7 +1843,7 @@ export async function runTaskByCanvas(params: LensCanvasTaskSubmitParams): Promi
     body: JSON.stringify(payload),
   })
   if (typeof data?.taskId !== 'number' || !Number.isFinite(data.taskId)) {
-    throw new Error('lens 生图任务提交失败：响应未返回合法 taskId')
+    throw new Error($('lens 生图任务提交失败：响应未返回合法 taskId'))
   }
   return data
 }
@@ -1916,7 +1918,7 @@ export async function runVideoTaskByCanvas(params: LensCanvasVideoSubmitParams):
     body: JSON.stringify(payload),
   })
   if (typeof data?.taskId !== 'number' || !Number.isFinite(data.taskId)) {
-    throw new Error('lens 视频任务提交失败：响应未返回合法 taskId')
+    throw new Error($('lens 视频任务提交失败：响应未返回合法 taskId'))
   }
   return data
 }
@@ -1969,11 +1971,11 @@ export async function getCanvasTaskStatus(taskId: number): Promise<LensCanvasTas
     `/api/taskQueue/status?taskId=${encodeURIComponent(String(taskId))}`,
   )
   if (typeof data?.taskId !== 'number' || !Number.isFinite(data.taskId)) {
-    throw new Error('lens 任务状态查询失败：响应未返回合法 taskId')
+    throw new Error($('lens 任务状态查询失败：响应未返回合法 taskId'))
   }
   // 显式拒绝未知状态，禁止兜底成「继续轮询」或「成功」
   if (!LENS_TASK_QUEUE_STATUSES.includes(data.status)) {
-    throw new Error(`lens 任务状态查询失败：未知任务状态 ${String(data.status)}`)
+    throw new Error($t('lens 任务状态查询失败：未知任务状态 {{status}}', { status: String(data.status) }))
   }
   return data
 }
@@ -2113,7 +2115,7 @@ export async function deleteLensNodePreset(id: string): Promise<void> {
 /** 从 lens 已有身份接口读取真实管理员角色，不使用 TapCanvas 开发环境权限。 */
 export async function getLensCurrentUserIsAdmin(): Promise<boolean> {
   const info = await lensFetch<{ roles?: unknown }>('/api/getInfo')
-  if (!Array.isArray(info.roles)) throw new Error('身份接口未返回角色列表')
+  if (!Array.isArray(info.roles)) throw new Error($('身份接口未返回角色列表'))
   return info.roles.includes('admin')
 }
 
@@ -2164,7 +2166,7 @@ export interface LensPromptPolishParams {
 export async function polishPrompt(params: LensPromptPolishParams): Promise<LensPromptPolishResult> {
   const prompt = typeof params.prompt === 'string' ? params.prompt.trim() : ''
   if (!prompt) {
-    throw new Error('缺少待润色的提示词')
+    throw new Error($('缺少待润色的提示词'))
   }
   const body: Record<string, unknown> = { prompt }
   if (params.systemPrompt) body.systemPrompt = params.systemPrompt
@@ -2177,7 +2179,7 @@ export async function polishPrompt(params: LensPromptPolishParams): Promise<Lens
   // 显式失败：后端必须返回非空 polishedText，拿不到就直接报错，不做任何兜底
   const polishedText = typeof data?.polishedText === 'string' ? data.polishedText.trim() : ''
   if (!polishedText) {
-    throw new Error('提示词润色失败：接口未返回有效内容')
+    throw new Error($('提示词润色失败：接口未返回有效内容'))
   }
   return { polishedText, billing: normalizeLensPromptPolishBilling(data?.billing) }
 }
@@ -2217,7 +2219,7 @@ export interface LensImageUnderstandParams {
 export async function understandImage(params: LensImageUnderstandParams): Promise<LensImageUnderstandResult> {
   const imageUrl = typeof params.imageUrl === 'string' ? params.imageUrl.trim() : ''
   if (!imageUrl) {
-    throw new Error('缺少待理解的图片地址')
+    throw new Error($('缺少待理解的图片地址'))
   }
   const body: Record<string, unknown> = { imageUrl }
   if (params.prompt) body.prompt = params.prompt
@@ -2231,7 +2233,7 @@ export async function understandImage(params: LensImageUnderstandParams): Promis
   // 显式失败：后端必须返回非空 text，拿不到就直接报错，不做任何兜底
   const text = typeof data?.text === 'string' ? data.text.trim() : ''
   if (!text) {
-    throw new Error('反推画面描述失败：接口未返回有效内容')
+    throw new Error($('反推画面描述失败：接口未返回有效内容'))
   }
   return { text, billing: normalizeLensPromptPolishBilling(data?.billing) }
 }
@@ -2248,7 +2250,7 @@ export async function fetchImageUnderstandBillingPreview(): Promise<LensPromptPo
   const data = await lensFetch<Record<string, unknown>>('/api/canvas/imageUnderstand/billing')
   const preview = normalizeLensPromptPolishBillingPreview(data)
   if (!preview) {
-    throw new Error('反推画面描述计费预览失败：后端返回字段缺失或类型不符')
+    throw new Error($('反推画面描述计费预览失败：后端返回字段缺失或类型不符'))
   }
   return preview
 }
@@ -2314,7 +2316,7 @@ export async function fetchPromptPolishBillingPreview(
     const data = await lensFetch<Record<string, unknown>>('/api/canvas/promptPolish/billing')
     const preview = normalizeLensPromptPolishBillingPreview(data)
     if (!preview) {
-      throw new Error('AI润色计费预览失败：后端返回字段缺失或类型不符')
+      throw new Error($('AI润色计费预览失败：后端返回字段缺失或类型不符'))
     }
     // 失败不写缓存（异常直接抛给调用方），成功才登记 TTL，保证失败后重试能真实发请求
     promptPolishBillingCache.set(cacheKey, { preview, expiresAt: Date.now() + PROMPT_POLISH_BILLING_TTL_MS })
@@ -2433,7 +2435,7 @@ export interface LensCanvasUploadedAsset {
  */
 function normalizeLensOssPostObjectPolicy(raw: unknown): LensOssPostObjectPolicy {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('获取 OSS 上传凭证失败：lens 返回结构不合法')
+    throw new Error($('获取 OSS 上传凭证失败：lens 返回结构不合法'))
   }
   const record = raw as Record<string, unknown>
   /** 仅接受非空字符串，其余类型一律视为缺失 */
@@ -2449,10 +2451,10 @@ function normalizeLensOssPostObjectPolicy(raw: unknown): LensOssPostObjectPolicy
   }
   const missing = (Object.keys(policy) as Array<keyof LensOssPostObjectPolicy>).filter((key) => !policy[key])
   if (missing.length > 0) {
-    throw new Error(`获取 OSS 上传凭证失败：lens 返回缺少字段 ${missing.join('/')}`)
+    throw new Error($t('获取 OSS 上传凭证失败：lens 返回缺少字段 {{fields}}', { fields: missing.join('/') }))
   }
   if (!/^https?:\/\//i.test(policy.host)) {
-    throw new Error(`获取 OSS 上传凭证失败：上传地址不合法 ${policy.host}`)
+    throw new Error($t('获取 OSS 上传凭证失败：上传地址不合法 {{host}}', { host: policy.host }))
   }
   return policy
 }
@@ -2547,7 +2549,7 @@ export async function uploadLensCanvasAssetFile(file: File, name?: string): Prom
       costMs: Date.now() - startedAt,
       reason,
     })
-    throw new Error(`画布图片上传 OSS 失败：${reason}`)
+    throw new Error($t('画布图片上传 OSS 失败：{{reason}}', { reason }))
   }
   if (response.status !== 200) {
     lensLog('error', '[lens] ✗ 画布图片上传 OSS 失败（HTTP 状态非 200）', {
@@ -2556,7 +2558,7 @@ export async function uploadLensCanvasAssetFile(file: File, name?: string): Prom
       httpStatus: response.status,
       costMs: Date.now() - startedAt,
     })
-    throw new Error(`画布图片上传 OSS 失败：HTTP ${response.status}`)
+    throw new Error($t('画布图片上传 OSS 失败：HTTP {{status}}', { status: response.status }))
   }
   lensLog('log', `[lens] ✓ 画布图片已上传 OSS ${Date.now() - startedAt}ms`, { key })
   // 文件名可能含中文/空格：OSS key 保持原样上传，访问 URL 必须做 URI 编码，

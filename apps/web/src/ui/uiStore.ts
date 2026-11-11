@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { $, $t } from '../canvas/i18n'
 
 let hoveredEdgeClearTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -407,7 +408,7 @@ function normalizePersistedCreationSession(value: unknown): PersistedCreationSes
     : []
   return {
     id,
-    title: typeof raw.title === 'string' ? raw.title.trim() : 'AI 创作',
+    title: typeof raw.title === 'string' ? raw.title.trim() : $('AI 创作'),
     status,
     unitType,
     currentIndex: toInt(raw.currentIndex, 0),
@@ -542,7 +543,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   clearFocusedSubgraph: () => set({ focusedNodeId: null }),
   edgeRoute: 'smooth',
   toggleEdgeRoute: () => set((s) => ({ edgeRoute: s.edgeRoute === 'smooth' ? 'orth' : 'smooth' })),
-  currentFlow: { id: null, name: '未命名', source: 'local', ownerType: 'project', ownerId: null },
+  currentFlow: { id: null, name: $('未命名'), source: 'local', ownerType: 'project', ownerId: null },
   setCurrentFlow: (patch) => set((s) => ({ currentFlow: { ...s.currentFlow, ...(patch||{}) } })),
   canvasViewport: null,
   setCanvasViewport: (v) => set({ canvasViewport: v }),
@@ -632,7 +633,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({
       creationSession: {
         id: payload.id,
-        title: String(payload.title || '').trim() || current?.title || 'AI 创作',
+        title: String(payload.title || '').trim() || current?.title || $('AI 创作'),
         status: payload.status || current?.status || 'running',
         unitType: payload.unitType,
         currentIndex: nextIndex,
@@ -653,7 +654,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     const nextTotalRaw = typeof payload.total === 'number' && Number.isFinite(payload.total)
       ? Math.max(committedIndex, Math.trunc(payload.total))
       : Math.max(current.total, committedIndex)
-    const nextSummary = String(payload.summary || '').trim() || current.summary || '创作进度已保存'
+    const nextSummary = String(payload.summary || '').trim() || current.summary || $('创作进度已保存')
     const nextNodeId = String(payload.nodeId || current.currentNodeId || '').trim()
     const nextStatus = payload.status || (payload.unitType === 'scene' ? 'paused' : 'running')
     const nextHistory =
@@ -695,8 +696,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     const nextCurrentIndex = latestRemaining ? latestRemaining.index : 0
     const nextNodeId = latestRemaining?.nodeId ? String(latestRemaining.nodeId).trim() : ''
     const nextSummary = latestRemaining
-      ? `已回退到场景 ${latestRemaining.index}。可继续下一场景，或重做当前结果。`
-      : '已回退到起点。可重新开始当前场景创作。'
+      ? $t('已回退到场景 {{index}}。可继续下一场景，或重做当前结果。', { index: latestRemaining.index })
+      : $('已回退到起点。可重新开始当前场景创作。')
     set({
       creationSession: {
         ...current,
@@ -718,7 +719,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       creationSession: {
         ...current,
         status: 'paused',
-        summary: current.summary || '创作已暂停',
+        summary: current.summary || $('创作已暂停'),
         updatedAt: Date.now(),
       },
     })
@@ -726,7 +727,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   completeCreationSession: (summary) => {
     const current = get().creationSession
     if (!current) return
-    const nextSummary = String(summary || '').trim() || current.summary || '创作已完成'
+    const nextSummary = String(summary || '').trim() || current.summary || $('创作已完成')
     const completedWithoutProgress =
       current.currentIndex <= 0 &&
       current.total <= 0 &&
@@ -755,7 +756,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         ...current,
         status: 'failed',
         lastError: String(message || '').trim(),
-        summary: '创作失败',
+        summary: $('创作失败'),
         updatedAt: Date.now(),
       },
     })

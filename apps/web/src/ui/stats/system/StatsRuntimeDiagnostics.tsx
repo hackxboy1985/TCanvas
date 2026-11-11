@@ -11,6 +11,7 @@ import {
 } from '../../../domain/upload-runtime/store/uploadRuntimeStore'
 import { PanelCard } from '../../PanelCard'
 import { InlinePanel } from '../../InlinePanel'
+import { $ } from '../../../canvas/i18n'
 
 function formatBytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -100,18 +101,18 @@ export default function StatsRuntimeDiagnostics({ className }: { className?: str
         <PanelCard className="stats-runtime-diagnostics__section-card" padding="compact">
           <Stack className="stats-runtime-diagnostics__section-stack" gap="sm">
             <div className="stats-runtime-diagnostics__section-header">
-              <Text className="stats-runtime-diagnostics__section-title" size="sm" fw={700}>资源运行时</Text>
+              <Text className="stats-runtime-diagnostics__section-title" size="sm" fw={700}>{ $('资源运行时') }</Text>
               <Text className="stats-runtime-diagnostics__section-subtitle" size="xs" c="dimmed">
-                句柄、对象 URL、trim 与下载槽位快照。
+                { $('句柄、对象 URL、trim 与下载槽位快照。') }
               </Text>
             </div>
             <Group className="stats-runtime-diagnostics__metrics-grid" grow align="stretch">
-              <SummaryMetric label="句柄" value={String(resourceSnapshot.handleCount)} hint={`active ${resourceSnapshot.activeHandleCount} / ready ${resourceSnapshot.readyHandleCount}`} color="blue" />
-              <SummaryMetric label="对象 URL" value={String(resourceSnapshot.readyObjectUrlCount)} hint={`revoked ${resourceSnapshot.revokedObjectUrlCount} / bitmap ${resourceSnapshot.readyBitmapCount}`} color="indigo" />
-              <SummaryMetric label="解码队列" value={`${resourceSnapshot.activeDecodeCount}/${resourceSnapshot.queuedDecodeCount}`} hint="ready 前的受控 decode 并发" color="orange" />
-              <SummaryMetric label="估算内存" value={formatBytes(resourceSnapshot.totalEstimatedBytes)} hint={`trim ${resourceSnapshot.trimmedResourceCount} / reason ${formatTrimReason(resourceSnapshot.lastTrimReason)}`} color="teal" />
-              <SummaryMetric label="下载队列" value={`${resourceSnapshot.activeDownloadCount}/${resourceSnapshot.queuedDownloadCount}`} hint={`critical ${resourceSnapshot.criticalHandleCount} / visible ${resourceSnapshot.visibleHandleCount}`} color="cyan" />
-              <SummaryMetric label="批处理队列" value={`${resourceSnapshot.activeBatchJobCount}/${resourceSnapshot.queuedBatchJobCount}`} hint="mosaic / referenceSheet 单独排队" color="grape" />
+              <SummaryMetric label={ $('句柄') } value={String(resourceSnapshot.handleCount)} hint={`active ${resourceSnapshot.activeHandleCount} / ready ${resourceSnapshot.readyHandleCount}`} color="blue" />
+              <SummaryMetric label={ $('对象 URL') } value={String(resourceSnapshot.readyObjectUrlCount)} hint={`revoked ${resourceSnapshot.revokedObjectUrlCount} / bitmap ${resourceSnapshot.readyBitmapCount}`} color="indigo" />
+              <SummaryMetric label={ $('解码队列') } value={`${resourceSnapshot.activeDecodeCount}/${resourceSnapshot.queuedDecodeCount}`} hint={ $('ready 前的受控 decode 并发') } color="orange" />
+              <SummaryMetric label={ $('估算内存') } value={formatBytes(resourceSnapshot.totalEstimatedBytes)} hint={`trim ${resourceSnapshot.trimmedResourceCount} / reason ${formatTrimReason(resourceSnapshot.lastTrimReason)}`} color="teal" />
+              <SummaryMetric label={ $('下载队列') } value={`${resourceSnapshot.activeDownloadCount}/${resourceSnapshot.queuedDownloadCount}`} hint={`critical ${resourceSnapshot.criticalHandleCount} / visible ${resourceSnapshot.visibleHandleCount}`} color="cyan" />
+              <SummaryMetric label={ $('批处理队列') } value={`${resourceSnapshot.activeBatchJobCount}/${resourceSnapshot.queuedBatchJobCount}`} hint={ $('mosaic / referenceSheet 单独排队') } color="grape" />
             </Group>
             <Group className="stats-runtime-diagnostics__resource-badges" gap={6} wrap="wrap">
               <Badge className="stats-runtime-diagnostics__resource-badge" variant="light">loading {resourceSnapshot.loadingHandleCount}</Badge>
@@ -132,16 +133,16 @@ export default function StatsRuntimeDiagnostics({ className }: { className?: str
         <PanelCard className="stats-runtime-diagnostics__section-card" padding="compact">
           <Stack className="stats-runtime-diagnostics__section-stack" gap="sm">
             <div className="stats-runtime-diagnostics__section-header">
-              <Text className="stats-runtime-diagnostics__section-title" size="sm" fw={700}>上传运行时</Text>
+              <Text className="stats-runtime-diagnostics__section-title" size="sm" fw={700}>{ $('上传运行时') }</Text>
               <Text className="stats-runtime-diagnostics__section-subtitle" size="xs" c="dimmed">
-                pending requestKey、owner 归属与重复阻断计数。
+                { $('pending requestKey、owner 归属与重复阻断计数。') }
               </Text>
             </div>
             <Group className="stats-runtime-diagnostics__metrics-grid" grow align="stretch">
-              <SummaryMetric label="节点上传中" value={String(uploadSnapshot.activeNodeImageUploadCount)} hint={`pending ${uploadSnapshot.pendingUploadCount}`} color="blue" />
-              <SummaryMetric label="重复阻断" value={String(uploadSnapshot.duplicateBlockedCount)} hint={`multi-owner ${uploadSnapshot.multiOwnerPendingCount}`} color="orange" />
-              <SummaryMetric label="owner 绑定" value={String(uploadSnapshot.ownerBoundPendingCount)} hint={`ownerless ${uploadSnapshot.ownerlessPendingCount} / errors ${uploadSnapshot.ownerBindingErrorCount}`} color={uploadSnapshot.ownerBindingErrorCount > 0 ? 'red' : 'teal'} />
-              <SummaryMetric label="最老 pending" value={formatDuration(uploadSnapshot.oldestPendingAgeMs)} hint="按 startedAt 计算" color="grape" />
+              <SummaryMetric label={ $('节点上传中') } value={String(uploadSnapshot.activeNodeImageUploadCount)} hint={`pending ${uploadSnapshot.pendingUploadCount}`} color="blue" />
+              <SummaryMetric label={ $('重复阻断') } value={String(uploadSnapshot.duplicateBlockedCount)} hint={`multi-owner ${uploadSnapshot.multiOwnerPendingCount}`} color="orange" />
+              <SummaryMetric label={ $('owner 绑定') } value={String(uploadSnapshot.ownerBoundPendingCount)} hint={`ownerless ${uploadSnapshot.ownerlessPendingCount} / errors ${uploadSnapshot.ownerBindingErrorCount}`} color={uploadSnapshot.ownerBindingErrorCount > 0 ? 'red' : 'teal'} />
+              <SummaryMetric label={ $('最老 pending') } value={formatDuration(uploadSnapshot.oldestPendingAgeMs)} hint={ $('按 startedAt 计算') } color="grape" />
             </Group>
           </Stack>
         </PanelCard>
@@ -150,9 +151,9 @@ export default function StatsRuntimeDiagnostics({ className }: { className?: str
       <PanelCard className="stats-runtime-diagnostics__table-card" padding="compact">
         <Stack className="stats-runtime-diagnostics__table-stack" gap="sm">
           <Group className="stats-runtime-diagnostics__table-header" justify="space-between" align="center" wrap="wrap">
-            <Text className="stats-runtime-diagnostics__table-title" size="sm" fw={700}>当前资源句柄</Text>
+            <Text className="stats-runtime-diagnostics__table-title" size="sm" fw={700}>{ $('当前资源句柄') }</Text>
             <Text className="stats-runtime-diagnostics__table-subtitle" size="xs" c="dimmed">
-              当前展示前 16 项，按 refCount / estimatedBytes / lastAccess 排序。
+              { $('当前展示前 16 项，按 refCount / estimatedBytes / lastAccess 排序。') }
             </Text>
           </Group>
           <div className="stats-runtime-diagnostics__table-wrap" style={{ overflowX: 'auto' }}>
@@ -173,7 +174,7 @@ export default function StatsRuntimeDiagnostics({ className }: { className?: str
                 {resourceRows.length === 0 ? (
                   <Table.Tr className="stats-runtime-diagnostics__table-empty-row">
                     <Table.Td className="stats-runtime-diagnostics__table-empty-cell" colSpan={8}>
-                      <Text className="stats-runtime-diagnostics__table-empty" size="sm" c="dimmed">当前没有资源句柄</Text>
+                      <Text className="stats-runtime-diagnostics__table-empty" size="sm" c="dimmed">{ $('当前没有资源句柄') }</Text>
                     </Table.Td>
                   </Table.Tr>
                 ) : resourceRows.map((entry) => (
@@ -215,9 +216,9 @@ export default function StatsRuntimeDiagnostics({ className }: { className?: str
       <PanelCard className="stats-runtime-diagnostics__table-card" padding="compact">
         <Stack className="stats-runtime-diagnostics__table-stack" gap="sm">
           <Group className="stats-runtime-diagnostics__table-header" justify="space-between" align="center" wrap="wrap">
-            <Text className="stats-runtime-diagnostics__table-title" size="sm" fw={700}>当前上传聚合</Text>
+            <Text className="stats-runtime-diagnostics__table-title" size="sm" fw={700}>{ $('当前上传聚合') }</Text>
             <Text className="stats-runtime-diagnostics__table-subtitle" size="xs" c="dimmed">
-              按 requestKey 聚合后的 pending uploads，可直接检查 owner 绑定是否缺失。
+              { $('按 requestKey 聚合后的 pending uploads，可直接检查 owner 绑定是否缺失。') }
             </Text>
           </Group>
           <div className="stats-runtime-diagnostics__table-wrap" style={{ overflowX: 'auto' }}>
@@ -237,7 +238,7 @@ export default function StatsRuntimeDiagnostics({ className }: { className?: str
                 {pendingRows.length === 0 ? (
                   <Table.Tr className="stats-runtime-diagnostics__table-empty-row">
                     <Table.Td className="stats-runtime-diagnostics__table-empty-cell" colSpan={7}>
-                      <Text className="stats-runtime-diagnostics__table-empty" size="sm" c="dimmed">当前没有 pending upload</Text>
+                      <Text className="stats-runtime-diagnostics__table-empty" size="sm" c="dimmed">{ $('当前没有 pending upload') }</Text>
                     </Table.Td>
                   </Table.Tr>
                 ) : pendingRows.map((item) => {

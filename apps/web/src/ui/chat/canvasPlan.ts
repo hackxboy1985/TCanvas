@@ -23,6 +23,7 @@ import { useUIStore } from '../uiStore'
 import { resolveCanvasPlanLayout, type LayoutPlanGroup } from './canvasPlanLayout'
 import { autoConnectReferenceNodesForTargets } from './referenceNodeAutowire'
 import { CANVAS_PLAN_TAG_NAME, canvasPlanSchema, type ChatCanvasPlan } from '@tapcanvas/canvas-plan-protocol'
+import { $t } from '../../canvas/i18n'
 
 const PLAN_PATTERN = new RegExp(`<${CANVAS_PLAN_TAG_NAME}>([\\s\\S]*?)</${CANVAS_PLAN_TAG_NAME}>`, 'i')
 
@@ -259,7 +260,7 @@ function validateCanvasPlan(plan: ChatCanvasPlan): ChatCanvasPlan {
     if (!VISUAL_PROMPT_REQUIRED_KINDS.has(kind)) continue
     if (isReferenceOnlyImageNode(node)) continue
     if (!prompt) {
-      throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 缺少 config.prompt；分镜/图像节点必须提供可执行视觉提示词，禁止用 label 兜底。`)
+      throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 缺少 config.prompt；分镜/图像节点必须提供可执行视觉提示词，禁止用 label 兜底。', { label: node.label, kind: kind }))
     }
   }
   for (const node of normalizedPlan.nodes) {
@@ -269,19 +270,19 @@ function validateCanvasPlan(plan: ChatCanvasPlan): ChatCanvasPlan {
     const prompt = extractVideoExecutionPromptFromConfig(node.config || {})
     const storyBeatPlan = extractStoryBeatPlan(node)
     if (!prompt) {
-      throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 缺少 config.prompt；视频节点必须提供唯一可执行 prompt。`)
+      throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 缺少 config.prompt；视频节点必须提供唯一可执行 prompt。', { label: node.label, kind: kind }))
     }
     const targetDuration = readTargetVideoDuration(node)
     if (storyBeatPlan.length > 0) {
       const beatDurationSum = storyBeatPlan.reduce((sum, item) => sum + extractBeatDuration(item), 0)
       if (targetDuration !== null && targetDuration <= 5 && storyBeatPlan.length > 3) {
-        throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 在 ${targetDuration} 秒短视频里塞入了 ${storyBeatPlan.length} 个拍点；请拆成多个视频节点或压缩到 2-3 个强拍点。`)
+        throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 在 {{targetDuration}} 秒短视频里塞入了 {{length}} 个拍点；请拆成多个视频节点或压缩到 2-3 个强拍点。', { label: node.label, kind: kind, targetDuration: targetDuration, length: storyBeatPlan.length }))
       }
       if (targetDuration !== null && targetDuration > 5 && targetDuration <= 10 && storyBeatPlan.length > 4) {
-        throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 在 ${targetDuration} 秒短视频里塞入了 ${storyBeatPlan.length} 个拍点；请拆成多个视频节点或压缩到 3-4 个强拍点。`)
+        throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 在 {{targetDuration}} 秒短视频里塞入了 {{length}} 个拍点；请拆成多个视频节点或压缩到 3-4 个强拍点。', { label: node.label, kind: kind, targetDuration: targetDuration, length: storyBeatPlan.length }))
       }
       if (targetDuration !== null && beatDurationSum > 0 && beatDurationSum > targetDuration + 1) {
-        throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 的 storyBeatPlan 总时长约 ${beatDurationSum} 秒，已超过目标视频时长 ${targetDuration} 秒；请减少镜头或拆分为多个视频节点。`)
+        throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 的 storyBeatPlan 总时长约 {{beatDurationSum}} 秒，已超过目标视频时长 {{targetDuration}} 秒；请减少镜头或拆分为多个视频节点。', { label: node.label, kind: kind, beatDurationSum: beatDurationSum, targetDuration: targetDuration }))
       }
     }
   }
@@ -402,10 +403,10 @@ function normalizePlanNovelTraceability(plan: ChatCanvasPlan): ChatCanvasPlan {
       }
     }
     if (!getStringField(config, 'sourceBookId')) {
-      throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 缺少 config.sourceBookId；章节关联节点必须可追溯到唯一书籍。`)
+      throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 缺少 config.sourceBookId；章节关联节点必须可追溯到唯一书籍。', { label: node.label, kind: kind }))
     }
     if (getChapterValueFromConfig(config) === undefined && getNumberField(config, 'materialChapter') === undefined) {
-      throw new Error(`画布计划校验失败：节点「${node.label}」(${kind}) 缺少 config.materialChapter；章节关联节点必须显式落到具体章节。`)
+      throw new Error($t('画布计划校验失败：节点「{{label}}」({{kind}}) 缺少 config.materialChapter；章节关联节点必须显式落到具体章节。', { label: node.label, kind: kind }))
     }
     return {
       ...node,
@@ -734,13 +735,13 @@ export async function executeCanvasPlan(plan: ChatCanvasPlan): Promise<{
     })
 
     if (!createResult.success) {
-      throw new Error(createResult.error || `创建节点失败：${node.label}`)
+      throw new Error(createResult.error || $t('创建节点失败：{{label}}', { label: node.label }))
     }
 
     const data = createResult.data as Record<string, unknown>
     const nodeId = typeof data.nodeId === 'string' ? data.nodeId.trim() : ''
     if (!nodeId) {
-      throw new Error(`创建节点成功但缺少 nodeId：${node.label}`)
+      throw new Error($t('创建节点成功但缺少 nodeId：{{label}}', { label: node.label }))
     }
 
     clientIdToNodeId.set(node.clientId, nodeId)
@@ -761,7 +762,7 @@ export async function executeCanvasPlan(plan: ChatCanvasPlan): Promise<{
     const sourceNodeId = clientIdToNodeId.get(edge.sourceClientId) || ''
     const targetNodeId = clientIdToNodeId.get(edge.targetClientId) || ''
     if (!sourceNodeId || !targetNodeId) {
-      throw new Error(`创建连线失败：缺少节点映射 ${edge.sourceClientId} -> ${edge.targetClientId}`)
+      throw new Error($t('创建连线失败：缺少节点映射 {{sourceClientId}} -> {{targetClientId}}', { sourceClientId: edge.sourceClientId, targetClientId: edge.targetClientId }))
     }
 
     const connectResult = await CanvasService.connectNodes({
@@ -771,7 +772,7 @@ export async function executeCanvasPlan(plan: ChatCanvasPlan): Promise<{
       ...(edge.targetHandle ? { targetHandle: edge.targetHandle } : {}),
     })
     if (!connectResult.success && !String(connectResult.error || '').includes('已存在连接')) {
-      throw new Error(connectResult.error || `创建连线失败：${sourceNodeId} -> ${targetNodeId}`)
+      throw new Error(connectResult.error || $t('创建连线失败：{{sourceNodeId}} -> {{targetNodeId}}', { sourceNodeId: sourceNodeId, targetNodeId: targetNodeId }))
     }
     createdEdgeCount += 1
   }

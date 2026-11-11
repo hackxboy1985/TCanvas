@@ -1,6 +1,7 @@
 import React from 'react'
 import { ActionIcon, Group, Loader, Modal, Text } from '@mantine/core'
 import { IconX } from '@tabler/icons-react'
+import { $ } from '../canvas/i18n'
 
 type WebCutVideoEditModalProps = {
   opened: boolean
@@ -41,7 +42,7 @@ export function WebCutVideoEditModal(props: WebCutVideoEditModalProps): JSX.Elem
                 <Group className="webcut-video-edit-modal__uploading" gap={6} style={{ pointerEvents: 'none' }}>
                   <Loader className="webcut-video-edit-modal__uploading-icon" size="xs" />
                   <Text className="webcut-video-edit-modal__uploading-text" size="xs" c="dimmed">
-                    正在上传剪辑结果…
+                    {$('正在上传剪辑结果…')}
                   </Text>
                 </Group>
               )}
@@ -52,7 +53,7 @@ export function WebCutVideoEditModal(props: WebCutVideoEditModalProps): JSX.Elem
               color="gray"
               onClick={onClose}
               disabled={loading}
-              title="关闭"
+              title={$('关闭')}
               style={{ pointerEvents: 'auto', background: 'rgba(0,0,0,.35)' }}
             >
               <IconX className="webcut-video-edit-modal__close-icon" size={18} />

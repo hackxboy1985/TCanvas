@@ -6,6 +6,7 @@ import { setTapImageDragData } from '../../../dnd/setTapImageDragData'
 import { MAX_FRAME_ANALYSIS_SAMPLES } from '../../taskNodeHelpers'
 import { isOssVideoUrl, buildOssVideoSnapshotUrl } from '../../../../utils/ossVideoSnapshot'
 import type { FrameSample } from '../types'
+import { $, $t } from '../../../i18n'
 
 type VideoFramePreviewProps = {
   /** 要抽帧的视频地址（分镜节点取 selectedImageUrl，视频节点取主视频结果） */
@@ -78,7 +79,7 @@ export function VideoFramePreview({
   const handleCapture = React.useCallback(async () => {
     const src = String(videoUrl || '').trim()
     if (!src) {
-      onNotify('当前没有可用的视频链接', 'error')
+      onNotify($('当前没有可用的视频链接'), 'error')
       return
     }
     setFrameCaptureLoading(true)
@@ -97,7 +98,7 @@ export function VideoFramePreview({
           describing: false,
         }))
         setFrameSamples(ossFrames)
-        onNotify(`已生成 ${ossFrames.length} 帧截图 URL`, 'success')
+        onNotify($t('已生成 {{v1}} 帧截图 URL', { v1: ossFrames.length }), 'success')
         return
       }
       
@@ -115,12 +116,12 @@ export function VideoFramePreview({
         })),
       )
       if (!frames.length) {
-        onNotify('未能抽取到有效帧，可能受跨域或视频格式限制', 'error')
+        onNotify($('未能抽取到有效帧，可能受跨域或视频格式限制'), 'error')
       } else {
-        onNotify(`已抽取 ${frames.length} 帧`, 'success')
+        onNotify($t('已抽取 {{v1}} 帧', { v1: frames.length }), 'success')
       }
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : '抽帧失败，可能是跨域或视频格式不支持'
+      const message = error instanceof Error && error.message ? error.message : $('抽帧失败，可能是跨域或视频格式不支持')
       onNotify(message, 'error')
     } finally {
       setFrameCaptureLoading(false)
@@ -149,11 +150,11 @@ export function VideoFramePreview({
           loading={frameCaptureLoading}
           onClick={() => void handleCapture()}
         >
-          抽帧预览
+          {$('抽帧预览')}
         </Button>
         {frameSamples.length > 0 && (
           <Button className="video-frame-preview-clear" size="compact-xs" variant="subtle" onClick={cleanupFrameSamples}>
-            清空帧
+            {$('清空帧')}
           </Button>
         )}
       </Group>
@@ -168,7 +169,7 @@ export function VideoFramePreview({
               className="video-frame-preview-card nodrag nopan"
               key={`${frame.url}-${frame.time}`}
               style={{ display: 'flex', flexDirection: 'column', gap: 4, cursor: 'grab' }}
-              title="拖拽到画布生成图片节点"
+              title={$("拖拽到画布生成图片节点")}
               draggable
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}

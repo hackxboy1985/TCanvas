@@ -14,6 +14,7 @@ import { useLiveChatRunStore, type LiveChatRunRecord } from './chat/liveChatRunS
 import { InlinePanel } from './InlinePanel'
 import { PanelCard } from './PanelCard'
 import { toast } from './toast'
+import { $ } from '../canvas/i18n'
 
 type AgentStateStoragePanelProps = {
   className?: string
@@ -679,7 +680,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
   const handleCopySnapshot = React.useCallback(async () => {
     const payload = JSON.stringify(snapshotPayload, null, 2)
     const ok = await copyText(payload)
-    toast(ok ? '已复制状态快照' : '复制状态快照失败', ok ? 'success' : 'error')
+    toast(ok ? $('已复制状态快照') : $('复制状态快照失败'), ok ? 'success' : 'error')
   }, [snapshotPayload])
 
   return (
@@ -689,7 +690,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
           <Group className="agent-state-storage-panel__hero-header" justify="space-between" align="center" wrap="wrap">
             <Group className="agent-state-storage-panel__hero-header-main" gap="xs" wrap="wrap">
               <Text className="agent-state-storage-panel__hero-title" size="sm" fw={700}>
-                前端状态存储概览
+                { $('前端状态存储概览') }
               </Text>
               <Group className="agent-state-storage-panel__hero-badges" gap="xs" wrap="wrap">
                 <Badge className="agent-state-storage-panel__hero-badge" variant="light" color="blue">
@@ -712,11 +713,11 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
               variant="light"
               onClick={() => void handleCopySnapshot()}
             >
-              复制快照
+              { $('复制快照') }
             </Button>
           </Group>
           <Text className="agent-state-storage-panel__hero-text" size="xs" c="dimmed">
-            这里只读展示当前浏览器内的 Zustand 状态规模、历史快照和热点字段，便于定位哪一块在吃内存。
+            { $('这里只读展示当前浏览器内的 Zustand 状态规模、历史快照和热点字段，便于定位哪一块在吃内存。') }
           </Text>
         </Stack>
       </PanelCard>
@@ -769,7 +770,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
                   Current Node Payload Hotspots
                 </Text>
                 <Text className="agent-state-storage-panel__section-subtitle" size="xs" c="dimmed">
-                  当前仅统计在内存中的 `node.data` 顶层字段
+                  { $('当前仅统计在内存中的 `node.data` 顶层字段') }
                 </Text>
               </Group>
               <div className="agent-state-storage-panel__table-wrap" style={{ overflowX: 'auto' }}>
@@ -787,7 +788,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
                       <Table.Tr className="agent-state-storage-panel__table-empty-row">
                         <Table.Td className="agent-state-storage-panel__table-empty-cell" colSpan={4}>
                           <Text className="agent-state-storage-panel__table-empty-text" size="sm" c="dimmed">
-                            当前没有可统计的节点 payload
+                            { $('当前没有可统计的节点 payload') }
                           </Text>
                         </Table.Td>
                       </Table.Tr>
@@ -880,7 +881,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
               <Stack className="agent-state-storage-panel__section-stack" gap="sm">
                 <Group className="agent-state-storage-panel__section-header" justify="space-between" align="center" wrap="wrap">
                   <Text className="agent-state-storage-panel__section-title" size="sm" fw={700}>
-                    DOM 图片/渲染挂载
+                    { $('DOM 图片/渲染挂载') }
                   </Text>
                   <Badge className="agent-state-storage-panel__section-badge" variant="light" color="blue">
                     {`img ${formatCount(domImageStats.imageCount)}`}
@@ -895,7 +896,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
                   <Badge className="agent-state-storage-panel__resource-badge" variant="light">{`video ${formatCount(domImageStats.videoCount)}`}</Badge>
                 </Group>
                 <Text className="agent-state-storage-panel__section-subtitle" size="xs" c="dimmed">
-                  这是页面真实挂载的 DOM 观测，用来辅助判断标签页总内存是否主要来自图片预览、blob URL 或渲染层，而不是 Zustand store。
+                  { $('这是页面真实挂载的 DOM 观测，用来辅助判断标签页总内存是否主要来自图片预览、blob URL 或渲染层，而不是 Zustand store。') }
                 </Text>
               </Stack>
             </PanelCard>
@@ -904,7 +905,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
               <Stack className="agent-state-storage-panel__section-stack" gap="sm">
                 <Group className="agent-state-storage-panel__section-header" justify="space-between" align="center" wrap="wrap">
                   <Text className="agent-state-storage-panel__section-title" size="sm" fw={700}>
-                    资源句柄大户
+                    { $('资源句柄大户') }
                   </Text>
                   <Badge className="agent-state-storage-panel__section-badge" variant="light" color="teal">
                     {`top ${formatCount(resourceEntryRows.length)}`}
@@ -926,7 +927,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
                         <Table.Tr className="agent-state-storage-panel__table-empty-row">
                           <Table.Td className="agent-state-storage-panel__table-empty-cell" colSpan={5}>
                             <Text className="agent-state-storage-panel__table-empty-text" size="sm" c="dimmed">
-                              当前没有资源句柄
+                              { $('当前没有资源句柄') }
                             </Text>
                           </Table.Td>
                         </Table.Tr>
@@ -1019,7 +1020,7 @@ export default function AgentStateStoragePanel(props: AgentStateStoragePanelProp
                 </>
               ) : (
                 <Text className="agent-state-storage-panel__live-empty" size="sm" c="dimmed">
-                  当前没有活动中的实时聊天运行态。
+                  { $('当前没有活动中的实时聊天运行态。') }
                 </Text>
               )}
             </Stack>

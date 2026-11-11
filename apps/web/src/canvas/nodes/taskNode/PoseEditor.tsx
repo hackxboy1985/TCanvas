@@ -16,6 +16,7 @@ import {
   normalizeCanvasResizeSize,
   parseCanvasResizeSizeDimensions,
 } from './imageEditSize'
+import { $, $t } from '../../i18n'
 
 export type PosePoint = { name: string; x: number; y: number }
 
@@ -86,28 +87,28 @@ type StyleConvertModeConfig = {
 const STYLE_CONVERT_MODE_CONFIGS: StyleConvertModeConfig[] = [
   {
     value: 'sketch',
-    tabLabel: '转线稿',
-    title: '转线稿',
-    hint: '把当前图片转换成黑白线稿：只保留主体轮廓与结构线，去掉颜色、光影与材质。',
-    actionLabel: '生成线稿图',
+    tabLabel: $('转线稿'),
+    title: $('转线稿'),
+    hint: $('把当前图片转换成黑白线稿：只保留主体轮廓与结构线，去掉颜色、光影与材质。'),
+    actionLabel: $('生成线稿图'),
     defaultPrompt:
       '把这张图转换成干净的黑白线稿：只保留主体轮廓与结构线，白底黑线，轮廓清晰闭合；去掉颜色、光影、材质与渐变；线条粗细均匀，不添加任何文字或水印。',
   },
   {
     value: 'depthmap',
-    tabLabel: '转深度图',
-    title: '转深度图',
-    hint: '把当前图片转换成深度图：用灰度表达远近关系，近亮远暗，只保留几何与空间层次。',
-    actionLabel: '生成深度图',
+    tabLabel: $('转深度图'),
+    title: $('转深度图'),
+    hint: $('把当前图片转换成深度图：用灰度表达远近关系，近亮远暗，只保留几何与空间层次。'),
+    actionLabel: $('生成深度图'),
     defaultPrompt:
       '把这张图转换成深度图：用灰度表示远近，近处亮、远处暗；只保留几何结构与空间层次，忽略颜色、材质与文字；过渡平滑，不添加任何新物体。',
   },
   {
     value: 'clay',
-    tabLabel: '转白模',
-    title: '转白模',
-    hint: '把当前图片转换成白模渲染：纯白石膏材质，去掉贴图与颜色，保留造型与比例。',
-    actionLabel: '生成白模图',
+    tabLabel: $('转白模'),
+    title: $('转白模'),
+    hint: $('把当前图片转换成白模渲染：纯白石膏材质，去掉贴图与颜色，保留造型与比例。'),
+    actionLabel: $('生成白模图'),
     defaultPrompt:
       '参考图片，将图片完整转化为画面100%全覆盖无残留的纯白石膏白模渲染图，保留原始构图、主体造型与空间纵深关系。按物理结构塑形：表面为纯净无贴图、无颜色的白色漫反射材质，仅靠柔和均匀的环境光与浅淡接触阴影表达体积与结构转折，禁止彩色、禁止材质纹理、禁止高光过曝的死白平面、禁止硬边分界与大面积纯色平面，结构轮廓清晰可辨，不添加任何文字或水印。',
   },
@@ -303,7 +304,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
 
   const openEditor = React.useCallback((baseImageUrl?: string) => {
     if (!options.hasImages) {
-      toast('请先上传或生成图片', 'warning')
+      toast($('请先上传或生成图片'), 'warning')
       return
     }
     setActiveBaseImageUrl((baseImageUrl || options.baseImageUrl || '').trim())
@@ -575,7 +576,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       const img = new Image()
       img.crossOrigin = 'anonymous'
       img.onload = () => resolve(img)
-      img.onerror = () => reject(new Error('加载图片失败，无法进行尺寸调整'))
+      img.onerror = () => reject(new Error($('加载图片失败，无法进行尺寸调整')))
       img.src = url
     })
   }, [])
@@ -595,7 +596,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     const hosted = await uploadServerAssetFile(file, filename)
     const remoteUrl = typeof hosted?.data?.url === 'string' ? hosted.data.url.trim() : ''
     if (!remoteUrl || !isRemoteUrl(remoteUrl)) {
-      throw new Error('图片上传失败，请稍后重试')
+      throw new Error($('图片上传失败，请稍后重试'))
     }
     return remoteUrl
   }, [])
@@ -623,13 +624,13 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     guideCanvas.width = Math.max(1, image.naturalWidth)
     guideCanvas.height = Math.max(1, image.naturalHeight)
     const guideCtx = guideCanvas.getContext('2d')
-    if (!guideCtx) throw new Error('Canvas 初始化失败')
+    if (!guideCtx) throw new Error($('Canvas 初始化失败'))
 
     const scaledMaskCanvas = document.createElement('canvas')
     scaledMaskCanvas.width = guideCanvas.width
     scaledMaskCanvas.height = guideCanvas.height
     const scaledMaskCtx = scaledMaskCanvas.getContext('2d')
-    if (!scaledMaskCtx) throw new Error('Canvas 初始化失败')
+    if (!scaledMaskCtx) throw new Error($('Canvas 初始化失败'))
 
     const previewRect = getContainedImageRect(image.naturalWidth, image.naturalHeight)
     scaledMaskCtx.imageSmoothingEnabled = true
@@ -650,7 +651,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     dimCanvas.width = guideCanvas.width
     dimCanvas.height = guideCanvas.height
     const dimCtx = dimCanvas.getContext('2d')
-    if (!dimCtx) throw new Error('Canvas 初始化失败')
+    if (!dimCtx) throw new Error($('Canvas 初始化失败'))
     dimCtx.fillStyle = 'rgba(4,10,20,0.42)'
     dimCtx.fillRect(0, 0, dimCanvas.width, dimCanvas.height)
     dimCtx.globalCompositeOperation = 'destination-out'
@@ -663,19 +664,19 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     guideCtx.drawImage(scaledMaskCanvas, 0, 0)
     guideCtx.restore()
 
-    return await uploadCanvasAsset(guideCanvas, 'mask-focus-guide.png', '生成局部编辑引导图失败')
+    return await uploadCanvasAsset(guideCanvas, 'mask-focus-guide.png', $('生成局部编辑引导图失败'))
   }, [activeBaseImageUrl, getContainedImageRect, loadImageElement, maskDirty, maskEnabled, uploadCanvasAsset])
 
   const exportResizedImage = React.useCallback(async (): Promise<string> => {
     if (!isRemoteUrl(activeBaseImageUrl)) {
-      throw new Error('请先上传主图到可访问的链接，再进行尺寸调整')
+      throw new Error($('请先上传主图到可访问的链接，再进行尺寸调整'))
     }
     const image = await loadImageElement(activeBaseImageUrl)
     const canvas = document.createElement('canvas')
     canvas.width = selectedSizeDimensions.width
     canvas.height = selectedSizeDimensions.height
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Canvas 初始化失败')
+    if (!ctx) throw new Error($('Canvas 初始化失败'))
     const scale = Math.max(
       canvas.width / Math.max(1, image.naturalWidth),
       canvas.height / Math.max(1, image.naturalHeight),
@@ -700,18 +701,18 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     return await uploadCanvasAsset(
       canvas,
       `image-resize-${selectedSizeDimensions.label}.png`,
-      '导出尺寸调整图片失败',
+      $('导出尺寸调整图片失败'),
     )
   }, [activeBaseImageUrl, loadImageElement, selectedSizeDimensions.label, selectedSizeDimensions.width, selectedSizeDimensions.height, uploadCanvasAsset])
 
   const handleApply = React.useCallback(async () => {
     const canvas = canvasRef.current
     if (editMode === 'pose' && !canvas) {
-      toast('姿势画布未就绪，请重试', 'error')
+      toast($('姿势画布未就绪，请重试'), 'error')
       return
     }
     if (!isRemoteUrl(activeBaseImageUrl)) {
-      toast('主图不是在线地址，将仅上传参考图/圈选，推荐先上传到可访问的链接', 'warning')
+      toast($('主图不是在线地址，将仅上传参考图/圈选，推荐先上传到可访问的链接'), 'warning')
     }
     setUploading(true)
     try {
@@ -720,11 +721,11 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       if (isStyleConvertMode(editMode)) {
         const stylePrompt = styleConvertPrompt.trim()
         if (!stylePrompt) {
-          toast('请先填写提示词', 'warning')
+          toast($('请先填写提示词'), 'warning')
           return
         }
         if (!isRemoteUrl(activeBaseImageUrl)) {
-          toast('主图不是在线地址，无法作为转换参考', 'error')
+          toast($('主图不是在线地址，无法作为转换参考'), 'error')
           return
         }
         options.onPoseSaved?.({
@@ -759,14 +760,14 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
           imageEditSize: canvasResizeSize,
           resizedImageUrl,
         })
-        toast('尺寸调整已生成新图', 'success')
+        toast($('尺寸调整已生成新图'), 'success')
         setOpen(false)
         return
       }
       options.onImageEditSizeChange?.(selectedImageEditSize)
       let remoteUrl: string | null = null
       if (editMode === 'pose') {
-        remoteUrl = await uploadCanvasAsset(canvas!, 'pose-stickman.png', '生成参考图失败')
+        remoteUrl = await uploadCanvasAsset(canvas!, 'pose-stickman.png', $('生成参考图失败'))
       }
 
       // 只有本次重新圈选才生成新引导图；否则沿用节点上已保存的图（见 localEditMaskGuide 语义）
@@ -807,11 +808,11 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
           imageEditSize: selectedImageEditSize,
         })
       }
-      toast('图片编辑参考已保存，将作为 Nano Banana 图像编辑参考', 'success')
+      toast($('图片编辑参考已保存，将作为 Nano Banana 图像编辑参考'), 'success')
       setOpen(false)
     } catch (err: any) {
       console.error('handleApplyPose error', err)
-      toast(err?.message || '图片编辑参考保存失败', 'error')
+      toast(err?.message || $('图片编辑参考保存失败'), 'error')
     } finally {
       setUploading(false)
     }
@@ -853,10 +854,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
     // 服务端只能拉取可访问的在线图片；local/blob/asset 未解析成 http(s) 时显式失败，不做本地猜测
     const imageUrl = resolveUnderstandImageUrl(rawImageUrl)
     if (!imageUrl) {
-      throw new Error('当前图片不是可访问的在线地址，请先上传主图后再反推画面描述')
+      throw new Error($('当前图片不是可访问的在线地址，请先上传主图后再反推画面描述'))
     }
     if (!isLensMode() && !apiKey && !token) {
-      throw new Error('请先登录后再试')
+      throw new Error($('请先登录后再试'))
     }
     if (isLensMode()) {
       const result = await understandImage({ imageUrl })
@@ -879,7 +880,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
 
   const handleGenerateDescription = React.useCallback(async () => {
     if (!isRemoteUrl(activeBaseImageUrl)) {
-      toast('请先上传主图到可访问的链接再进行局部修改', 'error')
+      toast($('请先上传主图到可访问的链接再进行局部修改'), 'error')
       return
     }
     setDescriptionLoading(true)
@@ -889,11 +890,11 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       // 不再做 JSON 解析/格式化，也不再发起二次「结构化细分」请求。
       const text = (await requestImageDescription(activeBaseImageUrl)).trim()
       if (!text) {
-        throw new Error('未返回可用的画面描述')
+        throw new Error($('未返回可用的画面描述'))
       }
       setDescriptionText(text)
     } catch (err: any) {
-      const message = err?.message || '局部修改失败'
+      const message = err?.message || $('局部修改失败')
       setDescriptionError(message)
       toast(message, 'error')
     } finally {
@@ -911,7 +912,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       title={(
         <Group className="pose-editor__header" gap={10} align="center" justify="space-between" wrap="nowrap">
           <Text className="pose-editor__title" size="md" fw={700}>
-            编辑模式
+            {$('编辑模式')}
           </Text>
           <SegmentedControl
             className="pose-editor__mode"
@@ -919,9 +920,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
             value={editMode}
             onChange={(value) => setEditMode(value as PoseEditMode)}
             data={[
-              { value: 'pose', label: '姿势调整' },
-              { value: 'depth', label: '局部修改' },
-              { value: 'size', label: '尺寸调整' },
+              { value: 'pose', label: $('姿势调整') },
+              { value: 'depth', label: $('局部修改') },
+              { value: 'size', label: $('尺寸调整') },
               ...STYLE_CONVERT_MODE_CONFIGS.map((item) => ({ value: item.value, label: item.tabLabel })),
             ]}
             styles={{
@@ -952,35 +953,35 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
       <Stack className="pose-editor__content" gap="sm" style={{ height: '100%' }}>
         <Text className="pose-editor__intro" size="xs" c="dimmed">
           {editMode === 'pose'
-            ? '使用方法：拖动火柴人指定新的动作参考，再补充提示词。姿势模式只使用火柴人参考，不支持局部圈选。'
+            ? $('使用方法：拖动火柴人指定新的动作参考，再补充提示词。姿势模式只使用火柴人参考，不支持局部圈选。')
             : editMode === 'depth'
-              ? '使用方法：先在原图上圈出需要修改的区域，再编辑画面描述（可点「反推画面描述」自动生成）。圈选会转成高亮引导图，模型只修改该区域，其余保持原样。'
+              ? $('使用方法：先在原图上圈出需要修改的区域，再编辑画面描述（可点「反推画面描述」自动生成）。圈选会转成高亮引导图，模型只修改该区域，其余保持原样。')
               : editMode === 'size'
-                ? '使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。'
-                : `使用方法：以当前原图为唯一参考，按下方提示词转换为「${activeStyleConvertConfig?.title || ''}」。提示词可修改后再生成，结果会作为新图片节点。`}
+                ? $('使用方法：选择目标尺寸后，本地按目标比例居中裁切导出新图，不加黑边，不调用任何生图接口。')
+                : $t('使用方法：以当前原图为唯一参考，按下方提示词转换为「{{v1}}」。提示词可修改后再生成，结果会作为新图片节点。', { v1: activeStyleConvertConfig?.title || '' })}
         </Text>
         <Group className="pose-editor__panels" align="stretch" gap="md" grow style={{ flex: 1, minHeight: 0 }}>
           <Stack className="pose-editor__panel" gap={8}>
             <Group className="pose-editor__panel-header" gap={8} align="center" justify="space-between">
               <Group className="pose-editor__panel-heading" gap={8} align="center" wrap="nowrap">
                 <Text className="pose-editor__panel-title" size="sm" fw={600}>
-                  {maskEnabled ? '原图圈选（可选）' : '原图预览'}
+                  {maskEnabled ? $('原图圈选（可选）') : $('原图预览')}
                 </Text>
                 {editMode === 'size' ? (
                   <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
-                    仅用于观察原图
+                    {$('仅用于观察原图')}
                   </Badge>
                 ) : editMode === 'pose' ? (
                   <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
-                    姿势模式不支持圈选
+                    {$('姿势模式不支持圈选')}
                   </Badge>
                 ) : isStyleConvertMode(editMode) ? (
                   <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="gray">
-                    仅作为转换参考
+                    {$('仅作为转换参考')}
                   </Badge>
                 ) : (
                   <Badge className="pose-editor__panel-badge" size="xs" variant="outline" color="orange">
-                    仅修改圈选区域
+                    {$('仅修改圈选区域')}
                   </Badge>
                 )}
               </Group>
@@ -990,18 +991,18 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 <Group className="pose-editor__mask-tools" gap={8} align="center" wrap="nowrap">
                   <Group className="pose-editor__brush" gap={6} align="center" wrap="nowrap">
                     <Text className="pose-editor__brush-label" size="xs" c="dimmed">
-                      笔触
+                      {$('笔触')}
                     </Text>
                     <SegmentedControl
                       className="pose-editor__brush-size-control"
                       size="xs"
-                      aria-label="笔触粗细"
+                      aria-label={$("笔触粗细")}
                       value={String(maskBrushSize)}
                       onChange={(value) => setMaskBrushSize(Number(value))}
                       data={[
-                        { value: String(MASK_BRUSH_THIN), label: '细' },
-                        { value: String(MASK_BRUSH_MEDIUM), label: '中' },
-                        { value: String(MASK_BRUSH_THICK), label: '粗' },
+                        { value: String(MASK_BRUSH_THIN), label: $('细') },
+                        { value: String(MASK_BRUSH_MEDIUM), label: $('中') },
+                        { value: String(MASK_BRUSH_THICK), label: $('粗') },
                       ]}
                     />
                   </Group>
@@ -1014,7 +1015,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     onClick={clearMask}
                     disabled={!maskDirty && (!options.poseMaskUrl || maskCleared)}
                   >
-                    清除圈选
+                    {$('清除圈选')}
                   </Button>
                 </Group>
               ) : null}
@@ -1052,7 +1053,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 />
               ) : (
                 <Text className="pose-editor__base-empty" size="xs" c="dimmed" style={{ padding: 12 }}>
-                  未找到在线主图，请先上传到可访问的地址
+                  {$('未找到在线主图，请先上传到可访问的地址')}
                 </Text>
               )}
               {maskEnabled ? (
@@ -1083,21 +1084,21 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
               <>
                 {maskCleared ? (
                   <Text className="pose-editor__mask-hint" size="xs" c="dimmed">
-                    已清除圈选：保存后将移除该节点上的局部编辑引导图。
+                    {$('已清除圈选：保存后将移除该节点上的局部编辑引导图。')}
                   </Text>
                 ) : options.poseMaskUrl && !maskDirty ? (
                   <Text className="pose-editor__mask-hint" size="xs" c="dimmed">
-                    已保存过圈选引导图：不重新圈选将沿用，重新圈选会覆盖。
+                    {$('已保存过圈选引导图：不重新圈选将沿用，重新圈选会覆盖。')}
                   </Text>
                 ) : null}
               </>
             ) : editMode === 'pose' ? (
               <Text className="pose-editor__size-preview-note" size="xs" c="dimmed">
-                姿势调整只会提交火柴人参考和提示词，不会提交局部涂抹区域。
+                {$('姿势调整只会提交火柴人参考和提示词，不会提交局部涂抹区域。')}
               </Text>
             ) : (
               <Text className="pose-editor__size-preview-note" size="xs" c="dimmed">
-                导出时会按目标比例居中裁切，完整填满画面，不再补黑边。
+                {$('导出时会按目标比例居中裁切，完整填满画面，不再补黑边。')}
               </Text>
             )}
           </Stack>
@@ -1107,10 +1108,10 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                   <Stack className="pose-editor__panel-stack" gap={8}>
                     <Group className="pose-editor__panel-header" gap={8} align="center">
                       <Text className="pose-editor__panel-title" size="sm" fw={600}>
-                        火柴人参考（必选）
+                        {$('火柴人参考（必选）')}
                       </Text>
                       <Badge className="pose-editor__panel-badge" size="xs" variant="light">
-                        必选
+                        {$('必选')}
                       </Badge>
                     </Group>
                     <canvas
@@ -1136,8 +1137,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     />
                     <Textarea
                       className="pose-editor__pose-prompt"
-                      label="补充提示词"
-                      placeholder="示例：保持原衣着，只调整手部动作；光影延续原图"
+                      label={$("补充提示词")}
+                      placeholder={$("示例：保持原衣着，只调整手部动作；光影延续原图")}
                       autosize
                       minRows={2}
                       maxRows={4}
@@ -1153,9 +1154,9 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       size="xs"
                       onClick={() => setPoints(createDefaultPosePoints())}
                     >
-                      重置火柴人
+                      {$('重置火柴人')}
                     </Button>
-                    <Tooltip className="pose-editor__save-tooltip" label="保存火柴人参考和提示词，并原位更新当前镜头">
+                    <Tooltip className="pose-editor__save-tooltip" label={$("保存火柴人参考和提示词，并原位更新当前镜头")}>
                       <Button
                         className="pose-editor__save"
                         size="xs"
@@ -1163,7 +1164,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         onClick={handleApply}
                         loading={uploading}
                       >
-                        保存并生成
+                        {$('保存并生成')}
                       </Button>
                     </Tooltip>
                   </Group>
@@ -1172,7 +1173,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 <>
                   <Stack className="pose-editor__panel-stack" gap={8}>
                     <Text className="pose-editor__panel-title" size="sm" fw={600}>
-                      画面描述（可编辑）
+                      {$('画面描述（可编辑）')}
                     </Text>
                     <Text
                       className="pose-editor__depth-hint"
@@ -1180,7 +1181,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       c="dimmed"
                       style={{ color: options.isDarkUi ? 'rgba(226,232,240,0.7)' : '#475569' }}
                     >
-                      点「反推画面描述」可让模型按当前图片生成一段自然语言描述（与「AI 润色」同类型），再按需要修改文字；保存后会把圈选高亮图作为局部编辑区域引导。「保存并生成」才会调用生图模型。
+                      {$('点「反推画面描述」可让模型按当前图片生成一段自然语言描述（与「AI 润色」同类型），再按需要修改文字；保存后会把圈选高亮图作为局部编辑区域引导。「保存并生成」才会调用生图模型。')}
                     </Text>
                     <Group className="pose-editor__panel-actions" gap={6}>
                       <Button
@@ -1190,7 +1191,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         loading={descriptionLoading}
                         onClick={handleGenerateDescription}
                       >
-                        反推画面描述
+                        {$('反推画面描述')}
                       </Button>
                       {descriptionError && (
                         <Text className="pose-editor__depth-error" size="xs" c="red">
@@ -1200,8 +1201,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     </Group>
                     <Textarea
                       className="pose-editor__depth-textarea"
-                      label="画面描述"
-                      placeholder="点击“反推画面描述”后在此编辑，也可以直接手写"
+                      label={$("画面描述")}
+                      placeholder={$("点击“反推画面描述”后在此编辑，也可以直接手写")}
                       autosize
                       minRows={4}
                       maxRows={7}
@@ -1211,7 +1212,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                   </Stack>
                   <div className="pose-editor__spacer" style={{ flex: 1 }} />
                   <Group className="pose-editor__panel-actions" gap={6}>
-                    <Tooltip className="pose-editor__save-tooltip" label="保存圈选引导和画面描述，并原位生图更新当前镜头">
+                    <Tooltip className="pose-editor__save-tooltip" label={$("保存圈选引导和画面描述，并原位生图更新当前镜头")}>
                       <Button
                         className="pose-editor__save"
                         size="xs"
@@ -1219,7 +1220,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         onClick={handleApply}
                         loading={uploading}
                       >
-                        保存并生成
+                        {$('保存并生成')}
                       </Button>
                     </Tooltip>
                   </Group>
@@ -1240,8 +1241,8 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                     </Text>
                     <Textarea
                       className="pose-editor__style-convert-textarea"
-                      label="提示词（可编辑）"
-                      placeholder="描述要转换成的画面风格与必须保留的结构"
+                      label={$("提示词（可编辑）")}
+                      placeholder={$("描述要转换成的画面风格与必须保留的结构")}
                       autosize
                       minRows={4}
                       maxRows={8}
@@ -1253,7 +1254,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                   <Group className="pose-editor__panel-actions" gap={6}>
                     <Tooltip
                       className="pose-editor__save-tooltip"
-                      label="以当前原图为参考，按提示词生成新图片节点"
+                      label={$("以当前原图为参考，按提示词生成新图片节点")}
                     >
                       <Button
                         className="pose-editor__save"
@@ -1271,7 +1272,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                 <>
                   <Stack className="pose-editor__panel-stack" gap={8}>
                     <Text className="pose-editor__panel-title" size="sm" fw={600}>
-                      尺寸调整
+                      {$('尺寸调整')}
                     </Text>
                     <Text
                       className="pose-editor__depth-hint"
@@ -1279,11 +1280,11 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       c="dimmed"
                       style={{ color: options.isDarkUi ? 'rgba(226,232,240,0.7)' : '#475569' }}
                     >
-                      直接用 Canvas 按目标比例裁切导出，不调用任何生图接口。
+                      {$('直接用 Canvas 按目标比例裁切导出，不调用任何生图接口。')}
                     </Text>
                     <Select
                       className="pose-editor__size-select"
-                      label="输出尺寸"
+                      label={$("输出尺寸")}
                       value={selectedCanvasResizePreset}
                       onChange={(value) => {
                         if (typeof value !== 'string' || !value.trim()) return
@@ -1301,7 +1302,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                           value: item.value,
                           label: item.label,
                         })),
-                        { value: '__custom__', label: '自定义尺寸' },
+                        { value: '__custom__', label: $('自定义尺寸') },
                       ]}
                       allowDeselect={false}
                     />
@@ -1309,7 +1310,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                       <Group className="pose-editor__size-custom-group" gap="sm" grow>
                         <NumberInput
                           className="pose-editor__size-custom-width"
-                          label="宽度"
+                          label={$("宽度")}
                           min={64}
                           max={4096}
                           step={1}
@@ -1322,7 +1323,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         />
                         <NumberInput
                           className="pose-editor__size-custom-height"
-                          label="高度"
+                          label={$("高度")}
                           min={64}
                           max={4096}
                           step={1}
@@ -1373,14 +1374,14 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         </div>
                       ) : (
                         <Text className="pose-editor__size-preview-stage-empty" size="xs" c="dimmed">
-                          未找到在线主图
+                          {$('未找到在线主图')}
                         </Text>
                       )}
                     </div>
                   </Stack>
                   <div className="pose-editor__spacer" style={{ flex: 1 }} />
                   <Group className="pose-editor__panel-actions" gap={6}>
-                    <Tooltip className="pose-editor__save-tooltip" label="仅导出当前尺寸新图，不调用任何生图接口">
+                    <Tooltip className="pose-editor__save-tooltip" label={$("仅导出当前尺寸新图，不调用任何生图接口")}>
                       <Button
                         className="pose-editor__save"
                         size="xs"
@@ -1388,7 +1389,7 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
                         onClick={handleApply}
                         loading={uploading}
                       >
-                        保存新图
+                        {$('保存新图')}
                       </Button>
                     </Tooltip>
                   </Group>
@@ -1398,12 +1399,12 @@ export function usePoseEditor(options: UsePoseEditorOptions) {
         </Group>
         <Text className="pose-editor__note" size="xs" c="dimmed" style={{ whiteSpace: 'normal' }}>
           {editMode === 'pose'
-            ? '效果：火柴人姿势和补充提示词会引导模型重排人物动作，不支持局部圈选。'
+            ? $('效果：火柴人姿势和补充提示词会引导模型重排人物动作，不支持局部圈选。')
             : editMode === 'depth'
-              ? '效果：圈选过区域时，圈选高亮图会作为局部编辑区域引导，模型只修改高亮区域、其余保持原图不变；没有圈选则整张图都可能被修改。'
+              ? $('效果：圈选过区域时，圈选高亮图会作为局部编辑区域引导，模型只修改高亮区域、其余保持原图不变；没有圈选则整张图都可能被修改。')
               : editMode === 'size'
-                ? '尺寸调整只做本地导出与上传，不触发远端图像编辑任务。'
-                : `效果：以原图为唯一参考、按提示词生成「${activeStyleConvertConfig?.title || ''}」，结果作为新的图片编辑节点，不修改原节点。`}
+                ? $('尺寸调整只做本地导出与上传，不触发远端图像编辑任务。')
+                : $t('效果：以原图为唯一参考、按提示词生成「{{v1}}」，结果作为新的图片编辑节点，不修改原节点。', { v1: activeStyleConvertConfig?.title || '' })}
         </Text>
       </Stack>
     </Modal>

@@ -58,6 +58,7 @@ import { runNodeRemote } from '../runner/remoteRunner'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
 
+import { $, $t } from '../canvas/i18n'
 /** 读取 URL query 参数 */
 function readQueryParams(): { dramaId: string; episode: number } {
   const params = new URLSearchParams(window.location.search)
@@ -575,7 +576,7 @@ function buildCanvasNodes(input: {
     const assetId = roleIdOf(asset)
     const children = roleChildrenByParent.get(assetId) ?? []
     // 角色：只展示三视图（threeImg），全身图/近身图不处理
-    addNode(`role-${assetId}`, 'image', asset.characterName || '角色', { x: COL1_X, y: roleCursorY }, {
+    addNode(`role-${assetId}`, 'image', asset.characterName || $('角色'), { x: COL1_X, y: roleCursorY }, {
       roleId: asset.roleId,
       roleName: asset.characterName,
       imageUrl: asset.threeImg,
@@ -584,7 +585,7 @@ function buildCanvasNodes(input: {
       source: 'lens_projection',
       nodeWidth: LENS_ASSET_NODE_WIDTH,
       nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
-      lensTypeLabel: '角色',
+      lensTypeLabel: $('角色'),
       assetCategory: 1,
       entityId: assetId,
       prompt: asset.description || '',
@@ -596,7 +597,7 @@ function buildCanvasNodes(input: {
       addNode(
         `role-${childId}`,
         'image',
-        child.characterName || '角色',
+        child.characterName || $('角色'),
         { x: COL1_X + (childIndex + 1) * CHILD_GAP_X, y: roleCursorY + ROW_GAP },
         {
           roleId: child.roleId,
@@ -609,7 +610,7 @@ function buildCanvasNodes(input: {
           source: 'lens_projection',
           nodeWidth: LENS_ASSET_NODE_WIDTH,
           nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
-          lensTypeLabel: '子造型',
+          lensTypeLabel: $('子造型'),
           assetCategory: 1,
           entityId: childId,
           parentEntityId: assetId,
@@ -630,13 +631,13 @@ function buildCanvasNodes(input: {
   sceneRoots.forEach((asset) => {
     const assetId = sceneIdOf(asset)
     const children = sceneChildrenByParent.get(assetId) ?? []
-    addNode(`scene-${assetId}`, 'image', asset.imgName || '场景', { x: COL2_X, y: sceneCursorY }, {
+    addNode(`scene-${assetId}`, 'image', asset.imgName || $('场景'), { x: COL2_X, y: sceneCursorY }, {
       imageUrl: asset.imgUrl,
       anchorBindings: [{ kind: 'scene', entityId: assetId, label: asset.imgName, imageUrl: asset.imgUrl }],
       source: 'lens_projection',
       nodeWidth: LENS_ASSET_NODE_WIDTH,
       nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
-      lensTypeLabel: '场景',
+      lensTypeLabel: $('场景'),
       assetCategory: 2,
       entityId: assetId,
       prompt: asset.description || '',
@@ -648,7 +649,7 @@ function buildCanvasNodes(input: {
       addNode(
         `scene-${childId}`,
         'image',
-        child.imgName || '场景',
+        child.imgName || $('场景'),
         { x: COL2_X + (childIndex + 1) * CHILD_GAP_X, y: sceneCursorY + ROW_GAP },
         {
           imageUrl: child.imgUrl,
@@ -658,7 +659,7 @@ function buildCanvasNodes(input: {
           source: 'lens_projection',
           nodeWidth: LENS_ASSET_NODE_WIDTH,
           nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
-          lensTypeLabel: '子场景',
+          lensTypeLabel: $('子场景'),
           assetCategory: 2,
           entityId: childId,
           parentEntityId: assetId,
@@ -675,13 +676,13 @@ function buildCanvasNodes(input: {
   propAssets.forEach((asset, index) => {
     const y = sceneColumnBottom + index * ROW_GAP
     const assetId = String(asset.assetId || '')
-    addNode(`prop-${assetId}`, 'image', asset.imgName || '道具', { x: COL2_X, y }, {
+    addNode(`prop-${assetId}`, 'image', asset.imgName || $('道具'), { x: COL2_X, y }, {
       imageUrl: asset.imgUrl,
       anchorBindings: [{ kind: 'prop', entityId: assetId, label: asset.imgName, imageUrl: asset.imgUrl }],
       source: 'lens_projection',
       nodeWidth: LENS_ASSET_NODE_WIDTH,
       nodeHeight: LENS_ASSET_MEDIA_HEIGHT,
-      lensTypeLabel: '道具',
+      lensTypeLabel: $('道具'),
       assetCategory: 3,
       entityId: assetId,
       prompt: asset.description || '',
@@ -700,18 +701,18 @@ function buildCanvasNodes(input: {
   }
   const TEXT_GAP = 40
   let scriptCursorY = lastCol2Y + 3 * 250
-  addNode('script-content', 'text', '剧本原文', { x: COL2_X, y: scriptCursorY }, {
+  addNode('script-content', 'text', $('剧本原文'), { x: COL2_X, y: scriptCursorY }, {
     prompt: script.content || '',
     hidden: true,
     source: 'lens_projection',
-    lensTypeLabel: '剧本',
+    lensTypeLabel: $('剧本'),
   })
   scriptCursorY += estimateTextNodeHeight(script.content || '') + TEXT_GAP
-  addNode('script-script-content', 'text', '台本', { x: COL2_X, y: scriptCursorY }, {
+  addNode('script-script-content', 'text', $('台本'), { x: COL2_X, y: scriptCursorY }, {
     prompt: script.scriptContent || '',
     hidden: true,
     source: 'lens_projection',
-    lensTypeLabel: '台本',
+    lensTypeLabel: $('台本'),
   })
 
   // 3. 分镜节点（单个 lensShot 节点，参考生视频；按 storyboardOrder 纵向排列）
@@ -732,7 +733,7 @@ function buildCanvasNodes(input: {
       position: { x: SHOT_COL_X, y },
       data: {
         kind: 'lensShot',
-        label: `分镜${order}`,
+        label: $t('分镜{{order}}', { order: order }),
         entityId: shot.id,
         sourceProjectId: dramaId,
         storyboardOrder: order,
@@ -953,7 +954,7 @@ export default function LensCanvasApp(): JSX.Element {
         return { ...n, position: { x: baseX + idx * 10, y: baseY + idx * 10 } }
       }),
     })
-    const groupId = useRFStore.getState().createGroupForNodeIds(ordered.map((n) => n.id), '分镜组')
+    const groupId = useRFStore.getState().createGroupForNodeIds(ordered.map((n) => n.id), $('分镜组'))
     if (!groupId) return
     shotGroupIdRef.current = groupId
     // 组内位置固定：禁止拖动
@@ -1054,7 +1055,7 @@ export default function LensCanvasApp(): JSX.Element {
         (n) => String((n.data as { entityId?: string })?.entityId ?? '') === parentEntityId,
       )
       const label = String((parent?.data as { label?: string })?.label ?? '').trim()
-      const suffix = category === 1 ? '子造型' : category === 2 ? '子场景' : '同构'
+      const suffix = category === 1 ? $('子造型') : category === 2 ? $('子场景') : $('同构')
       return label ? `${label} · ${suffix}` : suffix
     }
 
@@ -1435,7 +1436,7 @@ export default function LensCanvasApp(): JSX.Element {
     savingRef.current = true
     try {
       const res = await saveFlow(dramaId, targetEpisode, {
-        name: `第${targetEpisode}集`,
+        name: $t('第{{targetEpisode}}集', { targetEpisode: targetEpisode }),
         data,
         version: flowVersionRef.current,
       })
@@ -1454,9 +1455,9 @@ export default function LensCanvasApp(): JSX.Element {
       // 顶部提示只展示失败原因：接口方法/地址由接口层写进控制台日志，不暴露给用户
       const reason = lensErrorReason(err)
       if (reason.includes('已被他人修改')) {
-        setError('编排已被他人修改，请刷新后重试')
+        setError($('编排已被他人修改，请刷新后重试'))
       } else {
-        setError(`编排保存失败：${reason || '保存失败'}`)
+        setError($t('编排保存失败：{{value}}', { value: reason || $('保存失败') }))
       }
       return false
     } finally {
@@ -1550,7 +1551,7 @@ export default function LensCanvasApp(): JSX.Element {
     const flowKey = `${dramaId}:${episodeNum}`
     useUIStore.getState().setCurrentFlow({
       id: flowKey,
-      name: `第${episodeNum}集`,
+      name: $t('第{{episodeNum}}集', { episodeNum: episodeNum }),
       source: 'server',
       ownerType: null,
       ownerId: null,
@@ -1559,7 +1560,7 @@ export default function LensCanvasApp(): JSX.Element {
       // 卸载时清理画布作用域，避免 AiChatDialog 等组件残留指向已关闭画布
       const uiState = useUIStore.getState()
       if (String(uiState.currentFlow?.id || '') === flowKey) {
-        uiState.setCurrentFlow({ id: null, name: '未命名', source: 'local', ownerType: null, ownerId: null })
+        uiState.setCurrentFlow({ id: null, name: $('未命名'), source: 'local', ownerType: null, ownerId: null })
       }
     }
   }, [dramaId, episodeNum])
@@ -1681,8 +1682,8 @@ export default function LensCanvasApp(): JSX.Element {
       }
       load({ nodes: normalizeImageNodeSize(projected.nodes), edges: projected.edges })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '加载失败'
-      setError(`画布加载失败：${msg}（可刷新重试或返回分镜板）`)
+      const msg = err instanceof Error ? err.message : $('加载失败')
+      setError($t('画布加载失败：{{msg}}（可刷新重试或返回分镜板）', { msg: msg }))
     } finally {
       setLoading(false)
       // 刷新后延迟建立「已保存」签名基准：此时布局重排与 viewport 恢复已完成，
@@ -1712,7 +1713,7 @@ export default function LensCanvasApp(): JSX.Element {
 
   // 加载集列表（选集下拉）
   useEffect(() => {
-    if (!dramaId) { setError('缺少 dramaId 参数'); setLoading(false); return }
+    if (!dramaId) { setError($('缺少 dramaId 参数')); setLoading(false); return }
     listEpisodes(dramaId).then(setEpisodes).catch(() => setEpisodes([]))
   }, [dramaId])
 
@@ -1883,7 +1884,7 @@ export default function LensCanvasApp(): JSX.Element {
         if (!url || existingUrls.has(url)) continue
         existingUrls.add(url)
         const mediaType = asset.mediaType === 'video' ? 'video' : 'image'
-        const title = String(asset.title || '').trim() || `AI${mediaType === 'video' ? '视频' : '图片'}-${index + 1}`
+        const title = String(asset.title || '').trim() || `AI${mediaType === 'video' ? $('视频') : $('图片')}-${index + 1}`
         created.push({
           id: `ai-reply-${mediaType}-${Date.now()}-${index}`,
           type: 'taskNode',
@@ -1985,7 +1986,7 @@ export default function LensCanvasApp(): JSX.Element {
 
   const episodeOptions = episodes.map((e) => ({
     value: String(e.episodeNumber),
-    label: `第${e.episodeNumber}集${e.title ? ` · ${e.title}` : ''}`,
+    label: $t('第{{episodeNumber}}集{{title}}', { episodeNumber: e.episodeNumber, title: e.title ? ` · ${e.title}` : '' }),
   }))
 
   /**
@@ -2007,7 +2008,7 @@ export default function LensCanvasApp(): JSX.Element {
       if (!entityId) return null
       return {
         nodeId,
-        title: `分镜${data.storyboardOrder ?? '-'}`,
+        title: $t('分镜{{storyboardOrder}}', { storyboardOrder: String(data.storyboardOrder ?? '-') }),
         kind: 'storyboard',
         dramaId,
         storyboardId: entityId,
@@ -2038,7 +2039,7 @@ export default function LensCanvasApp(): JSX.Element {
       const label =
         (typeof data.label === 'string' && data.label.trim()) ||
         (typeof data.title === 'string' && data.title.trim()) ||
-        '画布节点'
+        $('画布节点')
       return {
         nodeId,
         title: label,
@@ -2064,7 +2065,7 @@ export default function LensCanvasApp(): JSX.Element {
     (nodeId: string) => {
       const target = resolveTaskResultTarget(nodeId)
       if (!target) {
-        toast('该节点没有有效的业务资产ID，暂不支持任务列表')
+        toast($('该节点没有有效的业务资产ID，暂不支持任务列表'))
         return
       }
       setTaskResultTarget(target)
@@ -2139,7 +2140,7 @@ export default function LensCanvasApp(): JSX.Element {
   const handleGenerateAllAssets = useCallback(async () => {
     if (batchGeneratingRef.current) return
     if (!dramaId) {
-      toast('缺少剧ID，无法查询资产表', 'warning')
+      toast($('缺少剧ID，无法查询资产表'), 'warning')
       return
     }
     // 有无资产图一律以资产表为准（lens_asset_image / lens_role.threeImg），
@@ -2164,7 +2165,7 @@ export default function LensCanvasApp(): JSX.Element {
         }
       }
     } catch (error) {
-      toast(`查询资产表失败：${error instanceof Error ? error.message : '未知错误'}`, 'error')
+      toast($t('查询资产表失败：{{value}}', { value: error instanceof Error ? error.message : $('未知错误') }), 'error')
       return
     }
     const allNodes = useRFStore.getState().nodes
@@ -2179,20 +2180,20 @@ export default function LensCanvasApp(): JSX.Element {
     }
     const skippedCount = assetNodes.length - pendingNodes.length
     if (assetNodes.length === 0) {
-      toast('画布中没有角色/场景/道具资产节点', 'warning')
+      toast($('画布中没有角色/场景/道具资产节点'), 'warning')
       return
     }
     if (pendingNodes.length === 0) {
-      toast(`画布中 ${assetNodes.length} 个资产节点都已有资产图，无需生成`, 'info')
+      toast($t('画布中 {{count}} 个资产节点都已有资产图，无需生成', { count: assetNodes.length }), 'info')
       return
     }
     const confirmed = await confirmCanvasAction({
-      title: '生成全部资产',
-      message: `只生成本集画布中没有资产图的角色/场景/道具（以资产表为准）：\n`
-        + `• 资产节点共 ${assetNodes.length} 个，已有资产图的 ${skippedCount} 个会自动跳过，本次提交 ${pendingNodes.length} 个\n`
-        + '• 子角色/子场景会参考父级资产图；同一父级下等父级生成完成后才提交（父级串行、同级并发）\n'
-        + '• 生成会消耗积分，请确认',
-      confirmText: `开始生成（${pendingNodes.length} 个）`,
+      title: $('生成全部资产'),
+      message: $(`只生成本集画布中没有资产图的角色/场景/道具（以资产表为准）：\n`)
+        + $t('• 资产节点共 {{count}} 个，已有资产图的 {{skippedCount}} 个会自动跳过，本次提交 {{count2}} 个\n', { count: assetNodes.length, skippedCount: skippedCount, count2: pendingNodes.length })
+        + $('• 子角色/子场景会参考父级资产图；同一父级下等父级生成完成后才提交（父级串行、同级并发）\n')
+        + $('• 生成会消耗积分，请确认'),
+      confirmText: $t('开始生成（{{count}} 个）', { count: pendingNodes.length }),
     })
     if (!confirmed) return
     batchGeneratingRef.current = true
@@ -2261,14 +2262,14 @@ export default function LensCanvasApp(): JSX.Element {
         await runNodeRemote(node.id, useRFStore.getState, useRFStore.setState)
         const after = useRFStore.getState().nodes.find((item) => item.id === node.id)
         if (!after || !readAssetNodeImageUrl(after.data)) {
-          markFailed(node, '未产出资产图')
+          markFailed(node, $('未产出资产图'))
           return
         }
         successCount += 1
         setBatchSuccess(successCount)
         setBatchFinished((prev) => prev + 1)
       } catch (error) {
-        markFailed(node, error instanceof Error ? error.message : '生成失败')
+        markFailed(node, error instanceof Error ? error.message : $('生成失败'))
       } finally {
         if (restoreReferenceImages) restoreReferenceImages()
       }
@@ -2300,7 +2301,7 @@ export default function LensCanvasApp(): JSX.Element {
           if (failedIds.has(parentId)) {
             remaining.delete(id)
             const node = pendingById.get(id)
-            if (node) markFailed(node, '父级生成失败，已跳过')
+            if (node) markFailed(node, $('父级生成失败，已跳过'))
             continue
           }
           ready.push(id)
@@ -2312,14 +2313,14 @@ export default function LensCanvasApp(): JSX.Element {
       // 兜底：依赖成环/父级一直未完成时，剩余节点显式记失败，不静默丢弃
       remaining.forEach((id) => {
         const node = pendingById.get(id)
-        if (node) markFailed(node, '父级未完成，已跳过')
+        if (node) markFailed(node, $('父级未完成，已跳过'))
       })
     } finally {
       batchGeneratingRef.current = false
       setBatchGenerating(false)
       setBatchCurrentLabel('')
     }
-    const summary = `生成全部资产完成：成功 ${successCount}，失败 ${failedCount}，跳过（已有图）${skippedCount}`
+    const summary = $t('生成全部资产完成：成功 {{successCount}}，失败 {{failedCount}}，跳过（已有图）{{skippedCount}}', { successCount: successCount, failedCount: failedCount, skippedCount: skippedCount })
     toast(summary, failedCount > 0 ? 'warning' : 'success')
   }, [])
 
@@ -2348,7 +2349,7 @@ export default function LensCanvasApp(): JSX.Element {
       useRFStore.setState({
         nodes: store.nodes.map((node) => ({ ...node, selected: node.id === nodeId })),
       })
-      toast(`画布已存在该资产：${asset.name}`)
+      toast($t('画布已存在该资产：{{name}}', { name: asset.name }))
       setAssetLibraryOpened(false)
       return
     }
@@ -2432,7 +2433,7 @@ export default function LensCanvasApp(): JSX.Element {
     const commit = (extraNodes: Node[]) => {
       useRFStore.setState({ nodes: [...useRFStore.getState().nodes, ...extraNodes] })
       setAssetLibraryOpened(false)
-      toast(`已添加资产：${asset.name}`)
+      toast($t('已添加资产：{{name}}', { name: asset.name }))
       // 新增子级后重新编组：让新节点立即进入对应的「父角色 · 分身」分组框，
       // 延迟一拍等节点完成首次渲染（组框尺寸依赖节点实测宽高）。
       if (parentId) {
@@ -2462,7 +2463,7 @@ export default function LensCanvasApp(): JSX.Element {
           if (!parent) {
             // 查不到父级仍要落地子节点，否则用户点了「添加」却没有任何反应
             commit([childNode])
-            toast(`未找到父级资产，子资产已单独添加`)
+            toast($(`未找到父级资产，子资产已单独添加`))
             return
           }
           const parentImgUrl = asset.category === ReferenceCategory.Role
@@ -2480,7 +2481,7 @@ export default function LensCanvasApp(): JSX.Element {
         .catch((reason: unknown) => {
           // 接口失败也要让子节点落地，并如实报错，不静默吞掉
           commit([childNode])
-          toast(`父级资产加载失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+          toast($t('父级资产加载失败：{{value}}', { value: reason instanceof Error ? reason.message : $('未知错误') }))
         })
       return
     }
@@ -2491,14 +2492,14 @@ export default function LensCanvasApp(): JSX.Element {
     <div className="lens-canvas-app">
       <Group className="lens-canvas-topbar" p={8} gap="xs" justify="space-between">
         <Group gap="xs">
-          <Text size="sm" fw={600}>画布</Text>
+          <Text size="sm" fw={600}>{ $('画布') }</Text>
           <Select
             className="lens-canvas-episode-select"
             size="xs"
-            placeholder="选集"
+            placeholder={$('选集')}
             value={String(episodeNum)}
             onChange={(v) => { const next = Number(v); if (Number.isFinite(next)) void switchEpisode(next) }}
-            data={episodeOptions.length > 0 ? episodeOptions : [{ value: String(episodeNum), label: `第${episodeNum}集` }]}
+            data={episodeOptions.length > 0 ? episodeOptions : [{ value: String(episodeNum), label: $t('第{{episodeNum}}集', { episodeNum: episodeNum }) }]}
             w={180}
           />
           {/* <Switch
@@ -2511,7 +2512,7 @@ export default function LensCanvasApp(): JSX.Element {
           <Switch
             className="lens-canvas-shot-group-switch"
             size="xs"
-            label="分镜组"
+            label={$('分镜组')}
             checked={shotGroupOn}
             onChange={(e) => {
               const on = e.currentTarget.checked
@@ -2531,8 +2532,7 @@ export default function LensCanvasApp(): JSX.Element {
             leftSection={<IconBoxMultiple size={14} />}
             onClick={openAssetLibrary}
           >
-            资产库
-          </Button>
+            { $('资产库') }</Button>
           <Button
             className="lens-canvas-generate-all-assets"
             size="xs"
@@ -2541,20 +2541,19 @@ export default function LensCanvasApp(): JSX.Element {
             loading={batchGenerating}
             onClick={() => { void handleGenerateAllAssets() }}
           >
-            {batchGenerating ? `生成中 ${batchFinished}/${batchTotal}` : '生成全部资产'}
+            {batchGenerating ? $t('生成中 {{batchFinished}}/{{batchTotal}}', { batchFinished: batchFinished, batchTotal: batchTotal }) : $('生成全部资产')}
           </Button>
 
         </Group>
         <Group gap="xs">
-          {savedAt && <Text size="xs" c="dimmed">已保存 {savedAt}</Text>}
+          {savedAt && <Text size="xs" c="dimmed">{ $('已保存 ') }{savedAt}</Text>}
           <Button
             size="xs"
             variant="light"
             leftSection={<IconSettings size={14} />}
             onClick={() => setConfigModalOpened(true)}
           >
-            配置
-          </Button>
+            { $('配置') }</Button>
           <Button
             size="xs"
             variant="light"
@@ -2563,11 +2562,10 @@ export default function LensCanvasApp(): JSX.Element {
               window.location.href = '/'
             }}
           >
-            返回分镜板
-          </Button>
+            { $('返回分镜板') }</Button>
         </Group>
       </Group>
-      {error && <Alert className="lens-canvas-error" color="red" title="提示" mb={8}>{error}</Alert>}
+      {error && <Alert className="lens-canvas-error" color="red" title={$('提示')} mb={8}>{error}</Alert>}
       <div className="lens-canvas-body" style={{ position: 'relative', height: 'calc(100vh - 56px)' }}>
         <LoadingOverlay visible={loading} />
         {/* 任务结果入口必须走 Canvas 的 prop：
@@ -2624,7 +2622,7 @@ export default function LensCanvasApp(): JSX.Element {
         className="lens-canvas-batch-assets-modal"
         opened={batchModalOpened}
         onClose={() => { if (!batchGenerating) setBatchModalOpened(false) }}
-        title="生成全部资产"
+        title={$('生成全部资产')}
         centered
         size="md"
         closeOnClickOutside={!batchGenerating}
@@ -2636,19 +2634,19 @@ export default function LensCanvasApp(): JSX.Element {
           mb="xs"
         />
         <Text size="sm" mb={4}>
-          已处理 {batchFinished}/{batchTotal}：成功 {batchSuccess}，失败 {batchFailed}，跳过（已有图）{batchSkipped}
+          { $('已处理') }{batchFinished}/{batchTotal}{ $('：成功 ') }{batchSuccess}{ $('，失败 ') }{batchFailed}{ $('，跳过（已有图）') }{batchSkipped}
         </Text>
         {batchGenerating && batchCurrentLabel ? (
-          <Text size="xs" c="dimmed" mb={4}>当前：{batchCurrentLabel}</Text>
+          <Text size="xs" c="dimmed" mb={4}>{ $('当前：') }{batchCurrentLabel}</Text>
         ) : null}
         {batchFailedNames.length > 0 ? (
           <Text size="xs" c="red" style={{ whiteSpace: 'pre-wrap', maxHeight: 180, overflowY: 'auto' }}>
-            失败资产：{batchFailedNames.join('；')}
+            { $('失败资产：') }{batchFailedNames.join('；')}
           </Text>
         ) : null}
         {!batchGenerating ? (
           <Group justify="flex-end" mt="md">
-            <Button size="xs" variant="light" onClick={() => setBatchModalOpened(false)}>关闭</Button>
+            <Button size="xs" variant="light" onClick={() => setBatchModalOpened(false)}>{ $('关闭') }</Button>
           </Group>
         ) : null}
       </Modal>

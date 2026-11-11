@@ -1,4 +1,5 @@
 import type { BillingModelKind, ModelCatalogImportPackageDto, ModelCatalogVendorAuthType, ProfileKind } from './deps'
+import { $ } from '../../../../canvas/i18n'
 
 export const DOC_TO_MODEL_CATALOG_ACTIVATION_PROMPT_ZH = `你是「TapCanvas 模型管理（系统级）」配置生成器。
 我会提供第三方厂商接口文档（可能是 Markdown / 链接 / 请求示例 / 响应示例）。
@@ -87,32 +88,32 @@ export const DOC_TO_MODEL_CATALOG_ACTIVATION_PROMPT_ZH = `你是「TapCanvas 模
 现在开始：根据我接下来粘贴的“接口文档内容”，输出最终可导入 JSON。`
 
 export const KIND_OPTIONS: Array<{ value: BillingModelKind; label: string }> = [
-  { value: 'text', label: '文本' },
-  { value: 'image', label: '图片' },
-  { value: 'video', label: '视频' },
+  { value: 'text', label: $('文本') },
+  { value: 'image', label: $('图片') },
+  { value: 'video', label: $('视频') },
 ]
 
 export const TASK_KIND_OPTIONS: Array<{ value: ProfileKind; label: string }> = [
-  { value: 'chat', label: 'chat（文本）' },
-  { value: 'prompt_refine', label: 'prompt_refine（指令优化）' },
-  { value: 'text_to_image', label: 'text_to_image（图片）' },
-  { value: 'image_edit', label: 'image_edit（图像编辑）' },
-  { value: 'image_to_prompt', label: 'image_to_prompt（图像理解）' },
-  { value: 'text_to_video', label: 'text_to_video（视频）' },
-  { value: 'image_to_video', label: 'image_to_video（图像转视频）' },
+  { value: 'chat', label: $('chat（文本）') },
+  { value: 'prompt_refine', label: $('prompt_refine（指令优化）') },
+  { value: 'text_to_image', label: $('text_to_image（图片）') },
+  { value: 'image_edit', label: $('image_edit（图像编辑）') },
+  { value: 'image_to_prompt', label: $('image_to_prompt（图像理解）') },
+  { value: 'text_to_video', label: $('text_to_video（视频）') },
+  { value: 'image_to_video', label: $('image_to_video（图像转视频）') },
 ]
 
 export const AUTH_TYPE_OPTIONS: Array<{ value: ModelCatalogVendorAuthType; label: string }> = [
   { value: 'bearer', label: 'bearer（Authorization: Bearer <key>）' },
   { value: 'x-api-key', label: 'x-api-key（X-API-Key）' },
   { value: 'query', label: 'query（?api_key=...）' },
-  { value: 'none', label: 'none（无需鉴权）' },
+  { value: 'none', label: $('none（无需鉴权）') },
 ]
 
 export const PAGE_SIZE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '10', label: '10 / 页' },
-  { value: '20', label: '20 / 页' },
-  { value: '50', label: '50 / 页' },
+  { value: '10', label: $('10 / 页') },
+  { value: '20', label: $('20 / 页') },
+  { value: '50', label: $('50 / 页') },
 ]
 
 export const IMPORT_TEMPLATE: ModelCatalogImportPackageDto = {

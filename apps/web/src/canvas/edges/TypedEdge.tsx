@@ -10,6 +10,7 @@ import {
 import { useRFStore } from '../store'
 import { useUIStore } from '../../ui/uiStore'
 import { useEdgeVisuals } from './useEdgeVisuals'
+import { $ } from '../i18n'
 
 function inferType(sourceHandle?: string | null, targetHandle?: string | null) {
   if (sourceHandle && sourceHandle.startsWith('out-')) return sourceHandle.slice(4)
@@ -63,7 +64,7 @@ export default function TypedEdge(props: EdgeProps<any>) {
               radius="md"
               variant="light"
               color="red"
-              aria-label="删除连线"
+              aria-label={ $('删除连线') }
               onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
               onClick={(e) => {
                 e.preventDefault()

@@ -59,6 +59,7 @@ import { readLensAssetTaskIdentity } from '../utils/lensAssetTaskIdentity'
 import { loadLensAssetTaskApplications, resolveLensTaskApplicationName } from '../utils/lensAssetTaskApplications'
 import { getLensCanvasFlowId } from '../utils/canvasNodeAssetId'
 import { collectDerivedTaskRows, filterTasksAfterNodeCreated } from '../utils/derivedTasks'
+import { $, $t } from '../i18n'
 
 /** 有未终态任务时的轮询间隔（毫秒）：只在存在排队/生成中任务时续期，全终态即停止 */
 const POLL_INTERVAL_MS = 20000
@@ -70,16 +71,16 @@ const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'ERROR', 'CANCEL', 'SYNC
 
 /** 状态中文名（对齐 lens 分镜板 statusText） */
 const STATUS_TEXT: Record<string, string> = {
-  CREATE: '创建',
-  CREATED: '创建',
-  QUEUED: '排队',
-  RUNNING: '生成中',
-  SYNCING: '同步中',
-  SYNC_FAILED: '同步失败',
-  SUCCESS: '成功',
-  FAILED: '失败',
-  ERROR: '失败',
-  CANCEL: '已取消',
+  CREATE: $('创建'),
+  CREATED: $('创建'),
+  QUEUED: $('排队'),
+  RUNNING: $('生成中'),
+  SYNCING: $('同步中'),
+  SYNC_FAILED: $('同步失败'),
+  SUCCESS: $('成功'),
+  FAILED: $('失败'),
+  ERROR: $('失败'),
+  CANCEL: $('已取消'),
 }
 
 /**
@@ -174,11 +175,11 @@ export interface TaskResultDrawerProps {
 
 /** 节点类型 → 展示文案 */
 const KIND_LABEL: Record<TaskResultTarget['kind'], string> = {
-  role: '角色',
-  scene: '场景',
-  prop: '道具',
-  storyboard: '分镜',
-  canvas: '画布节点',
+  role: $('角色'),
+  scene: $('场景'),
+  prop: $('道具'),
+  storyboard: $('分镜'),
+  canvas: $('画布节点'),
 }
 
 /** 资产类型映射：角色=0 场景=1 道具=2（与后端 AssetType 一致） */
@@ -407,7 +408,7 @@ function toCardModel(record: LensTaskRecord, index: number): TaskCardModel {
     key: String(record.id || `task-${index}`),
     id: String(record.id || ''),
     status,
-    statusText: STATUS_TEXT[status] || status || '未知',
+    statusText: STATUS_TEXT[status] || status || $('未知'),
     statusClass: statusClass(status),
     pending: !TERMINAL_STATUSES.has(status),
     failed: status === 'FAILED' || status === 'ERROR' || status === 'SYNC_FAILED',
@@ -522,7 +523,7 @@ export function TaskResultDrawer({
       setError(null)
       try {
         if (target.kind === 'storyboard') {
-          if (!target.storyboardId) throw new Error('分镜节点缺少分镜ID，无法查询任务')
+          if (!target.storyboardId) throw new Error($('分镜节点缺少分镜ID，无法查询任务'))
           const res = await listShotVideoTasks({
             dramaId: target.dramaId,
             storyboardId: target.storyboardId,
@@ -538,7 +539,7 @@ export function TaskResultDrawer({
         // 任务归属是 flowId(scene_id) + 节点数字ID(asset_id)，与节点内嵌任务面板同一口径。
         if (target.kind === 'canvas') {
           if (target.canvasFlowId === undefined || !target.canvasNodeAssetId) {
-            throw new Error('画布节点缺少任务归属信息，无法查询任务')
+            throw new Error($('画布节点缺少任务归属信息，无法查询任务'))
           }
           // 任务卡片的模型列按 originAppId 解析用户选择的应用名，必须先加载应用列表；
           // 此前只在资产分支加载，画布节点任务恒显示「未匹配应用（73）」。
@@ -566,16 +567,16 @@ export function TaskResultDrawer({
         // 角色/场景/道具：按业务实体查询（与归一角色界面同口径）
         const assetType = ENTITY_ASSET_TYPE[target.kind]
         if (assetType === undefined || !target.entityId) {
-          throw new Error('资产节点缺少实体ID，无法查询任务')
+          throw new Error($('资产节点缺少实体ID，无法查询任务'))
         }
         const identity = readLensAssetTaskIdentity({ assetCategory: assetType + 1, entityId: target.entityId })
         if (!identity) {
-          throw new Error(`资产实体ID非法：${target.entityId}`)
+          throw new Error($t('资产实体ID非法：{{id}}', { id: target.entityId }))
         }
         const loadedApplications = await loadLensAssetTaskApplications()
         setApplications(loadedApplications)
         const applicationIds = loadedApplications.filter((application) => application.enabled === true).map((application) => String(application.value))
-        if (!applicationIds.length) throw new Error('当前未配置可用生图应用，无法筛选资产任务')
+        if (!applicationIds.length) throw new Error($('当前未配置可用生图应用，无法筛选资产任务'))
         if (requestVersion !== requestVersionRef.current) return
         const res = await listAssetImageTasks({
            applicationIds,
@@ -604,7 +605,7 @@ export function TaskResultDrawer({
         if (requestVersion !== requestVersionRef.current) return
         setRecords([])
         setTotal(0)
-        setError(err instanceof Error ? err.message : '任务查询失败')
+        setError(err instanceof Error ? err.message : $('任务查询失败'))
       } finally {
         if (requestVersion === requestVersionRef.current) setLoading(false)
       }
@@ -632,9 +633,9 @@ export function TaskResultDrawer({
         shotLabel:
           targetKind === 'storyboard'
             ? card.storyboardOrder !== null
-              ? `分镜${card.storyboardOrder}`
-              : '当前分镜'
-            : '该节点',
+              ? $t('分镜{{no}}', { no: card.storyboardOrder })
+              : $('当前分镜')
+            : $('该节点'),
         results: card.results,
         resultIndex,
       })
@@ -651,7 +652,7 @@ export function TaskResultDrawer({
     if (!adoptDraft || !target) return
     const media = adoptDraft.results[adoptDraft.resultIndex]
     if (!media || !media.url) {
-      toast('该结果没有可采纳的地址，无法采纳', 'error')
+      toast($('该结果没有可采纳的地址，无法采纳'), 'error')
       return
     }
     /** 媒体 → uploadType：0=图 1=视频（与 lens_storyboard.select_file_type 一致） */
@@ -668,7 +669,7 @@ export function TaskResultDrawer({
         })
       }
       setAdoptDraft(null)
-      toast(`已采纳${media.type === 'video' ? '视频' : '图片'}到${adoptDraft.shotLabel}`, 'success')
+      toast($t('已采纳{{type}}到{{target}}', { type: media.type === 'video' ? $('视频') : $('图片'), target: adoptDraft.shotLabel }), 'success')
       onAdoptResult?.({
         nodeId: target.nodeId,
         storyboardId: adoptDraft.storyboardId,
@@ -677,7 +678,7 @@ export function TaskResultDrawer({
       })
     } catch (err) {
       // 显式暴露失败原因，禁止静默兜底
-      toast(`采纳失败：${err instanceof Error ? err.message : '未知错误'}`, 'error')
+      toast($t('采纳失败：{{msg}}', { msg: err instanceof Error ? err.message : $('未知错误') }), 'error')
     } finally {
       setAdopting(false)
     }
@@ -730,13 +731,13 @@ export function TaskResultDrawer({
    */
   const copyPrompt = React.useCallback((prompt: string) => {
     if (!prompt) {
-      toast('该任务没有提示词')
+      toast($('该任务没有提示词'))
       return
     }
     void navigator.clipboard
       .writeText(prompt)
-      .then(() => toast('提示词已复制', 'success'))
-      .catch(() => toast('复制失败，请手动选择文本复制', 'error'))
+      .then(() => toast($('提示词已复制'), 'success'))
+      .catch(() => toast($('复制失败，请手动选择文本复制'), 'error'))
   }, [])
 
   const cards = React.useMemo(() => records.map((record, index) => {
@@ -772,7 +773,7 @@ export function TaskResultDrawer({
         size="xl"
         title={
           <Group gap="xs">
-            <Text fw={600}>任务列表</Text>
+            <Text fw={600}>{ $('任务列表') }</Text>
             {target && <Badge variant="light">{KIND_LABEL[target.kind]}</Badge>}
             {target && (
               <Text size="sm" c="dimmed">
@@ -787,22 +788,22 @@ export function TaskResultDrawer({
           {/* 顶部：条数 + 刷新 */}
           <Group justify="space-between">
             <Text size="sm" c="dimmed">
-              {loading ? '查询中…' : `共 ${total} 条`}
+              {loading ? $('查询中…') : $t('共 {{count}} 条', { count: total })}
             </Text>
             {target?.kind !== 'storyboard' && target?.kind !== 'canvas' && (
-              <Select className="lens-asset-task-status" size="xs" w={140} aria-label="资产任务状态"
+              <Select className="lens-asset-task-status" size="xs" w={140} aria-label={ $('资产任务状态') }
                 value={taskStatus} onChange={(value) => setTaskStatus(value as LensAssetTaskStatus)}
                 allowDeselect={false} data={[
-                  { value: LensAssetTaskStatus.All, label: '默认：隐藏失败' },
-                  { value: LensAssetTaskStatus.Created, label: '创建' },
-                  { value: LensAssetTaskStatus.Queued, label: '排队' },
-                  { value: LensAssetTaskStatus.Running, label: '生成中' },
-                  { value: LensAssetTaskStatus.Success, label: '成功' },
-                  { value: LensAssetTaskStatus.Failed, label: '失败' },
+                  { value: LensAssetTaskStatus.All, label: $('默认：隐藏失败') },
+                  { value: LensAssetTaskStatus.Created, label: $('创建') },
+                  { value: LensAssetTaskStatus.Queued, label: $('排队') },
+                  { value: LensAssetTaskStatus.Running, label: $('生成中') },
+                  { value: LensAssetTaskStatus.Success, label: $('成功') },
+                  { value: LensAssetTaskStatus.Failed, label: $('失败') },
                 ]} />
             )}
-            <Tooltip label="刷新">
-              <ActionIcon variant="subtle" loading={loading} onClick={() => void fetchTasks(page)} aria-label="刷新任务列表">
+            <Tooltip label={ $('刷新') }>
+              <ActionIcon variant="subtle" loading={loading} onClick={() => void fetchTasks(page)} aria-label={ $('刷新任务列表') }>
                 <IconRefresh size={16} />
               </ActionIcon>
             </Tooltip>
@@ -824,8 +825,7 @@ export function TaskResultDrawer({
           {!error && !loading && cards.length === 0 && (
             <Center py="lg">
               <Text size="sm" c="dimmed">
-                暂无任务记录
-              </Text>
+                { $('暂无任务记录') }</Text>
             </Center>
           )}
 
@@ -837,17 +837,17 @@ export function TaskResultDrawer({
                 <div className="lens-task-meta-left">
                   {card.modelName && <span className="lens-task-module-chip">{card.modelName}</span>}
                   {card.storyboardOrder !== null && (
-                    <span className="lens-task-shot-tag">分镜{card.storyboardOrder}</span>
+                    <span className="lens-task-shot-tag">{ $t('分镜{{no}}', { no: card.storyboardOrder }) }</span>
                   )}
                   {/* 衍生节点任务（图片编辑/角度/打光）：标明来源，和原资产任务区分开 */}
                   {card.derivedLabel && <span className="lens-task-derived-tag">{card.derivedLabel}</span>}
                   <span className={`lens-task-status-pill lens-task-status-pill--${card.statusClass}`}>
                     {card.statusText}
                   </span>
-                  {card.pending && <span className="lens-task-fresh-hint">自动更新中</span>}
+                  {card.pending && <span className="lens-task-fresh-hint">{ $('自动更新中') }</span>}
                   {card.submitter && <span className="lens-task-meta-text">{card.submitter}</span>}
                   {card.seqJobId && (
-                    <Tooltip label={`序列任务 ${card.seqJobId}`}>
+                    <Tooltip label={$t('序列任务 {{id}}', { id: card.seqJobId })}>
                       <span className="lens-task-ultra-tag">Ultra</span>
                     </Tooltip>
                   )}
@@ -856,7 +856,7 @@ export function TaskResultDrawer({
                   {card.duration && <span className="lens-task-meta-text">{card.duration}s</span>}
                   {card.createTime && <span className="lens-task-meta-text">{formatDate(card.createTime)}</span>}
                   <span className="lens-task-meta-text lens-task-meta-mono">
-                    {card.id ? `#${card.id}` : '排队中'}
+                    {card.id ? `#${card.id}` : $('排队中')}
                   </span>
                 </div>
               </div>
@@ -866,7 +866,7 @@ export function TaskResultDrawer({
                 <div className="lens-task-info-row">
                   {card.channel && <span className="lens-task-info-chip">{card.channel}</span>}
                   {card.ratio && <span className="lens-task-info-chip">{card.ratio}</span>}
-                  {card.refCount > 0 && <span className="lens-task-info-chip">{card.refCount} 参考图</span>}
+                  {card.refCount > 0 && <span className="lens-task-info-chip">{ $t('{{count}} 参考图', { count: card.refCount }) }</span>}
                 </div>
               )}
 
@@ -878,12 +878,12 @@ export function TaskResultDrawer({
                       key={`${img}-${i}`}
                       type="button"
                       className="lens-task-ref-link"
-                      aria-label={`预览参考图 ${i + 1}`}
+                      aria-label={$t('预览参考图 {{index}}', { index: i + 1 })}
                       onClick={() =>
                         useUIStore.getState().openPreview({
                           url: img,
                           kind: 'image',
-                          name: `参考图 ${i + 1}`,
+                          name: $t('参考图 {{index}}', { index: i + 1 }),
                         })
                       }
                     >
@@ -905,13 +905,13 @@ export function TaskResultDrawer({
                 {card.failed && card.results.length === 0 && (
                   <div className="lens-task-failed-msg">
                     <IconAlertTriangle size={14} />
-                    <span>{card.resMsg || '任务失败'}</span>
+                    <span>{card.resMsg || $('任务失败')}</span>
                   </div>
                 )}
                 {!card.failed && card.pending && card.results.length === 0 && (
                   <div className="lens-task-generating">
                     <span className="lens-shot-status-dot lens-shot-status-dot--generating" />
-                    <span>生成中，请稍候…</span>
+                    <span>{ $('生成中，请稍候…') }</span>
                   </div>
                 )}
                 {card.results.length > 0 && (
@@ -933,12 +933,12 @@ export function TaskResultDrawer({
                           key={`${r.url}-${i}`}
                           type="button"
                           className="lens-task-result-item"
-                          aria-label={`预览结果 ${i + 1}`}
+                          aria-label={$t('预览结果 {{index}}', { index: i + 1 })}
                           onClick={() =>
                             useUIStore.getState().openPreview({
                               url: r.url,
                               kind: 'image',
-                              name: card.modelName || `结果 ${i + 1}`,
+                              name: card.modelName || $t('结果 {{index}}', { index: i + 1 }),
                             })
                           }
                         >
@@ -949,7 +949,7 @@ export function TaskResultDrawer({
                   </div>
                 )}
                 {!card.failed && !card.pending && card.results.length === 0 && (
-                  <div className="lens-task-no-result">暂无结果</div>
+                  <div className="lens-task-no-result">{ $('暂无结果') }</div>
                 )}
               </div>
 
@@ -963,11 +963,11 @@ export function TaskResultDrawer({
                     label={
                       canAdoptToCanvas
                         ? card.results.length > 1
-                          ? '选择本任务中的一条结果设为本节点当前图片'
-                          : '把该结果设为本节点当前图片'
+                          ? $('选择本任务中的一条结果设为本节点当前图片')
+                          : $('把该结果设为本节点当前图片')
                         : card.results.length > 1
-                          ? '选择本任务中的一条结果采纳到该分镜'
-                          : '采纳该结果到本节点对应的分镜'
+                          ? $('选择本任务中的一条结果采纳到该分镜')
+                          : $('采纳该结果到本节点对应的分镜')
                     }
                   >
                     <Button
@@ -986,8 +986,7 @@ export function TaskResultDrawer({
                         )
                       }
                     >
-                      采纳结果
-                    </Button>
+                      { $('采纳结果') }</Button>
                   </Tooltip>
                 )}
                 <Button
@@ -996,17 +995,15 @@ export function TaskResultDrawer({
                   leftSection={<IconCopy size={13} />}
                   onClick={() => copyPrompt(card.prompt)}
                 >
-                  复制提示词
-                </Button>
+                  { $('复制提示词') }</Button>
                 {canViewParams && (
                   <Button
                     variant="light"
                     size="compact-xs"
                     leftSection={<IconEye size={13} />}
-                    onClick={() => setParamsText(card.taskParams || '（该任务没有记录请求参数）')}
+                    onClick={() => setParamsText(card.taskParams || $('（该任务没有记录请求参数）'))}
                   >
-                    查看参数
-                  </Button>
+                    { $('查看参数') }</Button>
                 )}
               </div>
             </div>
@@ -1027,7 +1024,7 @@ export function TaskResultDrawer({
       </Drawer>
 
       {/* 查看参数弹窗（仅管理员，对齐 lens 分镜板 reqParDialog） */}
-      <Modal opened={paramsText !== ''} onClose={() => setParamsText('')} title="任务详情" size="lg">
+      <Modal opened={paramsText !== ''} onClose={() => setParamsText('')} title={ $('任务详情') } size="lg">
         <pre className="lens-task-reqpar">{paramsText}</pre>
       </Modal>
 
@@ -1035,23 +1032,23 @@ export function TaskResultDrawer({
       <Modal
         opened={adoptDraft !== null}
         onClose={() => setAdoptDraft(null)}
-        title="采纳结果"
+        title={ $('采纳结果') }
         size="md"
         className="lens-task-adopt-modal"
       >
         {adoptDraft && (
           <Stack className="lens-task-adopt-body" gap="sm">
             <Text className="lens-task-adopt-confirm">
-              确认将{adoptSelectedMedia?.type === 'video' ? '视频' : '图片'}采纳到{adoptDraft.shotLabel}吗？
+              { $t('确认将{{type}}采纳到{{target}}吗？', { type: adoptSelectedMedia?.type === 'video' ? $('视频') : $('图片'), target: adoptDraft.shotLabel }) }
               {adoptDraft.targetKind === 'canvas'
-                ? '采纳后该节点的当前图片会被覆盖。'
-                : '采纳后该分镜的选中结果会被覆盖。'}
+                ? $('采纳后该节点的当前图片会被覆盖。')
+                : $('采纳后该分镜的选中结果会被覆盖。')}
             </Text>
 
             {adoptDraft.results.length > 1 && (
               <div className="lens-task-adopt-picker">
                 <Text className="lens-task-adopt-picker-label" size="xs">
-                  该任务有 {adoptDraft.results.length} 个结果，请选择要采纳的一个：
+                  { $t('该任务有 {{count}} 个结果，请选择要采纳的一个：', { count: adoptDraft.results.length }) }
                 </Text>
                 <div className="lens-task-adopt-options">
                   {adoptDraft.results.map((media, i) => (
@@ -1072,7 +1069,7 @@ export function TaskResultDrawer({
                         loading="lazy"
                       />
                       <span className="lens-task-adopt-option-text">
-                        {media.type === 'video' ? `视频 ${i + 1}` : `图片 ${i + 1}`}
+                        {media.type === 'video' ? $t('视频 {{index}}', { index: i + 1 }) : $t('图片 {{index}}', { index: i + 1 })}
                       </span>
                     </button>
                   ))}
@@ -1082,8 +1079,7 @@ export function TaskResultDrawer({
 
             <Group className="lens-task-adopt-actions" justify="flex-end" gap="xs">
               <Button className="lens-task-adopt-cancel" variant="default" size="xs" onClick={() => setAdoptDraft(null)}>
-                取消
-              </Button>
+                { $('取消') }</Button>
               <Button
                 className="lens-task-adopt-submit"
                 variant="filled"
@@ -1092,8 +1088,7 @@ export function TaskResultDrawer({
                 leftSection={<IconCheck size={14} />}
                 onClick={() => void confirmAdopt()}
               >
-                确认采纳
-              </Button>
+                { $('确认采纳') }</Button>
             </Group>
           </Stack>
         )}

@@ -7,6 +7,7 @@ import type {
   NanoComicMetricCard,
   NanoComicRiskItem,
 } from './types'
+import { $, $t } from '../../canvas/i18n'
 
 type NanoComicOverviewTabProps = {
   metrics: readonly NanoComicMetricCard[]
@@ -24,9 +25,9 @@ function getMetricToneClassName(tone: NanoComicMetricCard['tone']): string {
 }
 
 function getRiskToneLabel(level: NanoComicRiskItem['level']): string {
-  if (level === 'blocked') return '阻塞'
-  if (level === 'stale') return '过期'
-  return '预警'
+  if (level === 'blocked') return $('阻塞')
+  if (level === 'stale') return $('过期')
+  return $('预警')
 }
 
 export default function NanoComicOverviewTab({
@@ -63,7 +64,7 @@ export default function NanoComicOverviewTab({
         <Paper className="nano-comic-overview__empty-panel" p="xl" radius="md">
           <Stack className="nano-comic-overview__empty-stack" gap="sm">
             <Title className="nano-comic-overview__empty-title" order={4}>
-              当前项目还没有可展示的源书数据
+              { $('当前项目还没有可展示的源书数据') }
             </Title>
             <Text className="nano-comic-overview__empty-text" size="sm">
               {emptyStateMessage}
@@ -77,10 +78,10 @@ export default function NanoComicOverviewTab({
           <Stack className="nano-comic-overview__episodes-stack" gap="md">
             <Group className="nano-comic-overview__section-header" justify="space-between">
               <Title className="nano-comic-overview__section-title" order={4}>
-                剧集推进
+                { $('剧集推进') }
               </Title>
               <Text className="nano-comic-overview__section-meta" size="sm" c="dimmed">
-                当前项目的阶段总览
+                { $('当前项目的阶段总览') }
               </Text>
             </Group>
             <Stack className="nano-comic-overview__episode-list" gap="sm">
@@ -111,10 +112,10 @@ export default function NanoComicOverviewTab({
                           variant="light"
                         >
                           {episode.runtimeStatus === 'running'
-                            ? '执行中'
+                            ? $('执行中')
                             : episode.runtimeStatus === 'success'
-                              ? '已完成'
-                              : '失败'}
+                              ? $('已完成')
+                              : $('失败')}
                         </Badge>
                         {episode.runtimeUpdatedAtLabel ? (
                           <Text className="nano-comic-overview__episode-runtime-time" size="xs" c="dimmed">
@@ -129,7 +130,7 @@ export default function NanoComicOverviewTab({
                   ) : null}
                   <div className="nano-comic-overview__episode-progress">
                     <Text className="nano-comic-overview__episode-progress-label" size="xs" c="dimmed">
-                      分镜 {episode.storyboardProgress}% / 视频 {episode.videoProgress}%
+                      { $t('分镜 {{storyboard}}% / 视频 {{video}}%', { storyboard: episode.storyboardProgress, video: episode.videoProgress }) }
                     </Text>
                     <Progress
                       className="nano-comic-overview__episode-progress-bar"
@@ -140,16 +141,16 @@ export default function NanoComicOverviewTab({
                   </div>
                   <Group className="nano-comic-overview__episode-meta" justify="space-between">
                     <Text className="nano-comic-overview__episode-owner" size="sm">
-                      负责人：{episode.ownerName}
+                      { $t('负责人：{{name}}', { name: episode.ownerName }) }
                     </Text>
                     <Text className="nano-comic-overview__episode-review" size="sm" c="dimmed">
-                      待审核 {episode.reviewCount}
+                      { $t('待审核 {{count}}', { count: episode.reviewCount }) }
                     </Text>
                   </Group>
                 </div>
               )) : (
                 <Text className="nano-comic-overview__empty-inline" size="sm" c="dimmed">
-                  暂无章节摘要。
+                  { $('暂无章节摘要。') }
                 </Text>
               )}
             </Stack>
@@ -160,10 +161,10 @@ export default function NanoComicOverviewTab({
           <Stack className="nano-comic-overview__risks-stack" gap="md">
             <Group className="nano-comic-overview__section-header" justify="space-between">
               <Title className="nano-comic-overview__section-title" order={4}>
-                风险与阻塞
+                { $('风险与阻塞') }
               </Title>
               <Text className="nano-comic-overview__section-meta" size="sm" c="dimmed">
-                先处理最影响下游的项
+                { $('先处理最影响下游的项') }
               </Text>
             </Group>
             <Stack className="nano-comic-overview__risk-list" gap="sm">
@@ -186,7 +187,7 @@ export default function NanoComicOverviewTab({
                 </div>
               )) : (
                 <Text className="nano-comic-overview__empty-inline" size="sm" c="dimmed">
-                  当前没有需要提示的风险。
+                  { $('当前没有需要提示的风险。') }
                 </Text>
               )}
             </Stack>
@@ -198,10 +199,10 @@ export default function NanoComicOverviewTab({
         <Stack className="nano-comic-overview__activity-stack" gap="md">
           <Group className="nano-comic-overview__section-header" justify="space-between">
             <Title className="nano-comic-overview__section-title" order={4}>
-              最近活动
+              { $('最近活动') }
             </Title>
             <Text className="nano-comic-overview__section-meta" size="sm" c="dimmed">
-              项目内最近一次变化
+              { $('项目内最近一次变化') }
             </Text>
           </Group>
           <Stack className="nano-comic-overview__activity-list" gap="sm">
@@ -226,7 +227,7 @@ export default function NanoComicOverviewTab({
               </Group>
             )) : (
               <Text className="nano-comic-overview__empty-inline" size="sm" c="dimmed">
-                当前还没有最近活动记录。
+                { $('当前还没有最近活动记录。') }
               </Text>
             )}
           </Stack>
@@ -237,16 +238,16 @@ export default function NanoComicOverviewTab({
         <Stack className="nano-comic-overview__conversation-stack" gap="md">
           <Group className="nano-comic-overview__section-header" justify="space-between">
             <Title className="nano-comic-overview__section-title" order={4}>
-              对话产物历史
+              { $('对话产物历史') }
             </Title>
             <Text className="nano-comic-overview__section-meta" size="sm" c="dimmed">
-              当前项目对话里最近落下的真实产物
+              { $('当前项目对话里最近落下的真实产物') }
             </Text>
           </Group>
           <Stack className="nano-comic-overview__conversation-list" gap="sm">
             {conversationArtifactsLoading ? (
               <Text className="nano-comic-overview__empty-inline" size="sm" c="dimmed">
-                正在读取对话产物历史…
+                { $('正在读取对话产物历史…') }
               </Text>
             ) : conversationArtifactsError ? (
               <Text className="nano-comic-overview__empty-inline" size="sm" c="dimmed">
@@ -265,7 +266,7 @@ export default function NanoComicOverviewTab({
                 ) : (
                   <div className="nano-comic-overview__conversation-preview-wrap nano-comic-overview__conversation-preview-wrap--empty">
                     <Text className="nano-comic-overview__conversation-preview-empty" size="xs">
-                      无预览
+                      { $('无预览') }
                     </Text>
                   </div>
                 )}
@@ -298,7 +299,7 @@ export default function NanoComicOverviewTab({
               </div>
             )) : (
               <Text className="nano-comic-overview__empty-inline" size="sm" c="dimmed">
-                当前项目还没有可回显到工作台的对话产物历史。
+                { $('当前项目还没有可回显到工作台的对话产物历史。') }
               </Text>
             )}
           </Stack>

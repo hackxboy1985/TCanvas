@@ -4,6 +4,7 @@ import { IconCheck, IconCopy, IconPlus, IconRefresh, IconSettings } from '@table
 import { addTeamMember, createTeam, createTeamInvite, listTeamCreditLedger, listTeamInvites, listTeamMembers, listTeams, topUpTeamCredits, type TeamCreditLedgerEntryDto, type TeamInviteDto, type TeamListItemDto, type TeamMemberDto, type TeamRole } from '../../../api/server'
 import { PanelCard } from '../../PanelCard'
 import { toast } from '../../toast'
+import { $, $t } from '../../../canvas/i18n'
 
 function formatCredits(value: number): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '0'
@@ -17,10 +18,10 @@ function formatTime(value: string): string {
 }
 
 function describeLedgerEntryType(entryType: TeamCreditLedgerEntryDto['entryType']): { label: string; color: string } {
-  if (entryType === 'topup') return { label: '充值', color: 'green' }
-  if (entryType === 'reserve') return { label: '冻结', color: 'yellow' }
-  if (entryType === 'release') return { label: '解冻', color: 'blue' }
-  return { label: '扣减', color: 'red' }
+  if (entryType === 'topup') return { label: $('充值'), color: 'green' }
+  if (entryType === 'reserve') return { label: $('冻结'), color: 'yellow' }
+  if (entryType === 'release') return { label: $('解冻'), color: 'blue' }
+  return { label: $('扣减'), color: 'red' }
 }
 
 function formatLedgerAmount(entry: TeamCreditLedgerEntryDto): string {
@@ -73,7 +74,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
     } catch (err: any) {
       console.error('list teams failed', err)
       setTeams([])
-      toast(err?.message || '加载团队列表失败', 'error')
+      toast(err?.message || $('加载团队列表失败'), 'error')
     } finally {
       setTeamsLoading(false)
     }
@@ -94,21 +95,21 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
         setMembers(Array.isArray(m.value) ? m.value : [])
       } else {
         setMembers([])
-        toast((m.reason as any)?.message || '加载成员失败', 'error')
+        toast((m.reason as any)?.message || $('加载成员失败'), 'error')
       }
 
       if (i.status === 'fulfilled') {
         setInvites(Array.isArray(i.value) ? i.value : [])
       } else {
         setInvites([])
-        toast((i.reason as any)?.message || '加载邀请码失败', 'error')
+        toast((i.reason as any)?.message || $('加载邀请码失败'), 'error')
       }
 
       if (l.status === 'fulfilled') {
         setLedger(Array.isArray(l.value) ? l.value : [])
       } else {
         setLedger([])
-        toast((l.reason as any)?.message || '加载积分流水失败', 'error')
+        toast((l.reason as any)?.message || $('加载积分流水失败'), 'error')
       }
     } finally {
       setMembersLoading(false)
@@ -130,20 +131,20 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
   const submitCreate = React.useCallback(async () => {
     const name = createName.trim()
     if (!name) {
-      toast('请输入团队名称', 'error')
+      toast($('请输入团队名称'), 'error')
       return
     }
     setCreateSubmitting(true)
     try {
       const ownerLogin = createOwnerLogin.trim()
       await createTeam(ownerLogin ? { name, ownerLogin } : { name })
-      toast('团队创建成功', 'success')
+      toast($('团队创建成功'), 'success')
       setCreateName('')
       setCreateOwnerLogin('')
       await reloadTeams()
     } catch (err: any) {
       console.error('create team failed', err)
-      toast(err?.message || '创建团队失败', 'error')
+      toast(err?.message || $('创建团队失败'), 'error')
     } finally {
       setCreateSubmitting(false)
     }
@@ -154,20 +155,20 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
     if (!teamId) return
     const login = addLogin.trim()
     if (!login) {
-      toast('请输入成员 GitHub 登录名', 'error')
+      toast($('请输入成员 GitHub 登录名'), 'error')
       return
     }
     setAddSubmitting(true)
     try {
       await addTeamMember(teamId, { login, role: addRole })
-      toast('成员已加入团队', 'success')
+      toast($('成员已加入团队'), 'success')
       setAddLogin('')
       setAddRole('member')
       await reloadManageData(teamId)
       await reloadTeams()
     } catch (err: any) {
       console.error('add team member failed', err)
-      toast(err?.message || '添加成员失败', 'error')
+      toast(err?.message || $('添加成员失败'), 'error')
     } finally {
       setAddSubmitting(false)
     }
@@ -178,20 +179,20 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
     if (!teamId) return
     const amount = typeof topupAmount === 'number' ? Math.floor(topupAmount) : NaN
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast('请输入有效充值金额', 'error')
+      toast($('请输入有效充值金额'), 'error')
       return
     }
     setTopupSubmitting(true)
     try {
       await topUpTeamCredits(teamId, { amount, note: topupNote.trim() || undefined })
-      toast('充值成功', 'success')
+      toast($('充值成功'), 'success')
       setTopupNote('')
       setTopupAmount(100)
       await reloadTeams()
       await reloadManageData(teamId)
     } catch (err: any) {
       console.error('top up failed', err)
-      toast(err?.message || '充值失败', 'error')
+      toast(err?.message || $('充值失败'), 'error')
     } finally {
       setTopupSubmitting(false)
     }
@@ -204,7 +205,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
     const email = inviteEmail.trim()
     const phone = invitePhone.trim()
     if (!login && !email && !phone) {
-      toast('请输入登录名/邮箱/手机号（至少一个）', 'error')
+      toast($('请输入登录名/邮箱/手机号（至少一个）'), 'error')
       return
     }
     const expiresInDays = typeof inviteExpiresDays === 'number' ? Math.floor(inviteExpiresDays) : undefined
@@ -216,7 +217,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
         ...(phone ? { phone } : {}),
         ...(expiresInDays && Number.isFinite(expiresInDays) ? { expiresInDays } : {}),
       })
-      toast('邀请码已生成', 'success')
+      toast($('邀请码已生成'), 'success')
       setInviteLogin('')
       setInviteEmail('')
       setInvitePhone('')
@@ -224,7 +225,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
       await reloadManageData(teamId)
     } catch (err: any) {
       console.error('create invite failed', err)
-      toast(err?.message || '生成邀请码失败', 'error')
+      toast(err?.message || $('生成邀请码失败'), 'error')
     } finally {
       setInviteSubmitting(false)
     }
@@ -235,18 +236,18 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
       <PanelCard className="stats-enterprise-card glass">
         <Group className="stats-enterprise-card-header" justify="space-between" align="flex-start" gap="md" wrap="wrap">
           <div className="stats-enterprise-card-header-left">
-            <Title className="stats-enterprise-title" order={3}>企业管理</Title>
+            <Title className="stats-enterprise-title" order={3}>{ $('企业管理') }</Title>
             <Text className="stats-enterprise-subtitle" size="sm" c="dimmed">
-              创建团队、邀请成员、为团队充值积分；扣积分任务会先冻结额度，资源托管到 OSS 后再扣减，失败会自动解冻。
+              { $('创建团队、邀请成员、为团队充值积分；扣积分任务会先冻结额度，资源托管到 OSS 后再扣减，失败会自动解冻。') }
             </Text>
           </div>
           <Group className="stats-enterprise-card-header-actions" gap={6}>
-            <Tooltip className="stats-enterprise-reload-tooltip" label="刷新" withArrow>
+            <Tooltip className="stats-enterprise-reload-tooltip" label={ $('刷新') } withArrow>
               <ActionIcon
                 className="stats-enterprise-reload"
                 size="sm"
                 variant="subtle"
-                aria-label="刷新"
+                aria-label={ $('刷新') }
                 onClick={() => void reloadTeams()}
                 loading={teamsLoading}
               >
@@ -256,19 +257,19 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
           </Group>
         </Group>
 
-        <Divider className="stats-enterprise-divider" my="md" label="创建团队" labelPosition="left" />
+        <Divider className="stats-enterprise-divider" my="md" label={ $('创建团队') } labelPosition="left" />
         <Group className="stats-enterprise-create" gap="sm" align="flex-end" wrap="wrap">
           <TextInput
             className="stats-enterprise-create-name"
-            label="团队名称"
-            placeholder="例如：XX 科技"
+            label={ $('团队名称') }
+            placeholder={ $('例如：XX 科技') }
             value={createName}
             onChange={(e) => setCreateName(e.currentTarget.value)}
             maw={320}
           />
           <TextInput
             className="stats-enterprise-create-owner"
-            label="负责人 GitHub 登录名（可选）"
+            label={ $('负责人 GitHub 登录名（可选）') }
             placeholder="owner_login"
             value={createOwnerLogin}
             onChange={(e) => setCreateOwnerLogin(e.currentTarget.value)}
@@ -280,31 +281,31 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
             onClick={() => void submitCreate()}
             loading={createSubmitting}
           >
-            创建
+            { $('创建') }
           </Button>
         </Group>
 
-        <Divider className="stats-enterprise-divider" my="md" label="团队列表" labelPosition="left" />
+        <Divider className="stats-enterprise-divider" my="md" label={ $('团队列表') } labelPosition="left" />
         {teamsLoading && !teams.length ? (
           <Group className="stats-enterprise-loading" gap="xs" align="center">
             <Loader className="stats-enterprise-loading-icon" size="sm" />
             <Text className="stats-enterprise-loading-text" size="sm" c="dimmed">
-              加载中…
+              { $('加载中…') }
             </Text>
           </Group>
         ) : !teams.length ? (
           <Text className="stats-enterprise-empty" size="sm" c="dimmed">
-            暂无团队
+            { $('暂无团队') }
           </Text>
         ) : (
           <Table className="stats-enterprise-table" striped highlightOnHover withTableBorder withColumnBorders>
             <Table.Thead className="stats-enterprise-table-head">
               <Table.Tr className="stats-enterprise-table-head-row">
-                <Table.Th className="stats-enterprise-table-head-cell">团队</Table.Th>
-                <Table.Th className="stats-enterprise-table-head-cell">积分</Table.Th>
-                <Table.Th className="stats-enterprise-table-head-cell">成员</Table.Th>
+                <Table.Th className="stats-enterprise-table-head-cell">{ $('团队') }</Table.Th>
+                <Table.Th className="stats-enterprise-table-head-cell">{ $('积分') }</Table.Th>
+                <Table.Th className="stats-enterprise-table-head-cell">{ $('成员') }</Table.Th>
                 <Table.Th className="stats-enterprise-table-head-cell">ID</Table.Th>
-                <Table.Th className="stats-enterprise-table-head-cell">操作</Table.Th>
+                <Table.Th className="stats-enterprise-table-head-cell">{ $('操作') }</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody className="stats-enterprise-table-body">
@@ -320,15 +321,15 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                         variant="light"
                         color={t.creditsAvailable > 0 ? 'grape' : 'gray'}
                       >
-                        可用 {formatCredits(t.creditsAvailable)}
+                        { $t('可用 {{creditsAvailable}}', { creditsAvailable: formatCredits(t.creditsAvailable) }) }
                       </Badge>
                       {t.creditsFrozen > 0 ? (
                         <Badge className="stats-enterprise-team-credits-frozen" variant="light" color="yellow">
-                          冻结 {formatCredits(t.creditsFrozen)}
+                          { $t('冻结 {{creditsFrozen}}', { creditsFrozen: formatCredits(t.creditsFrozen) }) }
                         </Badge>
                       ) : null}
                       <Badge className="stats-enterprise-team-credits-total" variant="light" color="gray">
-                        总 {formatCredits(t.credits)}
+                        { $t('总 {{credits}}', { credits: formatCredits(t.credits) }) }
                       </Badge>
                     </Group>
                   </Table.Td>
@@ -348,7 +349,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                       leftSection={<IconSettings className="stats-enterprise-team-manage-icon" size={14} />}
                       onClick={() => openManage(t)}
                     >
-                      管理
+                      { $('管理') }
                     </Button>
                   </Table.Td>
                 </Table.Tr>
@@ -362,7 +363,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
         className="stats-enterprise-manage-modal"
         opened={manageOpen}
         onClose={() => setManageOpen(false)}
-        title={manageTeam ? `团队管理：${manageTeam.name}` : '团队管理'}
+        title={manageTeam ? $t('团队管理：{{name}}', { name: manageTeam.name }) : $('团队管理')}
         size="lg"
         radius="md"
         centered
@@ -371,26 +372,26 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
         <Stack className="stats-enterprise-manage" gap="md">
           {!manageTeam ? (
             <Text className="stats-enterprise-manage-empty" size="sm" c="dimmed">
-              未选择团队
+              { $('未选择团队') }
             </Text>
           ) : (
             <>
               <Group className="stats-enterprise-manage-meta" gap="xs" wrap="wrap">
                 <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="gray">ID</Badge>
                 <Text className="stats-enterprise-manage-meta-id" size="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>{manageTeam.id}</Text>
-                <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="grape">可用</Badge>
+                <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="grape">{ $('可用') }</Badge>
                 <Text className="stats-enterprise-manage-meta-credits-available" size="sm" fw={600}>{formatCredits(manageTeam.creditsAvailable)}</Text>
-                <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="yellow">冻结</Badge>
+                <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="yellow">{ $('冻结') }</Badge>
                 <Text className="stats-enterprise-manage-meta-credits-frozen" size="sm" fw={600}>{formatCredits(manageTeam.creditsFrozen)}</Text>
-                <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="gray">总额</Badge>
+                <Badge className="stats-enterprise-manage-meta-badge" variant="light" color="gray">{ $('总额') }</Badge>
                 <Text className="stats-enterprise-manage-meta-credits-total" size="sm" fw={600}>{formatCredits(manageTeam.credits)}</Text>
               </Group>
 
-              <Divider className="stats-enterprise-manage-divider" label="充值积分（仅管理员）" labelPosition="left" />
+              <Divider className="stats-enterprise-manage-divider" label={ $('充值积分（仅管理员）') } labelPosition="left" />
               <Group className="stats-enterprise-topup" gap="sm" align="flex-end" wrap="wrap">
                 <NumberInput
                   className="stats-enterprise-topup-amount"
-                  label="充值数量"
+                  label={ $('充值数量') }
                   value={topupAmount}
                   onChange={(value) => setTopupAmount(typeof value === 'number' && Number.isFinite(value) ? value : '')}
                   min={1}
@@ -399,8 +400,8 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                 />
                 <TextInput
                   className="stats-enterprise-topup-note"
-                  label="备注（可选）"
-                  placeholder="例如：月度充值"
+                  label={ $('备注（可选）') }
+                  placeholder={ $('例如：月度充值') }
                   value={topupNote}
                   onChange={(e) => setTopupNote(e.currentTarget.value)}
                   maw={320}
@@ -410,28 +411,28 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                   onClick={() => void submitTopup()}
                   loading={topupSubmitting}
                 >
-                  充值
+                  { $('充值') }
                 </Button>
               </Group>
 
-              <Divider className="stats-enterprise-manage-divider" label="积分流水（最近 200 条）" labelPosition="left" />
+              <Divider className="stats-enterprise-manage-divider" label={ $('积分流水（最近 200 条）') } labelPosition="left" />
               <Stack className="stats-enterprise-ledger" gap="xs">
                 {ledgerLoading && !ledger.length ? (
                   <Group className="stats-enterprise-ledger-loading" gap="xs" align="center">
                     <Loader className="stats-enterprise-ledger-loading-icon" size="sm" />
-                    <Text className="stats-enterprise-ledger-loading-text" size="sm" c="dimmed">加载中…</Text>
+                    <Text className="stats-enterprise-ledger-loading-text" size="sm" c="dimmed">{ $('加载中…') }</Text>
                   </Group>
                 ) : !ledger.length ? (
-                  <Text className="stats-enterprise-ledger-empty" size="sm" c="dimmed">暂无流水</Text>
+                  <Text className="stats-enterprise-ledger-empty" size="sm" c="dimmed">{ $('暂无流水') }</Text>
                 ) : (
                   <Table className="stats-enterprise-ledger-table" striped highlightOnHover withTableBorder withColumnBorders>
                     <Table.Thead className="stats-enterprise-ledger-table-head">
                       <Table.Tr className="stats-enterprise-ledger-table-head-row">
-                        <Table.Th className="stats-enterprise-ledger-table-head-cell">时间</Table.Th>
-                        <Table.Th className="stats-enterprise-ledger-table-head-cell">类型</Table.Th>
-                        <Table.Th className="stats-enterprise-ledger-table-head-cell">数量</Table.Th>
-                        <Table.Th className="stats-enterprise-ledger-table-head-cell">任务</Table.Th>
-                        <Table.Th className="stats-enterprise-ledger-table-head-cell">备注</Table.Th>
+                        <Table.Th className="stats-enterprise-ledger-table-head-cell">{ $('时间') }</Table.Th>
+                        <Table.Th className="stats-enterprise-ledger-table-head-cell">{ $('类型') }</Table.Th>
+                        <Table.Th className="stats-enterprise-ledger-table-head-cell">{ $('数量') }</Table.Th>
+                        <Table.Th className="stats-enterprise-ledger-table-head-cell">{ $('任务') }</Table.Th>
+                        <Table.Th className="stats-enterprise-ledger-table-head-cell">{ $('备注') }</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody className="stats-enterprise-ledger-table-body">
@@ -467,7 +468,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                                   </Text>
                                   <CopyButton value={it.taskId} timeout={1200}>
                                     {({ copied, copy }) => (
-                                      <Tooltip className="stats-enterprise-ledger-task-copy-tooltip" label={copied ? '已复制' : '复制'} withArrow>
+                                      <Tooltip className="stats-enterprise-ledger-task-copy-tooltip" label={copied ? $('已复制') : $('复制')} withArrow>
                                         <ActionIcon className="stats-enterprise-ledger-task-copy" variant="subtle" onClick={copy} aria-label="copy-task-id">
                                           {copied ? <IconCheck className="stats-enterprise-ledger-task-copy-icon" size={14} /> : <IconCopy className="stats-enterprise-ledger-task-copy-icon" size={14} />}
                                         </ActionIcon>
@@ -492,11 +493,11 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                 )}
               </Stack>
 
-              <Divider className="stats-enterprise-manage-divider" label="邀请/添加成员" labelPosition="left" />
+              <Divider className="stats-enterprise-manage-divider" label={ $('邀请/添加成员') } labelPosition="left" />
               <Group className="stats-enterprise-add-member" gap="sm" align="flex-end" wrap="wrap">
                 <TextInput
                   className="stats-enterprise-add-member-login"
-                  label="GitHub 登录名"
+                  label={ $('GitHub 登录名') }
                   placeholder="member_login"
                   value={addLogin}
                   onChange={(e) => setAddLogin(e.currentTarget.value)}
@@ -504,12 +505,12 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                 />
                 <Select
                   className="stats-enterprise-add-member-role"
-                  label="角色"
+                  label={ $('角色') }
                   value={addRole}
                   onChange={(v) => setAddRole((v as TeamRole) || 'member')}
                   data={[
-                    { value: 'member', label: '成员' },
-                    { value: 'admin', label: '管理员' },
+                    { value: 'member', label: $('成员') },
+                    { value: 'admin', label: $('管理员') },
                     { value: 'owner', label: 'Owner' },
                   ]}
                   maw={180}
@@ -519,39 +520,39 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                   onClick={() => void submitAddMember()}
                   loading={addSubmitting}
                 >
-                  添加
+                  { $('添加') }
                 </Button>
               </Group>
 
-              <Divider className="stats-enterprise-manage-divider" label="生成邀请码（成员自助加入）" labelPosition="left" />
+              <Divider className="stats-enterprise-manage-divider" label={ $('生成邀请码（成员自助加入）') } labelPosition="left" />
               <Group className="stats-enterprise-invite" gap="sm" align="flex-end" wrap="wrap">
                 <TextInput
                   className="stats-enterprise-invite-login"
-                  label="限制登录名（可选）"
-                  placeholder="仅允许该登录名使用"
+                  label={ $('限制登录名（可选）') }
+                  placeholder={ $('仅允许该登录名使用') }
                   value={inviteLogin}
                   onChange={(e) => setInviteLogin(e.currentTarget.value)}
                   maw={220}
                 />
                 <TextInput
                   className="stats-enterprise-invite-email"
-                  label="限制邮箱（可选）"
-                  placeholder="仅允许该邮箱使用"
+                  label={ $('限制邮箱（可选）') }
+                  placeholder={ $('仅允许该邮箱使用') }
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.currentTarget.value)}
                   maw={260}
                 />
                 <TextInput
                   className="stats-enterprise-invite-phone"
-                  label="限制手机号（可选）"
-                  placeholder="仅允许该手机号使用（建议 +86...）"
+                  label={ $('限制手机号（可选）') }
+                  placeholder={ $('仅允许该手机号使用（建议 +86...）') }
                   value={invitePhone}
                   onChange={(e) => setInvitePhone(e.currentTarget.value)}
                   maw={240}
                 />
                 <NumberInput
                   className="stats-enterprise-invite-expire"
-                  label="有效期（天）"
+                  label={ $('有效期（天）') }
                   value={inviteExpiresDays}
                   onChange={(value) => setInviteExpiresDays(typeof value === 'number' && Number.isFinite(value) ? value : '')}
                   min={1}
@@ -563,14 +564,14 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                   onClick={() => void submitCreateInvite()}
                   loading={inviteSubmitting}
                 >
-                  生成
+                  { $('生成') }
                 </Button>
               </Group>
 
               <Stack className="stats-enterprise-manage-lists" gap="md">
                 <Stack className="stats-enterprise-members" gap="xs">
                   <Group className="stats-enterprise-members-header" justify="space-between" align="center">
-                    <Text className="stats-enterprise-members-title" size="sm" fw={600}>成员</Text>
+                    <Text className="stats-enterprise-members-title" size="sm" fw={600}>{ $('成员') }</Text>
                     <Button
                       className="stats-enterprise-members-refresh"
                       size="xs"
@@ -578,24 +579,24 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                       onClick={() => void reloadManageData(manageTeam.id)}
                       loading={membersLoading || invitesLoading}
                     >
-                      刷新
+                      { $('刷新') }
                     </Button>
                   </Group>
 
                   {membersLoading && !members.length ? (
                     <Group className="stats-enterprise-members-loading" gap="xs" align="center">
                       <Loader className="stats-enterprise-members-loading-icon" size="sm" />
-                      <Text className="stats-enterprise-members-loading-text" size="sm" c="dimmed">加载中…</Text>
+                      <Text className="stats-enterprise-members-loading-text" size="sm" c="dimmed">{ $('加载中…') }</Text>
                     </Group>
                   ) : !members.length ? (
-                    <Text className="stats-enterprise-members-empty" size="sm" c="dimmed">暂无成员</Text>
+                    <Text className="stats-enterprise-members-empty" size="sm" c="dimmed">{ $('暂无成员') }</Text>
                   ) : (
                     <Table className="stats-enterprise-members-table" striped highlightOnHover withTableBorder withColumnBorders>
                       <Table.Thead className="stats-enterprise-members-table-head">
                         <Table.Tr className="stats-enterprise-members-table-head-row">
-                          <Table.Th className="stats-enterprise-members-table-head-cell">登录名</Table.Th>
-                          <Table.Th className="stats-enterprise-members-table-head-cell">角色</Table.Th>
-                          <Table.Th className="stats-enterprise-members-table-head-cell">用户</Table.Th>
+                          <Table.Th className="stats-enterprise-members-table-head-cell">{ $('登录名') }</Table.Th>
+                          <Table.Th className="stats-enterprise-members-table-head-cell">{ $('角色') }</Table.Th>
+                          <Table.Th className="stats-enterprise-members-table-head-cell">{ $('用户') }</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody className="stats-enterprise-members-table-body">
@@ -622,22 +623,22 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                 </Stack>
 
                 <Stack className="stats-enterprise-invites" gap="xs">
-                  <Text className="stats-enterprise-invites-title" size="sm" fw={600}>邀请码</Text>
+                  <Text className="stats-enterprise-invites-title" size="sm" fw={600}>{ $('邀请码') }</Text>
                   {invitesLoading && !invites.length ? (
                     <Group className="stats-enterprise-invites-loading" gap="xs" align="center">
                       <Loader className="stats-enterprise-invites-loading-icon" size="sm" />
-                      <Text className="stats-enterprise-invites-loading-text" size="sm" c="dimmed">加载中…</Text>
+                      <Text className="stats-enterprise-invites-loading-text" size="sm" c="dimmed">{ $('加载中…') }</Text>
                     </Group>
                   ) : !invites.length ? (
-                    <Text className="stats-enterprise-invites-empty" size="sm" c="dimmed">暂无邀请码</Text>
+                    <Text className="stats-enterprise-invites-empty" size="sm" c="dimmed">{ $('暂无邀请码') }</Text>
                   ) : (
                     <Table className="stats-enterprise-invites-table" striped highlightOnHover withTableBorder withColumnBorders>
                       <Table.Thead className="stats-enterprise-invites-table-head">
                         <Table.Tr className="stats-enterprise-invites-table-head-row">
-                          <Table.Th className="stats-enterprise-invites-table-head-cell">邀请码</Table.Th>
-                          <Table.Th className="stats-enterprise-invites-table-head-cell">限制</Table.Th>
-                          <Table.Th className="stats-enterprise-invites-table-head-cell">状态</Table.Th>
-                          <Table.Th className="stats-enterprise-invites-table-head-cell">复制</Table.Th>
+                          <Table.Th className="stats-enterprise-invites-table-head-cell">{ $('邀请码') }</Table.Th>
+                          <Table.Th className="stats-enterprise-invites-table-head-cell">{ $('限制') }</Table.Th>
+                          <Table.Th className="stats-enterprise-invites-table-head-cell">{ $('状态') }</Table.Th>
+                          <Table.Th className="stats-enterprise-invites-table-head-cell">{ $('复制') }</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody className="stats-enterprise-invites-table-body">
@@ -659,7 +660,7 @@ export default function StatsEnterpriseManagement({ className }: { className?: s
                             <Table.Td className="stats-enterprise-invites-table-cell">
                               <CopyButton value={it.code} timeout={1200}>
                                 {({ copied, copy }) => (
-                                  <Tooltip className="stats-enterprise-invite-copy-tooltip" label={copied ? '已复制' : '复制'} withArrow>
+                                  <Tooltip className="stats-enterprise-invite-copy-tooltip" label={copied ? $('已复制') : $('复制')} withArrow>
                                     <ActionIcon className="stats-enterprise-invite-copy" variant="light" onClick={copy} aria-label="copy-invite">
                                       {copied ? <IconCheck className="stats-enterprise-invite-copy-icon" size={16} /> : <IconCopy className="stats-enterprise-invite-copy-icon" size={16} />}
                                     </ActionIcon>

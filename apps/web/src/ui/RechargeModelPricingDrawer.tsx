@@ -3,6 +3,7 @@ import { Badge, Button, Collapse, Divider, Drawer, Group, Loader, ScrollArea, St
 import { preloadModelOptions } from '../config/useModelOptions'
 import { PanelCard } from './PanelCard'
 import { buildRechargeModelPricingSections, type RechargeModelPricingSection } from './rechargeModelPricing'
+import { $, $t } from '../canvas/i18n'
 
 export type RechargeModelPricingDrawerProps = {
   opened: boolean
@@ -34,7 +35,7 @@ export default function RechargeModelPricingDrawer({
       }))
       setExpandedRows({})
     } catch (loadError: unknown) {
-      const message = loadError instanceof Error ? loadError.message : '加载模型价格失败'
+      const message = loadError instanceof Error ? loadError.message : $('加载模型价格失败')
       setSections([])
       setError(message)
     } finally {
@@ -55,18 +56,18 @@ export default function RechargeModelPricingDrawer({
       position="right"
       size="lg"
       zIndex={400}
-      title="当前启用模型价格"
+      title={$('当前启用模型价格')}
     >
       <Stack className="recharge-model-pricing-drawer-stack" gap="md">
         <Text className="recharge-model-pricing-drawer-subtitle" size="sm" c="dimmed">
-          仅展示当前系统模型管理里已启用的模型，价格单位统一为积分。
+          {$('仅展示当前系统模型管理里已启用的模型，价格单位统一为积分。')}
         </Text>
 
         {loading ? (
           <Group className="recharge-model-pricing-drawer-loading" gap="xs">
             <Loader className="recharge-model-pricing-drawer-loader" size="sm" />
             <Text className="recharge-model-pricing-drawer-loading-text" size="sm" c="dimmed">
-              加载模型价格中…
+              {$('加载模型价格中…')}
             </Text>
           </Group>
         ) : error ? (
@@ -75,7 +76,7 @@ export default function RechargeModelPricingDrawer({
           </Text>
         ) : sections.length === 0 ? (
           <Text className="recharge-model-pricing-drawer-empty" size="sm" c="dimmed">
-            暂无已启用模型价格
+            {$('暂无已启用模型价格')}
           </Text>
         ) : (
           <ScrollArea className="recharge-model-pricing-drawer-scroll" offsetScrollbars>
@@ -87,7 +88,7 @@ export default function RechargeModelPricingDrawer({
                       {section.label}
                     </Text>
                     <Badge className="recharge-model-pricing-drawer-section-badge" variant="light">
-                      {section.rows.length} 个模型
+                      {$t('{{count}} 个模型', { count: section.rows.length })}
                     </Badge>
                   </Group>
                   <Divider className="recharge-model-pricing-drawer-section-divider" />
@@ -117,7 +118,7 @@ export default function RechargeModelPricingDrawer({
                                 className="recharge-model-pricing-drawer-row-spec-toggle"
                                 size="compact-xs"
                                 variant="subtle"
-                                aria-label={`${isExpanded ? '收起' : '展开'} ${row.label} 规格价格`}
+                                aria-label={$t('{{action}} {{label}} 规格价格', { action: isExpanded ? $('收起') : $('展开'), label: row.label })}
                                 onClick={() => {
                                   setExpandedRows((current) => ({
                                     ...current,
@@ -125,7 +126,7 @@ export default function RechargeModelPricingDrawer({
                                   }))
                                 }}
                               >
-                                {isExpanded ? '收起规格价' : `${row.specPriceLabels.length} 个规格价`}
+                                {isExpanded ? $('收起规格价') : $t('{{count}} 个规格价', { count: row.specPriceLabels.length })}
                               </Button>
                             ) : (
                               <Text
@@ -133,7 +134,7 @@ export default function RechargeModelPricingDrawer({
                                 size="xs"
                                 c="dimmed"
                               >
-                                无规格价
+                                {$('无规格价')}
                               </Text>
                             )}
                           </Stack>

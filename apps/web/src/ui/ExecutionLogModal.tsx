@@ -3,6 +3,7 @@ import { Modal, Stack, Group, Text, Badge, ScrollArea, Button, Table, Divider, A
 import { IconCopy, IconFilter, IconX } from '@tabler/icons-react'
 import { API_BASE, getWorkflowExecution, listWorkflowNodeRuns, type WorkflowExecutionDto, type WorkflowExecutionEventDto, type WorkflowNodeRunDto } from '../api/server'
 import { getAuthToken, getAuthTokenFromCookie } from '../auth/store'
+import { $ } from '../canvas/i18n'
 
 function parseSseChunk(buffer: string) {
   const parts = buffer.split('\n\n')
@@ -202,7 +203,7 @@ export function ExecutionLogModal(props: {
   const modalClassName = ['execution-log-modal', className].filter(Boolean).join(' ')
 
   return (
-    <Modal className={modalClassName} opened={opened} onClose={onClose} title="运行日志" centered size="lg">
+    <Modal className={modalClassName} opened={opened} onClose={onClose} title={$('运行日志')} centered size="lg">
       <Stack className="execution-log-body" gap="sm">
         <Group className="execution-log-header" justify="space-between">
           <Group className="execution-log-meta" gap="xs">
@@ -224,23 +225,23 @@ export function ExecutionLogModal(props: {
             )}
           </Group>
           <Group className="execution-log-controls" gap="xs" wrap="nowrap">
-            <Tooltip className="execution-log-filter-tooltip" label={onlyIssues ? '只看告警/错误（已开启）' : '只看告警/错误'}>
+            <Tooltip className="execution-log-filter-tooltip" label={onlyIssues ? $('只看告警/错误（已开启）') : $('只看告警/错误')}>
               <ActionIcon
                 className="execution-log-filter-action"
                 size="sm"
                 variant={onlyIssues ? 'light' : 'subtle'}
-                aria-label="只看告警/错误"
+                aria-label={$('只看告警/错误')}
                 onClick={() => setOnlyIssues((v) => !v)}
               >
                 <IconFilter className="execution-log-filter-icon" size={14} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip className="execution-log-node-filter-tooltip" label={filterNodeId ? '清除节点筛选' : '未筛选节点'}>
+            <Tooltip className="execution-log-node-filter-tooltip" label={filterNodeId ? $('清除节点筛选') : $('未筛选节点')}>
               <ActionIcon
                 className="execution-log-node-filter-action"
                 size="sm"
                 variant={filterNodeId ? 'light' : 'subtle'}
-                aria-label="清除节点筛选"
+                aria-label={$('清除节点筛选')}
                 disabled={!filterNodeId}
                 onClick={() => setFilterNodeId(null)}
               >
@@ -256,7 +257,7 @@ export function ExecutionLogModal(props: {
             <Group className="execution-log-summary" justify="space-between">
               <Group className="execution-log-summary-left" gap="xs">
                 <Text className="execution-log-summary-label" size="xs" c="dimmed">
-                  节点执行
+                  {$('节点执行')}
                 </Text>
                 <Badge className="execution-log-summary-total" size="xs" variant="light">
                   {runsSummary.total}
@@ -283,7 +284,7 @@ export function ExecutionLogModal(props: {
                 }}
                 disabled={!nodeRuns.some((r) => r.status === 'failed')}
               >
-                定位失败节点
+                {$('定位失败节点')}
               </Button>
             </Group>
 
@@ -291,9 +292,9 @@ export function ExecutionLogModal(props: {
               <Table className="execution-log-runs-table" striped highlightOnHover stickyHeader verticalSpacing="xs">
                 <Table.Thead className="execution-log-runs-head">
                   <Table.Tr className="execution-log-runs-head-row">
-                    <Table.Th className="execution-log-runs-head-cell" style={{ width: 180 }}>节点</Table.Th>
-                    <Table.Th className="execution-log-runs-head-cell" style={{ width: 110 }}>状态</Table.Th>
-                    <Table.Th className="execution-log-runs-head-cell">信息</Table.Th>
+                    <Table.Th className="execution-log-runs-head-cell" style={{ width: 180 }}>{$('节点')}</Table.Th>
+                    <Table.Th className="execution-log-runs-head-cell" style={{ width: 110 }}>{$('状态')}</Table.Th>
+                    <Table.Th className="execution-log-runs-head-cell">{$('信息')}</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody className="execution-log-runs-body">
@@ -341,11 +342,11 @@ export function ExecutionLogModal(props: {
             <Table.Thead className="execution-log-events-head">
               <Table.Tr className="execution-log-events-head-row">
                 <Table.Th className="execution-log-events-head-cell" style={{ width: 54 }}>#</Table.Th>
-                <Table.Th className="execution-log-events-head-cell" style={{ width: 90 }}>时间</Table.Th>
-                <Table.Th className="execution-log-events-head-cell" style={{ width: 70 }}>级别</Table.Th>
-                <Table.Th className="execution-log-events-head-cell" style={{ width: 160 }}>节点</Table.Th>
-                <Table.Th className="execution-log-events-head-cell" style={{ width: 120 }}>事件</Table.Th>
-                <Table.Th className="execution-log-events-head-cell">信息</Table.Th>
+                <Table.Th className="execution-log-events-head-cell" style={{ width: 90 }}>{$('时间')}</Table.Th>
+                <Table.Th className="execution-log-events-head-cell" style={{ width: 70 }}>{$('级别')}</Table.Th>
+                <Table.Th className="execution-log-events-head-cell" style={{ width: 160 }}>{$('节点')}</Table.Th>
+                <Table.Th className="execution-log-events-head-cell" style={{ width: 120 }}>{$('事件')}</Table.Th>
+                <Table.Th className="execution-log-events-head-cell">{$('信息')}</Table.Th>
                 <Table.Th className="execution-log-events-head-cell" style={{ width: 44 }} />
               </Table.Tr>
             </Table.Thead>
@@ -403,12 +404,12 @@ export function ExecutionLogModal(props: {
                       </Text>
                     </Table.Td>
                     <Table.Td className="execution-log-events-cell">
-                      <Tooltip className="execution-log-events-copy-tooltip" label="复制">
+                      <Tooltip className="execution-log-events-copy-tooltip" label={$('复制')}>
                         <ActionIcon
                           className="execution-log-events-copy-action"
                           size="sm"
                           variant="subtle"
-                          aria-label="复制日志"
+                          aria-label={$('复制日志')}
                           onClick={(ev) => {
                             ev.stopPropagation()
                             void writeClipboard(clip)
@@ -425,7 +426,7 @@ export function ExecutionLogModal(props: {
                 <Table.Tr className="execution-log-events-empty-row">
                   <Table.Td className="execution-log-events-empty-cell" colSpan={7}>
                     <Text className="execution-log-events-empty-text" size="xs" c="dimmed" p="xs">
-                      暂无事件
+                      {$('暂无事件')}
                     </Text>
                   </Table.Td>
                 </Table.Tr>
@@ -436,7 +437,7 @@ export function ExecutionLogModal(props: {
 
         <Group className="execution-log-footer" justify="flex-end">
           <Button className="execution-log-close" variant="subtle" onClick={onClose}>
-            关闭
+            {$('关闭')}
           </Button>
         </Group>
       </Stack>

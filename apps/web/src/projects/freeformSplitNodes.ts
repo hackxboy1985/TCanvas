@@ -16,14 +16,15 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { LensFreeformSplitShot } from '../api/lens'
 
+import { $, $t } from '../canvas/i18n'
 /** 自由节点上记录拆分来源的标记：挂了这个标记的节点都是画布自由节点，不属于 lens 业务投影 */
 export const FREEFORM_SPLIT_SOURCE = 'freeform_split'
 
-/** 分组标签（同时作为资产节点分组名） */
+/** 分组标签（同时作为资产节点分组名）；注意在模块加载时按当前语言求值，切换语言需刷新页面（可接受）。 */
 export const FREEFORM_SPLIT_GROUP_LABELS = {
-  character: '角色',
-  scene: '场景',
-  prop: '道具',
+  character: $('角色'),
+  scene: $('场景'),
+  prop: $('道具'),
 } as const
 
 /** 分镜图节点尺寸（与画布 storyboardImage 节点默认尺寸一致） */
@@ -130,7 +131,7 @@ export function buildFreeformSplitCanvasPlan(
   const { sourceNodeId, origin } = options
   const validShots = shots.filter((shot) => shot && Number.isFinite(Number(shot.index)))
   if (validShots.length === 0) {
-    throw new Error('拆分结果为空，未生成任何节点')
+    throw new Error($('拆分结果为空，未生成任何节点'))
   }
 
   // 1. 汇总资产名称（全局去重，保持出现顺序）
@@ -217,7 +218,7 @@ export function buildFreeformSplitCanvasPlan(
       clientId,
       type: 'taskNode',
       kind: 'storyboardImage',
-      label: `分镜${shot.index}`,
+      label: $t('分镜{{index}}', { index: shot.index }),
       position: {
         x: col * (SHOT_NODE_WIDTH + SHOT_GAP_X),
         y: row * (SHOT_NODE_HEIGHT + ASSET_GAP_Y),
@@ -225,7 +226,7 @@ export function buildFreeformSplitCanvasPlan(
       style: { width: SHOT_NODE_WIDTH, height: SHOT_NODE_HEIGHT },
       data: {
         kind: 'storyboardImage',
-        label: `分镜${shot.index}`,
+        label: $t('分镜{{index}}', { index: shot.index }),
         prompt: shot.prompt,
         ...(subtitle ? { subtitle } : null),
         source: FREEFORM_SPLIT_SOURCE,
@@ -310,7 +311,7 @@ export function resolveFreeformSplitNodePositions(
 
 /** 一行汇总文案：给 toast 用 */
 export function describeFreeformSplitPlan(plan: FreeformSplitCanvasPlan, chargedCredit: number): string {
-  const creditText = chargedCredit > 0 ? `，消耗 ${chargedCredit} 积分` : ''
-  const assetText = plan.assetCount > 0 ? `、${plan.assetCount} 个角色/场景/道具节点` : ''
-  return `拆分镜完成：生成 ${plan.shotCount} 个分镜节点${assetText}，共 ${plan.edges.length} 条连线${creditText}`
+  const creditText = chargedCredit > 0 ? $t('，消耗 {{chargedCredit}} 积分', { chargedCredit: chargedCredit }) : ''
+  const assetText = plan.assetCount > 0 ? $t('、{{assetCount}} 个角色/场景/道具节点', { assetCount: plan.assetCount }) : ''
+  return $t('拆分镜完成：生成 {{shotCount}} 个分镜节点{{assetText}}，共 {{count}} 条连线{{creditText}}', { shotCount: plan.shotCount, assetText: assetText, count: plan.edges.length, creditText: creditText })
 }

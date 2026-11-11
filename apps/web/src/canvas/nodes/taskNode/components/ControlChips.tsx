@@ -1,6 +1,7 @@
 import React from 'react'
 import { ActionIcon, Button, Menu } from '@mantine/core'
 import { IconBrain, IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react'
+import { $, $t } from '../../../i18n'
 
 const DEFAULT_IMAGE_ASPECT_RATIO_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '5:4', '4:5', '21:9'].map((value) => ({
   value,
@@ -87,7 +88,7 @@ export function ControlChips({
   qualityOptions,
   onQualityChange,
   showResolutionMenu,
-  resolutionTitle = '分辨率',
+  resolutionTitle = $('分辨率'),
   resolutionOptions,
   onResolutionChange,
   showImageSizeMenu,
@@ -133,7 +134,7 @@ export function ControlChips({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
-              title={`模型 · ${summaryModelLabel}`}
+              title={$t('模型 · {{v1}}', { v1: summaryModelLabel })}
             >
               <span
                 className="control-chips-value"
@@ -205,7 +206,7 @@ export function ControlChips({
                 ...summaryChipStyles,
                 minWidth: 0,
               }}
-              title="时长"
+              title={$("时长")}
             >
               <span className="control-chips-value" style={controlValueStyle}>{summaryDuration}</span>
             </Button>
@@ -232,7 +233,7 @@ export function ControlChips({
                 ...summaryChipStyles,
                 minWidth: 0,
               }}
-              title="质量"
+              title={$("质量")}
             >
               <span className="control-chips-value" style={controlValueStyle}>{summaryQuality}</span>
             </Button>
@@ -280,7 +281,7 @@ export function ControlChips({
               radius={0}
               size="compact-sm"
               style={summaryChipStyles}
-              title="图像尺寸"
+              title={$("图像尺寸")}
             >
               <span className="control-chips-value" style={controlValueStyle}>{imageSize}</span>
             </Button>
@@ -307,15 +308,15 @@ export function ControlChips({
                 ...summaryChipStyles,
                 minWidth: 0,
               }}
-              title="方向"
+              title={$("方向")}
             >
-              <span className="control-chips-value" style={controlValueStyle}>{orientation === 'portrait' ? '竖屏' : '横屏'}</span>
+              <span className="control-chips-value" style={controlValueStyle}>{orientation === 'portrait' ? $('竖屏') : $('横屏')}</span>
             </Button>
           </Menu.Target>
           <Menu.Dropdown className="control-chips-menu-dropdown">
             {(orientationOptions || [
-              { value: 'landscape', label: '横屏' },
-              { value: 'portrait', label: '竖屏' },
+              { value: 'landscape', label: $('横屏') },
+              { value: 'portrait', label: $('竖屏') },
             ]).map((option) => (
               <Menu.Item className="control-chips-menu-item" key={option.value} onClick={() => onOrientationChange(option.value as 'portrait' | 'landscape')}>
                 {option.label}
@@ -337,7 +338,7 @@ export function ControlChips({
                 ...summaryChipStyles,
                 minWidth: 0,
               }}
-              title="生成次数"
+              title={$("生成次数")}
             >
               <span className="control-chips-value" style={controlValueStyle}>{summaryExec}</span>
             </Button>
@@ -375,7 +376,7 @@ export function ControlChips({
           {requiredCreditsLabel && (
             <span
               className="control-chips-required-credits"
-              title={`当前生成将消耗 ${requiredCreditsLabel}`}
+              title={$t('当前生成将消耗 {{v1}}', { v1: requiredCreditsLabel })}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -394,7 +395,7 @@ export function ControlChips({
             </span>
           )}
           {isRunning && (
-            <ActionIcon className="control-chips-stop" size="md" variant="light" color="red" title="停止当前任务" onClick={onCancelRun}>
+            <ActionIcon className="control-chips-stop" size="md" variant="light" color="red" title={$("停止当前任务")} onClick={onCancelRun}>
               <IconPlayerStop className="control-chips-stop-icon" size={16} />
             </ActionIcon>
           )}
@@ -402,7 +403,7 @@ export function ControlChips({
           <ActionIcon
             className="control-chips-run"
             size="md"
-            title="执行节点"
+            title={$("执行节点")}
             disabled={isRunning}
             onClick={onRun}
             radius="md"

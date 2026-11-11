@@ -3,12 +3,14 @@ import { Badge, Box, Button, Group, SimpleGrid, Stack, Text } from '@mantine/cor
 import { PROJECT_ART_STYLE_PRESETS, getArtStylePresetById } from './projectPresetLibrary'
 import { PanelCard } from '../ui/PanelCard'
 
+import { $ } from '../canvas/i18n'
 type ProjectArtStylePresetPickerProps = {
   value?: string
   onChange: (value?: string) => void
   description?: string
 }
 
+/** 注意：封面说明在模块加载时按当前语言求值，切换语言需刷新页面（可接受）。 */
 const PRESET_COVER_MAP: Record<string, {
   background: string
   accent: string
@@ -17,32 +19,32 @@ const PRESET_COVER_MAP: Record<string, {
   'toonflow-2d-chinese-guofeng': {
     background: 'linear-gradient(135deg, #0f3b36 0%, #2f7f74 42%, #efe2b8 100%)',
     accent: '#f4d27a',
-    caption: '青绿山水 / 留白云雾',
+    caption: $('青绿山水 / 留白云雾'),
   },
   'toonflow-2d-flat-design': {
     background: 'linear-gradient(135deg, #ff7a18 0%, #ffd166 48%, #fff2cc 100%)',
     accent: '#a83d00',
-    caption: '高纯色块 / 清晰轮廓',
+    caption: $('高纯色块 / 清晰轮廓'),
   },
   'toonflow-2d-90s-japanese-anime': {
     background: 'linear-gradient(135deg, #102a71 0%, #ff4f5e 58%, #ffd166 100%)',
     accent: '#fff2cf',
-    caption: '高反差 / 热血赛璐璐',
+    caption: $('高反差 / 热血赛璐璐'),
   },
   'toonflow-2d-mature-urban-romance': {
     background: 'linear-gradient(135deg, #42253d 0%, #d57a66 58%, #f7d9cf 100%)',
     accent: '#fff4eb',
-    caption: '都市夜色 / 克制情绪',
+    caption: $('都市夜色 / 克制情绪'),
   },
   'toonflow-realpeople-urban-modern': {
     background: 'linear-gradient(135deg, #1b232c 0%, #75808c 45%, #d9dfe5 100%)',
     accent: '#ffffff',
-    caption: '真实空间 / 现代服化道',
+    caption: $('真实空间 / 现代服化道'),
   },
   'toonflow-3d-anime-render': {
     background: 'linear-gradient(135deg, #18284a 0%, #45b7d1 42%, #e8fbff 100%)',
     accent: '#f5feff',
-    caption: '3D资产 / 稳定复用',
+    caption: $('3D资产 / 稳定复用'),
   },
 }
 
@@ -57,15 +59,14 @@ export default function ProjectArtStylePresetPicker({
     <Stack gap="xs">
       <Group justify="space-between" align="flex-end" gap="md">
         <Box style={{ flex: 1, minWidth: 220 }}>
-          <Text size="sm" fw={600}>画风选择</Text>
+          <Text size="sm" fw={600}>{ $('画风选择') }</Text>
           <Text size="xs" c="dimmed" mt={4}>
-            {description || '优先用视觉卡片选风格，文字只作为补充说明。'}
+            {description || $('优先用视觉卡片选风格，文字只作为补充说明。')}
           </Text>
         </Box>
         {selected ? (
           <Button size="xs" variant="subtle" onClick={() => onChange(undefined)}>
-            清除选择
-          </Button>
+            { $('清除选择') }</Button>
         ) : null}
       </Group>
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
@@ -120,7 +121,7 @@ export default function ProjectArtStylePresetPicker({
                     <Text size="xs" c="dimmed" mt={4} lineClamp={2}>{preset.summary}</Text>
                   </Box>
                   <Badge variant={active ? 'filled' : 'light'} color={active ? 'blue' : 'gray'}>
-                    {active ? '已选' : '选择'}
+                    {active ? $('已选') : $('选择')}
                   </Badge>
                 </Group>
                 <Group gap={6}>

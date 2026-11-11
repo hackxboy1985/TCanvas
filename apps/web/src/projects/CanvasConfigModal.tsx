@@ -51,6 +51,7 @@ import {
 } from '../ui/chat/canvasShortcutConfig'
 import { toast } from '../ui/toast'
 
+import { $ } from '../canvas/i18n'
 /** 内置视觉风格选项（与 lens 配置页常见取值对齐；支持自定义覆盖） */
 const STYLE_OPTIONS = [
   '真人电影',
@@ -67,22 +68,23 @@ const STYLE_OPTIONS = [
 /** 屏幕比例选项 */
 const RATIO_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9']
 
+/** 注意：以下选项标签在模块加载时按当前语言求值，切换语言需刷新页面（可接受）。 */
 /** 生视频模式选项（取值与 lens 配置页一致：reference / reference_ultra） */
 const VIDEO_MODE_OPTIONS = [
-  { value: 'reference', label: '参考图（角色图 + 场景图）' },
-  { value: 'reference_ultra', label: '参考图Ultra（智能衔接分镜）' },
+  { value: 'reference', label: $('参考图（角色图 + 场景图）') },
+  { value: 'reference_ultra', label: $('参考图Ultra（智能衔接分镜）') },
 ]
 
 /** 人物参考图类型选项 */
 const REFERENCE_IMG_TYPE_OPTIONS = [
-  { value: 'threeImg', label: '三视图' },
-  { value: 'frontImg', label: '全身图' },
+  { value: 'threeImg', label: $('三视图') },
+  { value: 'frontImg', label: $('全身图') },
 ]
 
 /** 快捷键下拉选项 */
 const SHORTCUT_OPTIONS: Array<{ value: CanvasShortcutKey; label: string }> = [
-  { value: 'enter', label: 'Enter 回车键' },
-  { value: 'ctrl+enter', label: 'Ctrl/⌘ + Enter 回车键' },
+  { value: 'enter', label: $('Enter 回车键') },
+  { value: 'ctrl+enter', label: $('Ctrl/⌘ + Enter 回车键') },
 ]
 
 /** 基本设置表单默认值（与 lens 配置页默认值一致） */
@@ -141,7 +143,7 @@ function buildComboSelectData(combos: LensPromptCombo[]): Array<{ value: string;
   return combos.map((combo) => ({
     value: String(combo.id),
     // 系统内置/内置组合加标记，避免用户误以为是剧内自定义组合
-    label: (combo.isSystem ? '[系统] ' : combo.isDefault ? '[内置] ' : '') + combo.name,
+    label: (combo.isSystem ? $('[系统] ') : combo.isDefault ? $('[内置] ') : '') + combo.name,
   }))
 }
 
@@ -205,13 +207,13 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
         } else {
           // 服务端读取失败（即使有本地缓存回退）也禁止保存：无法确认服务端最新字段，保存可能丢字段
           console.warn('[canvas-config] 服务端基本设置读取失败，已回退本地缓存并禁止保存')
-          toast('读取画布配置失败，已使用本地缓存（本次不可保存）', 'error')
+          toast($('读取画布配置失败，已使用本地缓存（本次不可保存）'), 'error')
           setLoadFailed(true)
         }
       } else {
         // 基本设置读不到时用默认值展示，但必须禁止保存（否则会用默认值覆盖服务端真实配置）
         console.warn('[canvas-config] 读取基本设置失败，使用默认值并禁止保存', settingsResult.reason)
-        toast('读取画布配置失败，已使用默认值（本次不可保存）', 'error')
+        toast($('读取画布配置失败，已使用默认值（本次不可保存）'), 'error')
         setLoadFailed(true)
       }
       if (imageCombosResult.status === 'fulfilled') setImageCombos(imageCombosResult.value)
@@ -230,11 +232,11 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
   const handleSaveCustomStyle = React.useCallback(() => {
     const value = customStyle.trim()
     if (!value) {
-      toast('请输入自定义风格内容', 'error')
+      toast($('请输入自定义风格内容'), 'error')
       return
     }
     if (value.length > 30) {
-      toast('自定义风格不能超过 30 个字', 'error')
+      toast($('自定义风格不能超过 30 个字'), 'error')
       return
     }
     updateForm('selectedStyle', value)
@@ -257,12 +259,12 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
   /** 保存配置（基本设置写服务端 + 快捷键写 localStorage，保存后立即生效） */
   const handleSave = React.useCallback(async () => {
     if (!dramaId) {
-      toast('未找到当前剧，无法保存配置', 'error')
+      toast($('未找到当前剧，无法保存配置'), 'error')
       return
     }
     // 加载中/加载失败时禁止保存：此时 form 只是默认值，保存会覆盖服务端真实配置
     if (loading || loadFailed || saving) {
-      toast(loading ? '配置加载中，请稍候' : '配置加载失败，请关闭弹窗重试', 'error')
+      toast(loading ? $('配置加载中，请稍候') : $('配置加载失败，请关闭弹窗重试'), 'error')
       return
     }
     setSaving(true)
@@ -275,7 +277,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
       } catch (error) {
         // 拉不到最新配置时必须中止保存：继续用旧 form 保存会覆盖服务端在打开弹窗后新增/变更的字段
         console.error('[canvas-config] 保存前读取服务端配置失败，已中止保存', error)
-        toast('拉取最新配置失败，请重试', 'error')
+        toast($('拉取最新配置失败，请重试'), 'error')
         return
       }
       const merged: LensCanvasStyleConfig = {
@@ -285,11 +287,11 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
       await saveCanvasBasicSettings(dramaId, merged)
       setForm(merged)
       saveCanvasShortcutConfig(shortcut)
-      toast('画布配置已保存', 'success')
+      toast($('画布配置已保存'), 'success')
       onClose()
     } catch (error) {
       console.error('[canvas-config] 保存配置失败', error)
-      toast('保存失败：' + (error instanceof Error ? error.message : String(error)), 'error')
+      toast($('保存失败：') + (error instanceof Error ? error.message : String(error)), 'error')
     } finally {
       setSaving(false)
     }
@@ -301,10 +303,10 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
     setCancelingQueued(true)
     try {
       await cancelAllQueuedTasks(dramaId)
-      toast('已提交取消排队任务', 'success')
+      toast($('已提交取消排队任务'), 'success')
     } catch (error) {
       console.error('[canvas-config] 取消排队任务失败', error)
-      toast('取消失败：' + (error instanceof Error ? error.message : String(error)), 'error')
+      toast($('取消失败：') + (error instanceof Error ? error.message : String(error)), 'error')
     } finally {
       setCancelingQueued(false)
       setCancelConfirmOpened(false)
@@ -330,7 +332,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
       className="lens-canvas-config-modal"
       opened={opened}
       onClose={onClose}
-      title="画布配置"
+      title={$('画布配置')}
       centered
       withinPortal
       /* 宽度走 Mantine 的 size（映射为 --modal-size / width: var(--modal-size)），
@@ -349,35 +351,35 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
       {loading ? (
         <Group className="lens-canvas-config-loading" justify="center" py="xl">
           <Loader size="sm" />
-          <Text size="sm" c="dimmed">正在加载配置…</Text>
+          <Text size="sm" c="dimmed">{ $('正在加载配置…') }</Text>
         </Group>
       ) : (
         <Tabs className="lens-canvas-config-tabs" value={activeTab} onChange={setActiveTab}>
           <Tabs.List className="lens-canvas-config__tab-list">
-            <Tabs.Tab className="lens-canvas-config__tab" value="basic" leftSection={<IconSettings size={14} />}>基本设置</Tabs.Tab>
-            <Tabs.Tab className="lens-canvas-config__tab" value="imagePrompt" leftSection={<IconBrush size={14} />}>生图前置提示词</Tabs.Tab>
-            <Tabs.Tab className="lens-canvas-config__tab" value="videoPrompt" leftSection={<IconPhoto size={14} />}>视频前置提示词</Tabs.Tab>
-            <Tabs.Tab className="lens-canvas-config__tab" value="utility" leftSection={<IconTool size={14} />}>实用功能</Tabs.Tab>
-            <Tabs.Tab className="lens-canvas-config__tab" value="general" leftSection={<IconKeyboard size={14} />}>通用</Tabs.Tab>
+            <Tabs.Tab className="lens-canvas-config__tab" value="basic" leftSection={<IconSettings size={14} />}>{ $('基本设置') }</Tabs.Tab>
+            <Tabs.Tab className="lens-canvas-config__tab" value="imagePrompt" leftSection={<IconBrush size={14} />}>{ $('生图前置提示词') }</Tabs.Tab>
+            <Tabs.Tab className="lens-canvas-config__tab" value="videoPrompt" leftSection={<IconPhoto size={14} />}>{ $('视频前置提示词') }</Tabs.Tab>
+            <Tabs.Tab className="lens-canvas-config__tab" value="utility" leftSection={<IconTool size={14} />}>{ $('实用功能') }</Tabs.Tab>
+            <Tabs.Tab className="lens-canvas-config__tab" value="general" leftSection={<IconKeyboard size={14} />}>{ $('通用') }</Tabs.Tab>
           </Tabs.List>
 
           {/* 基本设置 */}
           <Tabs.Panel value="basic" pt="md">
             <Stack gap="md">
               <div>
-                <Text className="lens-canvas-config-section-title" size="sm" fw={700}>基础配置</Text>
+                <Text className="lens-canvas-config-section-title" size="sm" fw={700}>{ $('基础配置') }</Text>
                 <Group grow align="flex-start" mt="xs">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>视觉风格</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('视觉风格') }</Text>
                     <Group gap="xs" wrap="nowrap">
                       <Select
                         data={STYLE_OPTIONS.map((style) => ({ value: style, label: style }))}
-                        value={String(form.selectedStyle || '真人电影')}
-                        onChange={(value) => updateForm('selectedStyle', value || '真人电影')}
+                        value={String(form.selectedStyle || $('真人电影'))}
+                        onChange={(value) => updateForm('selectedStyle', value || $('真人电影'))}
                         comboboxProps={{ withinPortal: true }}
                         style={{ flex: 1 }}
                       />
-                      <Button size="xs" variant="light" onClick={() => setShowCustomStyle((prev) => !prev)}>自定义</Button>
+                      <Button size="xs" variant="light" onClick={() => setShowCustomStyle((prev) => !prev)}>{ $('自定义') }</Button>
                     </Group>
                     {showCustomStyle ? (
                       <Group gap="xs" mt={6} wrap="nowrap">
@@ -385,16 +387,16 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                           className="lens-canvas-config-custom-style"
                           value={customStyle}
                           maxLength={30}
-                          placeholder="输入自定义风格（最多30字）"
+                          placeholder={$('输入自定义风格（最多30字）')}
                           onChange={(event) => setCustomStyle(event.target.value)}
                           style={{ flex: 1, height: 30, borderRadius: 4, border: '1px solid #ced4da', padding: '0 8px' }}
                         />
-                        <Button size="xs" onClick={handleSaveCustomStyle}>保存</Button>
+                        <Button size="xs" onClick={handleSaveCustomStyle}>{ $('保存') }</Button>
                       </Group>
                     ) : null}
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>屏幕比例</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('屏幕比例') }</Text>
                     <Select
                       id="canvas-config-ratio-select"
                       data={RATIO_OPTIONS.map((ratio) => ({ value: ratio, label: ratio }))}
@@ -406,23 +408,23 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 </Group>
                 <Group grow mt="sm">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>生图前置提示词</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('生图前置提示词') }</Text>
                     <Select
                       data={imageComboData}
                       value={form.selectedImagePrompt === '' || form.selectedImagePrompt === undefined ? null : String(form.selectedImagePrompt)}
                       onChange={(value) => updateForm('selectedImagePrompt', value || '')}
-                      placeholder="不选表示不加前置提示词"
+                      placeholder={$('不选表示不加前置提示词')}
                       clearable
                       comboboxProps={{ withinPortal: true }}
                     />
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>视频前置提示词</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('视频前置提示词') }</Text>
                     <Select
                       data={videoComboData}
                       value={form.selectedVideoPrompt === '' || form.selectedVideoPrompt === undefined ? null : String(form.selectedVideoPrompt)}
                       onChange={(value) => updateForm('selectedVideoPrompt', value || '')}
-                      placeholder="请选择"
+                      placeholder={$('请选择')}
                       clearable
                       comboboxProps={{ withinPortal: true }}
                     />
@@ -430,18 +432,18 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 </Group>
                 <Group grow mt="sm">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>风格导演</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('风格导演') }</Text>
                     <Select
                       data={directorData}
                       value={form.selectedDirectorId === null || form.selectedDirectorId === undefined ? null : String(form.selectedDirectorId)}
                       onChange={(value) => updateForm('selectedDirectorId', value ? Number(value) : null)}
-                      placeholder="请选择"
+                      placeholder={$('请选择')}
                       clearable
                       comboboxProps={{ withinPortal: true }}
                     />
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>最大视频时长（秒）</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('最大视频时长（秒）') }</Text>
                     <NumberInput
                       value={Number(form.maxVideoDuration ?? 15)}
                       onChange={(value) => updateForm('maxVideoDuration', typeof value === 'number' ? value : 15)}
@@ -454,10 +456,10 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
               </div>
               <Divider />
               <div>
-                <Text className="lens-canvas-config-section-title" size="sm" fw={700}>自动生成设置</Text>
+                <Text className="lens-canvas-config-section-title" size="sm" fw={700}>{ $('自动生成设置') }</Text>
                 <Group grow mt="xs">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>视频执行模型</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('视频执行模型') }</Text>
                     <Select
                       data={buildModelSelectData(videoModels)}
                       value={form.autoGenerateModel ? String(form.autoGenerateModel) : null}
@@ -473,7 +475,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                     />
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>视频分辨率</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('视频分辨率') }</Text>
                     <Select
                       data={resolutionOptions.map((item) => ({ value: item, label: item }))}
                       value={form.resolution ? String(form.resolution) : null}
@@ -484,7 +486,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 </Group>
                 <Group grow mt="sm">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>生图默认模型</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('生图默认模型') }</Text>
                     <Select
                       data={buildModelSelectData(imageModels)}
                       value={form.autoImageModel ? String(form.autoImageModel) : null}
@@ -499,7 +501,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                     />
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>生图分辨率</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('生图分辨率') }</Text>
                     <Select
                       data={imageResolutionOptions.map((item) => ({ value: item, label: item }))}
                       value={form.imageResolution ? String(form.imageResolution) : null}
@@ -510,7 +512,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 </Group>
                 <Group grow mt="sm">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>图生图默认模型</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('图生图默认模型') }</Text>
                     <Select
                       data={buildModelSelectData(image2imageModels)}
                       value={form.autoImage2ImageModel ? String(form.autoImage2ImageModel) : null}
@@ -519,17 +521,17 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                     />
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>台本功能</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('台本功能') }</Text>
                     <Switch
                       checked={form.enableScriptGen === true}
                       onChange={(event) => updateForm('enableScriptGen', event.currentTarget.checked)}
-                      label={form.enableScriptGen === true ? '开启' : '关闭'}
+                      label={form.enableScriptGen === true ? $('开启') : $('关闭')}
                     />
                   </div>
                 </Group>
                 <Group grow mt="sm" align="flex-start">
                   <div>
-                    <Text size="xs" fw={500} mb={4}>生视频模式</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('生视频模式') }</Text>
                     <Radio.Group
                       value={String(form.autoGenerateVideoMode || 'reference')}
                       onChange={(value) => updateForm('autoGenerateVideoMode', value)}
@@ -542,7 +544,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                     </Radio.Group>
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>人物参考图类型</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('人物参考图类型') }</Text>
                     <Radio.Group
                       value={String(form.referenceImgType || 'threeImg')}
                       onChange={(value) => updateForm('referenceImgType', value)}
@@ -558,11 +560,11 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
               </div>
               <Divider />
               <div>
-                <Text className="lens-canvas-config-section-title" size="sm" fw={700}>角色生图提示词</Text>
+                <Text className="lens-canvas-config-section-title" size="sm" fw={700}>{ $('角色生图提示词') }</Text>
                 <Stack gap="sm" mt="xs">
 
                   <div>
-                    <Text size="xs" fw={500} mb={4}>三视图提示词</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('三视图提示词') }</Text>
                     <Textarea
                       autosize
                       minRows={2}
@@ -572,7 +574,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                     />
                   </div>
                   <div>
-                    <Text size="xs" fw={500} mb={4}>文生三视图提示词</Text>
+                    <Text size="xs" fw={500} mb={4}>{ $('文生三视图提示词') }</Text>
                     <Textarea
                       autosize
                       minRows={2}
@@ -590,30 +592,29 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
           <Tabs.Panel value="imagePrompt" pt="md">
             <Stack gap="md">
               <Alert color="blue" variant="light">
-                复杂组合编辑（颜色/光影等细化选项）请在 lens 配置页「生图前置提示词」中管理；这里选择后保存即可生效。
-              </Alert>
+                { $('复杂组合编辑（颜色/光影等细化选项）请在 lens 配置页「生图前置提示词」中管理；这里选择后保存即可生效。') }</Alert>
               <div>
-                <Text size="xs" fw={500} mb={4}>当前选择</Text>
+                <Text size="xs" fw={500} mb={4}>{ $('当前选择') }</Text>
                 <Select
                   data={imageComboData}
                   value={form.selectedImagePrompt === '' || form.selectedImagePrompt === undefined ? null : String(form.selectedImagePrompt)}
                   onChange={(value) => updateForm('selectedImagePrompt', value || '')}
-                  placeholder="不选表示不加前置提示词"
+                  placeholder={$('不选表示不加前置提示词')}
                   clearable
                   comboboxProps={{ withinPortal: true }}
                 />
               </div>
               <div>
-                <Text size="xs" fw={500} mb={6}>可用组合（只读）</Text>
+                <Text size="xs" fw={500} mb={6}>{ $('可用组合（只读）') }</Text>
                 {imageCombos.length === 0 ? (
-                  <Text size="sm" c="dimmed">暂无可用组合</Text>
+                  <Text size="sm" c="dimmed">{ $('暂无可用组合') }</Text>
                 ) : (
                   <Stack gap={6}>
                     {imageCombos.map((combo) => (
                       <Group key={combo.id} justify="space-between" wrap="nowrap">
                         <Group gap="xs" wrap="nowrap">
                           <Badge size="xs" variant="light" color={combo.isSystem ? 'grape' : 'blue'}>
-                            {combo.isSystem ? '系统' : '剧内'}
+                            {combo.isSystem ? $('系统') : $('剧内')}
                           </Badge>
                           <Text size="sm">{combo.name}</Text>
                         </Group>
@@ -632,30 +633,29 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
           <Tabs.Panel value="videoPrompt" pt="md">
             <Stack gap="md">
               <Alert color="blue" variant="light">
-                复杂组合编辑（颜色/光影等细化选项）请在 lens 配置页「视频前置提示词」中管理；这里选择后保存即可生效。
-              </Alert>
+                { $('复杂组合编辑（颜色/光影等细化选项）请在 lens 配置页「视频前置提示词」中管理；这里选择后保存即可生效。') }</Alert>
               <div>
-                <Text size="xs" fw={500} mb={4}>当前选择</Text>
+                <Text size="xs" fw={500} mb={4}>{ $('当前选择') }</Text>
                 <Select
                   data={videoComboData}
                   value={form.selectedVideoPrompt === '' || form.selectedVideoPrompt === undefined ? null : String(form.selectedVideoPrompt)}
                   onChange={(value) => updateForm('selectedVideoPrompt', value || '')}
-                  placeholder="请选择"
+                  placeholder={$('请选择')}
                   clearable
                   comboboxProps={{ withinPortal: true }}
                 />
               </div>
               <div>
-                <Text size="xs" fw={500} mb={6}>可用组合（只读）</Text>
+                <Text size="xs" fw={500} mb={6}>{ $('可用组合（只读）') }</Text>
                 {videoCombos.length === 0 ? (
-                  <Text size="sm" c="dimmed">暂无可用组合</Text>
+                  <Text size="sm" c="dimmed">{ $('暂无可用组合') }</Text>
                 ) : (
                   <Stack gap={6}>
                     {videoCombos.map((combo) => (
                       <Group key={combo.id} justify="space-between" wrap="nowrap">
                         <Group gap="xs" wrap="nowrap">
                           <Badge size="xs" variant="light" color={combo.isSystem ? 'grape' : combo.isDefault ? 'gray' : 'blue'}>
-                            {combo.isSystem ? '系统' : combo.isDefault ? '内置' : '剧内'}
+                            {combo.isSystem ? $('系统') : combo.isDefault ? $('内置') : $('剧内')}
                           </Badge>
                           <Text size="sm">{combo.name}</Text>
                         </Group>
@@ -674,8 +674,8 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
           <Tabs.Panel value="utility" pt="md">
             <Stack gap="lg">
               <div>
-                <Text size="sm" fw={700} mb={4}>取消排队任务</Text>
-                <Text size="xs" c="dimmed" mb={8}>取消当前剧所有排队中的任务；已在执行中的任务不受影响。</Text>
+                <Text size="sm" fw={700} mb={4}>{ $('取消排队任务') }</Text>
+                <Text size="xs" c="dimmed" mb={8}>{ $('取消当前剧所有排队中的任务；已在执行中的任务不受影响。') }</Text>
                 <Button
                   color="red"
                   variant="light"
@@ -683,20 +683,19 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                   loading={cancelingQueued}
                   onClick={() => setCancelConfirmOpened(true)}
                 >
-                  取消所有排队任务
-                </Button>
+                  { $('取消所有排队任务') }</Button>
               </div>
               <Divider />
               <div>
-                <Text size="sm" fw={700} mb={8}>备用通道</Text>
+                <Text size="sm" fw={700} mb={8}>{ $('备用通道') }</Text>
                 <Group gap="lg" align="flex-end">
                   <Switch
                     checked={form.enableBackupChannel !== false}
                     onChange={(event) => updateForm('enableBackupChannel', event.currentTarget.checked)}
-                    label="开启备用通道"
+                    label={$('开启备用通道')}
                   />
                   <NumberInput
-                    label="备用通道最大重试次数"
+                    label={$('备用通道最大重试次数')}
                     value={Number(form.backupRetryMax ?? 2)}
                     onChange={(value) => updateForm('backupRetryMax', typeof value === 'number' ? value : 2)}
                     min={0}
@@ -712,10 +711,9 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
           <Tabs.Panel value="general" pt="md">
             <Stack gap="md">
               <Alert color="blue" variant="light">
-                快捷键用于画布右下角 AI 对话输入框；两项互斥（一项选 Enter，另一项自动为 Ctrl/⌘+Enter），保存后立即生效。
-              </Alert>
+                { $('快捷键用于画布右下角 AI 对话输入框；两项互斥（一项选 Enter，另一项自动为 Ctrl/⌘+Enter），保存后立即生效。') }</Alert>
               <div>
-                <Text size="xs" fw={500} mb={4}>换行快捷键</Text>
+                <Text size="xs" fw={500} mb={4}>{ $('换行快捷键') }</Text>
                 <Select
                   id="canvas-config-linebreak-select"
                   data={SHORTCUT_OPTIONS}
@@ -725,7 +723,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 />
               </div>
               <div>
-                <Text size="xs" fw={500} mb={4}>提交生成快捷键</Text>
+                <Text size="xs" fw={500} mb={4}>{ $('提交生成快捷键') }</Text>
                 <Select
                   id="canvas-config-submit-select"
                   data={SHORTCUT_OPTIONS}
@@ -735,7 +733,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 />
               </div>
               <Text size="xs" c="dimmed">
-                当前：Enter = {shortcut.submit === 'enter' ? '发送' : '换行'}，Ctrl/⌘+Enter = {shortcut.submit === 'enter' ? '换行' : '发送'}
+                { $('当前：Enter =') }{shortcut.submit === 'enter' ? $('发送') : $('换行')}，Ctrl/⌘+Enter = {shortcut.submit === 'enter' ? $('换行') : $('发送')}
               </Text>
             </Stack>
           </Tabs.Panel>
@@ -743,7 +741,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
       )}
 
       <Group className="lens-canvas-config-footer" justify="flex-end" mt="lg">
-        <Button variant="default" onClick={onClose}>关闭</Button>
+        <Button variant="default" onClick={onClose}>{ $('关闭') }</Button>
         <Button
           id="canvas-config-save-button"
           color="blue"
@@ -751,8 +749,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
           disabled={loading || loadFailed}
           onClick={() => { void handleSave() }}
         >
-          保存配置
-        </Button>
+          { $('保存配置') }</Button>
       </Group>
 
       {/* 取消排队确认 */}
@@ -760,14 +757,14 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
         className="lens-canvas-config-confirm"
         opened={cancelConfirmOpened}
         onClose={() => setCancelConfirmOpened(false)}
-        title="确认取消排队任务"
+        title={$('确认取消排队任务')}
         size="sm"
         centered
       >
-        <Text size="sm">确定取消当前剧所有排队中的任务吗？已在执行中的任务不受影响。</Text>
+        <Text size="sm">{ $('确定取消当前剧所有排队中的任务吗？已在执行中的任务不受影响。') }</Text>
         <Group justify="flex-end" mt="md">
-          <Button variant="default" size="xs" onClick={() => setCancelConfirmOpened(false)}>取消</Button>
-          <Button color="red" size="xs" loading={cancelingQueued} onClick={() => { void handleCancelQueued() }}>确定</Button>
+          <Button variant="default" size="xs" onClick={() => setCancelConfirmOpened(false)}>{ $('取消') }</Button>
+          <Button color="red" size="xs" loading={cancelingQueued} onClick={() => { void handleCancelQueued() }}>{ $('确定') }</Button>
         </Group>
       </Modal>
     </Modal>

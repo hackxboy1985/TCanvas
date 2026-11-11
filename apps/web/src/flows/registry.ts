@@ -1,4 +1,5 @@
 import type { Node, Edge } from '@xyflow/react'
+import { $ } from '../canvas/i18n'
 
 export type Port = { id: string; label: string; type: 'image'|'audio'|'subtitle'|'video'|'any' }
 export type FlowIO = { inputs: Port[]; outputs: Port[] }
@@ -66,7 +67,7 @@ export function validateNoCycle(flowId: string): { ok: boolean; reason?: string 
     onstack.delete(u)
   }
   dfs(flowId)
-  return bad ? { ok: false, reason: '检测到引用环' } : { ok: true }
+  return bad ? { ok: false, reason: $('检测到引用环') } : { ok: true }
 }
 
 export function scanCycles(): string[] {

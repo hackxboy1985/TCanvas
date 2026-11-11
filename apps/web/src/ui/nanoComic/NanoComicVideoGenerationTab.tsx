@@ -22,6 +22,7 @@ import {
   clipMultilineText,
   escapeRegExp,
 } from './workspaceTabShared'
+import { $, $t } from '../../canvas/i18n'
 
 type NanoComicVideoGenerationTabProps = {
   shots: readonly NanoComicShotItem[]
@@ -318,15 +319,15 @@ export default function NanoComicVideoGenerationTab({
           <Stack className="nano-comic-storyboard__asset-stack" gap="sm">
             <Group className="nano-comic-storyboard__section-header" justify="space-between">
               <div className="nano-comic-storyboard__section-headline">
-                <Title className="nano-comic-storyboard__section-title" order={4}>资产库</Title>
+                <Title className="nano-comic-storyboard__section-title" order={4}>{ $('资产库') }</Title>
               </div>
               <Badge className="nano-comic-storyboard__section-badge" variant="light" radius="sm">
-                {filteredAssetItems.length} 项
+                { $t('{{count}} 项', { count: filteredAssetItems.length }) }
               </Badge>
             </Group>
             <TextInput
               className="nano-comic-storyboard__asset-search"
-              placeholder="搜索角色 / 场景 / 道具"
+              placeholder={ $('搜索角色 / 场景 / 道具') }
               value={assetQuery}
               onChange={(event) => setAssetQuery(event.currentTarget.value)}
               leftSection={<IconSearch size={14} />}
@@ -339,8 +340,8 @@ export default function NanoComicVideoGenerationTab({
               value={assetScopeFilter}
               onChange={(value) => setAssetScopeFilter(value === 'all' ? 'all' : 'current')}
               data={[
-                { value: 'all', label: '全部资产' },
-                { value: 'current', label: '当前资产' },
+                { value: 'all', label: $('全部资产') },
+                { value: 'current', label: $('当前资产') },
               ]}
             />
             <div ref={assetScrollRef} className="nano-comic-storyboard__asset-scroll" onScroll={handleAssetScroll}>
@@ -360,7 +361,7 @@ export default function NanoComicVideoGenerationTab({
                         ) : (
                           <div className="nano-comic-storyboard__asset-card-placeholder">
                             <IconLayoutGrid size={16} />
-                            <Text className="nano-comic-storyboard__asset-card-placeholder-text" size="xs">待生成参考图</Text>
+                            <Text className="nano-comic-storyboard__asset-card-placeholder-text" size="xs">{ $('待生成参考图') }</Text>
                           </div>
                         )}
                       </div>
@@ -368,7 +369,7 @@ export default function NanoComicVideoGenerationTab({
                         <Text className="nano-comic-storyboard__asset-card-kind" size="xs" fw={800}>{asset.title}</Text>
                         <Group className="nano-comic-storyboard__asset-card-top" justify="space-between" align="center">
                           <Badge className="nano-comic-storyboard__asset-card-status" variant="light" radius="sm">
-                            {asset.isGenerating ? '生成中' : asset.statusLabel}
+                            {asset.isGenerating ? $('生成中') : asset.statusLabel}
                           </Badge>
                         </Group>
                         {assetLinked ? (
@@ -382,7 +383,7 @@ export default function NanoComicVideoGenerationTab({
                               onLocateInCanvas(asset.entityKey)
                             }}
                           >
-                            定位
+                            { $('定位') }
                           </Button>
                         ) : canGenerate ? (
                           <Button
@@ -393,7 +394,7 @@ export default function NanoComicVideoGenerationTab({
                             loading={asset.isGenerating}
                             onClick={() => onGenerateAsset(asset.id)}
                           >
-                            生成
+                            { $('生成') }
                           </Button>
                         ) : null}
                       </div>
@@ -419,10 +420,10 @@ export default function NanoComicVideoGenerationTab({
                 {visibleAssetItems.length <= 0 && assetSkeletonCount <= 0 ? (
                   <div className="nano-comic-storyboard__empty-block">
                     <Text className="nano-comic-storyboard__empty-text">
-                      {filteredAssetItems.length === 0 && normalizedAssetQuery ? '没有匹配的资产。' : '当前章节还没有可用资产。'}
+                      {filteredAssetItems.length === 0 && normalizedAssetQuery ? $('没有匹配的资产。') : $('当前章节还没有可用资产。')}
                     </Text>
                     <Text className="nano-comic-storyboard__empty-hint" size="sm" c="dimmed">
-                      {filteredAssetItems.length === 0 && normalizedAssetQuery ? '换个关键词试试。' : '先完成分镜图片，再进入视频生成。'}
+                      {filteredAssetItems.length === 0 && normalizedAssetQuery ? $('换个关键词试试。') : $('先完成分镜图片，再进入视频生成。')}
                     </Text>
                   </div>
                 ) : null}
@@ -436,11 +437,11 @@ export default function NanoComicVideoGenerationTab({
               <Stack className="nano-comic-storyboard__editor-stack" gap="md">
                 <Group className="nano-comic-storyboard__section-header" justify="space-between" align="flex-start">
                   <div className="nano-comic-storyboard__section-headline">
-                    <Title className="nano-comic-storyboard__section-title" order={4}>视频提示词</Title>
+                    <Title className="nano-comic-storyboard__section-title" order={4}>{ $('视频提示词') }</Title>
                   </div>
                   {selectedShot ? (
                     <Badge className="nano-comic-storyboard__section-badge" variant="light" radius="sm">
-                      片段 {selectedShot.shotCode}
+                      { $t('片段 {{code}}', { code: selectedShot.shotCode }) }
                     </Badge>
                   ) : null}
                 </Group>
@@ -448,9 +449,9 @@ export default function NanoComicVideoGenerationTab({
                   <div className="nano-comic-storyboard__prompt-panel">
                     <Group className="nano-comic-storyboard__prompt-header" justify="space-between">
                       <div className="nano-comic-storyboard__prompt-title-wrap">
-                        <Text className="nano-comic-storyboard__editor-label" size="xs" fw={800}>视频生成提示词</Text>
+                        <Text className="nano-comic-storyboard__editor-label" size="xs" fw={800}>{ $('视频生成提示词') }</Text>
                         <Text className="nano-comic-storyboard__prompt-subtitle" size="xs" c="dimmed">
-                          基于当前镜头结果与 `@角色 / @场景 / @道具` 锚点，继续生成视频片段
+                          { $('基于当前镜头结果与 `@角色 / @场景 / @道具` 锚点，继续生成视频片段') }
                         </Text>
                         {chapterScriptState?.message ? (
                           <Text className="nano-comic-storyboard__prompt-assist-status" size="xs" c="dimmed">
@@ -460,7 +461,7 @@ export default function NanoComicVideoGenerationTab({
                         ) : null}
                         {selectedShotVideoBlockedReason ? (
                           <Text className="nano-comic-storyboard__prompt-assist-status" size="xs" c="dimmed">
-                            视频生成前置条件未满足：{selectedShotVideoBlockedReason}
+                            { $t('视频生成前置条件未满足：{{reason}}', { reason: selectedShotVideoBlockedReason }) }
                           </Text>
                         ) : null}
                       </div>
@@ -470,8 +471,8 @@ export default function NanoComicVideoGenerationTab({
                           size="sm"
                           radius="sm"
                           variant="light"
-                          aria-label="生成当前章节剧本"
-                          title="生成当前章节剧本"
+                          aria-label={ $('生成当前章节剧本') }
+                          title={ $('生成当前章节剧本') }
                           loading={chapterScriptState?.status === 'running'}
                           disabled={chapterScriptState?.status === 'running'}
                           onClick={() => onGenerateChapterScript()}
@@ -606,7 +607,7 @@ export default function NanoComicVideoGenerationTab({
                             mentionMetaRef.current = null
                           }
                         }}
-                        placeholder="在这里输入视频提示词，支持 @角色 / @场景 / @道具"
+                        placeholder={ $('在这里输入视频提示词，支持 @角色 / @场景 / @道具') }
                         autosize={false}
                       />
                     </div>
@@ -615,7 +616,7 @@ export default function NanoComicVideoGenerationTab({
                         className="nano-comic-storyboard__mention-menu"
                         style={mentionMenuPosition ? { left: mentionMenuPosition.left, top: mentionMenuPosition.top } : undefined}
                       >
-                        <Text className="nano-comic-storyboard__mention-title" size="xs">引用当前资产</Text>
+                        <Text className="nano-comic-storyboard__mention-title" size="xs">{ $('引用当前资产') }</Text>
                         {mentionItems.length > 0 ? mentionItems.map((item, index) => (
                           <button
                             key={item.id}
@@ -638,7 +639,7 @@ export default function NanoComicVideoGenerationTab({
                             </span>
                           </button>
                         )) : (
-                          <Text className="nano-comic-storyboard__mention-empty" size="xs">没有匹配的资产引用</Text>
+                          <Text className="nano-comic-storyboard__mention-empty" size="xs">{ $('没有匹配的资产引用') }</Text>
                         )}
                       </div>
                     ) : null}
@@ -650,7 +651,7 @@ export default function NanoComicVideoGenerationTab({
               <Stack className="nano-comic-storyboard__preview-stack" gap="md">
                 <Group className="nano-comic-storyboard__section-header" justify="space-between">
                   <div className="nano-comic-storyboard__section-headline">
-                    <Title className="nano-comic-storyboard__section-title" order={4}>视频结果</Title>
+                    <Title className="nano-comic-storyboard__section-title" order={4}>{ $('视频结果') }</Title>
                   </div>
                 </Group>
                 <div className="nano-comic-storyboard__stage-image-shell">
@@ -666,13 +667,13 @@ export default function NanoComicVideoGenerationTab({
                     <Image
                       className="nano-comic-storyboard__stage-image"
                       src={String(selectedShot?.previewImageUrl || '').trim()}
-                      alt={selectedShot?.title || '当前镜头结果'}
+                      alt={selectedShot?.title || $('当前镜头结果')}
                       radius={0}
                     />
                   ) : (
                     <div className="nano-comic-storyboard__stage-empty">
                       <Text className="nano-comic-storyboard__empty-text">
-                        {selectedShotVideoBlockedReason ? '当前镜头暂时不能生成视频。' : '当前镜头待生成视频。'}
+                        {selectedShotVideoBlockedReason ? $('当前镜头暂时不能生成视频。') : $('当前镜头待生成视频。')}
                       </Text>
                       {selectedShotVideoBlockedReason ? (
                         <Text className="nano-comic-storyboard__empty-hint" size="sm" c="dimmed">
@@ -688,10 +689,10 @@ export default function NanoComicVideoGenerationTab({
           <PanelCard className="nano-comic-storyboard__strip-panel">
             <Group className="nano-comic-storyboard__section-header" justify="space-between">
               <div className="nano-comic-storyboard__section-headline">
-                <Title className="nano-comic-storyboard__section-title" order={4}>视频生成队列</Title>
+                <Title className="nano-comic-storyboard__section-title" order={4}>{ $('视频生成队列') }</Title>
               </div>
               <Badge className="nano-comic-storyboard__section-badge" variant="light" radius="sm">
-                {shots.length} 条视频任务
+                { $t('{{count}} 条视频任务', { count: shots.length }) }
               </Badge>
             </Group>
             <div className="nano-comic-storyboard__strip">
@@ -722,19 +723,19 @@ export default function NanoComicVideoGenerationTab({
                             tabIndex={-1}
                             disablePictureInPicture
                           />
-                          <span className="nano-comic-storyboard__strip-card-video-badge">视频</span>
+                          <span className="nano-comic-storyboard__strip-card-video-badge">{ $('视频') }</span>
                         </div>
                       ) : shot.previewImageUrl ? (
                         <Image className="nano-comic-storyboard__strip-card-image" src={shot.previewImageUrl} alt={shot.title} radius={0} />
                       ) : (
                         <div className="nano-comic-storyboard__strip-card-placeholder">
-                          <Text size="xs">待生成视频</Text>
+                          <Text size="xs">{ $('待生成视频') }</Text>
                         </div>
                       )}
                     </div>
                     <div className="nano-comic-storyboard__strip-card-body">
                       <Group className="nano-comic-storyboard__strip-card-head" justify="space-between" align="flex-start">
-                        <Text className="nano-comic-storyboard__strip-card-code" size="xs" fw={800}>视频 {shot.shotCode}</Text>
+                        <Text className="nano-comic-storyboard__strip-card-code" size="xs" fw={800}>{ $t('视频 {{code}}', { code: shot.shotCode }) }</Text>
                         <Badge className="nano-comic-storyboard__shot-row-status" variant="light" radius="sm">
                           {shot.productionStatus}
                         </Badge>
@@ -745,10 +746,10 @@ export default function NanoComicVideoGenerationTab({
                       </Text>
                       <Group className="nano-comic-storyboard__strip-card-foot" justify="space-between">
                         <Text className="nano-comic-storyboard__strip-card-meta" size="xs">
-                          {hasPrompt ? '已带视频提示词' : '待补视频提示词'}
+                          {hasPrompt ? $('已带视频提示词') : $('待补视频提示词')}
                         </Text>
                         {isLinked ? (
-                          <Text className="nano-comic-storyboard__strip-card-meta" size="xs" c="dimmed">已入画布</Text>
+                          <Text className="nano-comic-storyboard__strip-card-meta" size="xs" c="dimmed">{ $('已入画布') }</Text>
                         ) : shot.videoBlockReason ? (
                           <Text className="nano-comic-storyboard__strip-card-meta" size="xs" c="dimmed">{shot.videoBlockReason}</Text>
                         ) : null}
@@ -758,9 +759,9 @@ export default function NanoComicVideoGenerationTab({
                 )
               }) : (
                 <div className="nano-comic-storyboard__empty-block">
-                  <Text className="nano-comic-storyboard__empty-text">当前章节还没有可生成的视频任务。</Text>
+                  <Text className="nano-comic-storyboard__empty-text">{ $('当前章节还没有可生成的视频任务。') }</Text>
                   <Text className="nano-comic-storyboard__empty-hint" size="sm" c="dimmed">
-                    {emptyStateMessage || '请先完成分镜图片，再进入视频生成。'}
+                    {emptyStateMessage || $('请先完成分镜图片，再进入视频生成。')}
                   </Text>
                 </div>
               )}

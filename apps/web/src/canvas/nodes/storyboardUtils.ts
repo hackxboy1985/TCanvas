@@ -1,3 +1,4 @@
+import { $ } from '../i18n'
 export type StoryboardScene = {
   id: string
   description: string
@@ -17,17 +18,17 @@ export const STORYBOARD_MAX_DURATION = 60
 export const STORYBOARD_MAX_TOTAL_DURATION = 25
 
 export const STORYBOARD_FRAMING_OPTIONS: { value: StoryboardFramingValue; label: string }[] = [
-  { value: 'close', label: '近景' },
-  { value: 'medium', label: '中景' },
-  { value: 'wide', label: '远景' },
+  { value: 'close', label: $('近景') },
+  { value: 'medium', label: $('中景') },
+  { value: 'wide', label: $('远景') },
 ]
 
 export const STORYBOARD_MOVEMENT_OPTIONS: { value: StoryboardMovementValue; label: string }[] = [
-  { value: 'static', label: '静止' },
-  { value: 'push', label: '推镜' },
-  { value: 'pull', label: '拉镜' },
-  { value: 'pan', label: '摇镜' },
-  { value: 'tilt', label: '俯仰' },
+  { value: 'static', label: $('静止') },
+  { value: 'push', label: $('推镜') },
+  { value: 'pull', label: $('拉镜') },
+  { value: 'pan', label: $('摇镜') },
+  { value: 'tilt', label: $('俯仰') },
 ]
 
 const randomId = () => {

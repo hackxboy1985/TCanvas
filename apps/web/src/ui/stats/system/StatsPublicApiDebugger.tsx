@@ -3,6 +3,7 @@ import { ActionIcon, Badge, Button, Divider, Group, Select, Stack, Switch, Text,
 import { IconEye, IconEyeOff, IconPlayerPlay, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { toast } from '../../toast'
 import { PanelCard } from '../../PanelCard'
+import { $, $t } from '../../../canvas/i18n'
 
 export type PublicApiDebuggerEndpoints = {
   chat: string
@@ -128,11 +129,11 @@ export default function StatsPublicApiDebugger({
 
   const endpointOptions = React.useMemo<SelectProps['data']>(
     () => [
-      { value: 'draw', label: '绘图 /public/draw' },
-      { value: 'vision', label: '图像理解 /public/vision' },
-      { value: 'video', label: '视频 /public/video' },
-      { value: 'taskResult', label: '查任务 /public/tasks/result' },
-      { value: 'chat', label: '文本 /public/agents/chat' },
+      { value: 'draw', label: $('绘图 /public/draw') },
+      { value: 'vision', label: $('图像理解 /public/vision') },
+      { value: 'video', label: $('视频 /public/video') },
+      { value: 'taskResult', label: $('查任务 /public/tasks/result') },
+      { value: 'chat', label: $('文本 /public/agents/chat') },
     ],
     [],
   )
@@ -145,25 +146,25 @@ export default function StatsPublicApiDebugger({
       ...prev,
       [endpointKind]: JSON.stringify(templateFor(endpointKind), null, 2),
     }))
-    toast('已重置模板', 'success')
+    toast($('已重置模板'), 'success')
   }, [endpointKind])
 
   const clearKey = React.useCallback(() => {
     setApiKey('')
-    toast('已清除 Key', 'success')
+    toast($('已清除 Key'), 'success')
   }, [])
 
   const send = React.useCallback(async () => {
     const key = apiKey.trim()
     if (!key) {
-      toast('请先填写 X-API-Key', 'error')
+      toast($('请先填写 X-API-Key'), 'error')
       return
     }
     let body: any
     try {
       body = JSON.parse(bodyText)
     } catch {
-      toast('请求体不是合法 JSON', 'error')
+      toast($('请求体不是合法 JSON'), 'error')
       return
     }
 
@@ -187,13 +188,13 @@ export default function StatsPublicApiDebugger({
       setResponseText(prettyJson(text))
       if (!res.ok) {
         const hint = extractErrorHint(text)
-        toast(`请求失败：${res.status}${hint ? ` - ${hint}` : ''}`, 'error')
+        toast($t('请求失败：{{status}}{{hint}}', { status: res.status, hint: hint ? ' - ' + hint : '' }), 'error')
       }
     } catch (err: any) {
       const tookMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt)
       setResponseMeta({ status: 0, ok: false, tookMs })
       setResponseText(String(err?.message || err || 'request failed'))
-      toast(err?.message || '请求失败（网络或 CORS）', 'error')
+      toast(err?.message || $('请求失败（网络或 CORS）'), 'error')
     } finally {
       setLoading(false)
     }
@@ -204,7 +205,7 @@ export default function StatsPublicApiDebugger({
       <Group className="stats-public-debugger-header" justify="space-between" align="center" wrap="wrap" gap="sm">
         <Group className="stats-public-debugger-header-left" gap={8} align="center">
           <Text className="stats-public-debugger-title" fw={700} size="sm">
-            在线调试
+            { $('在线调试') }
           </Text>
           <Badge className="stats-public-debugger-badge" size="xs" variant="light">
             x-api-key
@@ -214,7 +215,7 @@ export default function StatsPublicApiDebugger({
           className="stats-public-debugger-enabled"
           checked={enabled}
           onChange={(e) => setEnabled(e.currentTarget.checked)}
-          label="开启"
+          label={ $('开启') }
         />
       </Group>
 
@@ -222,7 +223,7 @@ export default function StatsPublicApiDebugger({
 
       {!enabled ? (
         <Text className="stats-public-debugger-hint" size="sm" c="dimmed">
-          打开开关后可直接在页面内携带 Key 调试 /public 接口；Key 会保存在当前标签页的 sessionStorage，并作为请求头发送。
+          { $('打开开关后可直接在页面内携带 Key 调试 /public 接口；Key 会保存在当前标签页的 sessionStorage，并作为请求头发送。') }
         </Text>
       ) : (
         <Stack className="stats-public-debugger-body" gap="sm">
@@ -230,13 +231,13 @@ export default function StatsPublicApiDebugger({
             <TextInput
               className="stats-public-debugger-key"
               label="X-API-Key"
-              placeholder="粘贴你的 key…"
+              placeholder={ $('粘贴你的 key…') }
               value={apiKey}
               onChange={(e) => setApiKey(e.currentTarget.value)}
               type={apiKeyVisible ? 'text' : 'password'}
               w={420}
               rightSection={
-                <Tooltip className="stats-public-debugger-key-visibility-tooltip" label={apiKeyVisible ? '隐藏' : '显示'} withArrow>
+                <Tooltip className="stats-public-debugger-key-visibility-tooltip" label={apiKeyVisible ? $('隐藏') : $('显示')} withArrow>
                   <ActionIcon
                     className="stats-public-debugger-key-visibility"
                     size="sm"
@@ -254,7 +255,7 @@ export default function StatsPublicApiDebugger({
               }
             />
 
-            <Tooltip className="stats-public-debugger-key-clear-tooltip" label="清除 Key" withArrow>
+            <Tooltip className="stats-public-debugger-key-clear-tooltip" label={ $('清除 Key') } withArrow>
               <ActionIcon
                 className="stats-public-debugger-key-clear"
                 size="md"
@@ -271,7 +272,7 @@ export default function StatsPublicApiDebugger({
           <Group className="stats-public-debugger-endpoint-row" gap="sm" align="flex-end" wrap="wrap">
             <Select
               className="stats-public-debugger-endpoint"
-              label="接口"
+              label={ $('接口') }
               data={endpointOptions}
               value={endpointKind}
               onChange={(v) => {
@@ -292,7 +293,7 @@ export default function StatsPublicApiDebugger({
 
           <Textarea
             className="stats-public-debugger-request"
-            label="请求 JSON"
+            label={ $('请求 JSON') }
             value={bodyText}
             onChange={(e) => {
               const next = e.currentTarget.value
@@ -312,7 +313,7 @@ export default function StatsPublicApiDebugger({
               loading={loading}
               leftSection={<IconPlayerPlay className="stats-public-debugger-send-icon" size={14} />}
             >
-              发送请求
+              { $('发送请求') }
             </Button>
             <Button
               className="stats-public-debugger-reset"
@@ -322,14 +323,14 @@ export default function StatsPublicApiDebugger({
               leftSection={<IconRefresh className="stats-public-debugger-reset-icon" size={14} />}
               disabled={loading}
             >
-              重置模板
+              { $('重置模板') }
             </Button>
           </Group>
 
           <Stack className="stats-public-debugger-response" gap={6}>
             <Group className="stats-public-debugger-response-header" justify="space-between" align="center" wrap="wrap">
               <Text className="stats-public-debugger-response-title" size="sm" fw={700}>
-                响应
+                { $('响应') }
               </Text>
               {responseMeta && (
                 <Group className="stats-public-debugger-response-meta" gap={10} wrap="wrap">
@@ -346,7 +347,7 @@ export default function StatsPublicApiDebugger({
               className="stats-public-debugger-response-pre"
               style={{ margin: 0, padding: 12, borderRadius: 12, background: 'rgba(0,0,0,0.18)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
             >
-              <code className="stats-public-debugger-response-code">{responseText || (loading ? '请求中…' : '—')}</code>
+              <code className="stats-public-debugger-response-code">{responseText || (loading ? $('请求中…') : '—')}</code>
             </pre>
           </Stack>
         </Stack>

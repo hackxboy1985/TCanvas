@@ -7,6 +7,7 @@ import {
   IconVideo,
 } from '@tabler/icons-react'
 import { Position } from '@xyflow/react'
+import { $ } from '../i18n'
 
 export type TaskNodeFeature =
   | 'prompt'
@@ -144,7 +145,7 @@ const DEFAULT_SCHEMA: TaskNodeSchema = {
   handles: {
     sources: [{ id: 'out-text', type: 'text', position: SOURCE }],
   },
-  label: '文本',
+  label: $('文本'),
 }
 
 const SHARED_IMAGE_FEATURES: TaskNodeFeature[] = [
@@ -166,7 +167,7 @@ const TASK_NODE_SCHEMAS: Record<TaskNodeKind, TaskNodeSchema> = {
     kind: 'text',
     category: 'document',
     icon: IconTypography,
-    label: '文本',
+    label: $('文本'),
     features: ['prompt'],
     handles: {
       sources: [{ id: 'out-text', type: 'text', position: SOURCE }],
@@ -176,7 +177,7 @@ const TASK_NODE_SCHEMAS: Record<TaskNodeKind, TaskNodeSchema> = {
     kind: 'image',
     category: 'image',
     icon: IconPhoto,
-    label: '图片',
+    label: $('图片'),
     features: SHARED_IMAGE_FEATURES,
     handles: {
       targets: [{ id: 'in-image', type: 'image', position: TARGET }],
@@ -187,7 +188,7 @@ const TASK_NODE_SCHEMAS: Record<TaskNodeKind, TaskNodeSchema> = {
     kind: 'imageEdit',
     category: 'image',
     icon: IconPhoto,
-    label: '图片编辑',
+    label: $('图片编辑'),
     features: SHARED_IMAGE_FEATURES,
     handles: {
       targets: [{ id: 'in-image', type: 'image', position: TARGET }],
@@ -198,7 +199,7 @@ const TASK_NODE_SCHEMAS: Record<TaskNodeKind, TaskNodeSchema> = {
     kind: 'video',
     category: 'video',
     icon: IconVideo,
-    label: '视频',
+    label: $('视频'),
     features: [
       'prompt',
       'systemPrompt',
@@ -220,7 +221,7 @@ const TASK_NODE_SCHEMAS: Record<TaskNodeKind, TaskNodeSchema> = {
     kind: 'storyboard',
     category: 'storyboard',
     icon: IconLayoutGrid,
-    label: '分镜编辑',
+    label: $('分镜编辑'),
     features: ['storyboardEditor'],
     handles: {
       targets: [{ id: 'in-image', type: 'image', position: TARGET }],

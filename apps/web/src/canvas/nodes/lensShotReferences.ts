@@ -4,6 +4,7 @@ import { useRFStore } from '../store'
 import { pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import type { LensShotRef } from './LensShotNode'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from '../../projects/lensCanvasNodeLayout'
+import { $ } from '../i18n'
 
 /**
  * 分类与 Lens 资产关联表一致。
@@ -26,8 +27,8 @@ export function groupReferenceAssets(category: ReferenceCategory, rows: LensRole
   const roles = rows as LensRole[]
   const images = rows as LensAssetImage[]
   const assets: ReferenceAsset[] = category === ReferenceCategory.Role
-    ? roles.map((row) => ({ category, id: String(row.id), name: row.roleName || '未命名角色', imgUrl: row.threeImg, parentId: row.roleType === 1 && row.parentId ? String(row.parentId) : undefined, variantName: row.cloneName }))
-    : images.map((row) => ({ category, id: String(row.id), name: row.name || '未命名资产', imgUrl: row.url, parentId: row.parentId ? String(row.parentId) : undefined, variantName: row.variantName, subType: row.subType, ...(typeof row.state === 'number' ? { state: row.state } : null) }))
+    ? roles.map((row) => ({ category, id: String(row.id), name: row.roleName || $('未命名角色'), imgUrl: row.threeImg, parentId: row.roleType === 1 && row.parentId ? String(row.parentId) : undefined, variantName: row.cloneName }))
+    : images.map((row) => ({ category, id: String(row.id), name: row.name || $('未命名资产'), imgUrl: row.url, parentId: row.parentId ? String(row.parentId) : undefined, variantName: row.variantName, subType: row.subType, ...(typeof row.state === 'number' ? { state: row.state } : null) }))
   const groups = new Map<string, ReferenceGroup>()
   assets.forEach((asset) => {
     const groupId = asset.parentId || asset.id
@@ -44,12 +45,12 @@ export function referenceFromNode(node: Node): ReferenceAsset {
   const category = Number(node.data.assetCategory)
   const entityId = String(node.data.entityId || '')
   const imgUrl = pickPrimaryImageFromNode(node)
-  if (!imgUrl) throw new Error('所选节点尚无可用参考图片')
+  if (!imgUrl) throw new Error($('所选节点尚无可用参考图片'))
   // 子造型/子场景名取自节点数据（投影/资产库建节点写入 variantName|cloneName），父级ID取 parentEntityId
   const childName = String(node.data.variantName || node.data.cloneName || node.data.childName || '').trim()
   const parentEntityId = String(node.data.parentEntityId || '').trim()
   return { category: entityId && [ReferenceCategory.Role, ReferenceCategory.Scene, ReferenceCategory.Prop, ReferenceCategory.Staging].includes(category) ? category : 0,
-    id: entityId || node.id, name: String(node.data.label || '参考图片'), imgUrl,
+    id: entityId || node.id, name: String(node.data.label || $('参考图片')), imgUrl,
     ...(childName ? { variantName: childName } : null),
     ...(parentEntityId ? { parentId: parentEntityId } : null) }
 }
@@ -199,13 +200,13 @@ function connectParentChildEdges(pendingEdges: Array<{ parentNodeId: string; chi
 
 /** 先删除业务关联，再同步移除本地引用及该资产指向分镜的连线。 */
 export async function disconnectShotReference(targetId: string, ref: LensShotRef): Promise<void> {
-  if (savingTargets.has(targetId)) throw new Error('参考正在保存，请稍候')
+  if (savingTargets.has(targetId)) throw new Error($('参考正在保存，请稍候'))
   const state = useRFStore.getState()
   const target = state.nodes.find((node) => node.id === targetId)
-  if (!target) throw new Error('目标分镜已不存在')
+  if (!target) throw new Error($('目标分镜已不存在'))
   const dramaId = String(target.data.sourceProjectId || '')
   const storyboardId = String(target.data.entityId || '')
-  if (!dramaId || !storyboardId) throw new Error('缺少剧集或分镜身份，无法删除参考')
+  if (!dramaId || !storyboardId) throw new Error($('缺少剧集或分镜身份，无法删除参考'))
   savingTargets.add(targetId)
   try {
     await removeShotReferenceRelations(dramaId, storyboardId, [{ assetId: ref.id, assetCategory: ref.category }])
@@ -224,27 +225,27 @@ export async function disconnectShotReference(targetId: string, ref: LensShotRef
 
 /** 业务关联成功后再补节点和连线，禁止把业务资产副本持久化到 flow。 */
 export async function connectShotReferences(targetId: string, assets: ReferenceAsset[], sourceNodeId?: string): Promise<void> {
-  if (savingTargets.has(targetId)) throw new Error('参考正在保存，请稍候')
+  if (savingTargets.has(targetId)) throw new Error($('参考正在保存，请稍候'))
   const state = useRFStore.getState()
   const target = state.nodes.find((node) => node.id === targetId)
-  if (!target) throw new Error('目标分镜已不存在')
+  if (!target) throw new Error($('目标分镜已不存在'))
   const dramaId = String(target.data.sourceProjectId || '')
   const storyboardId = String(target.data.entityId || '')
-  if (!dramaId || !storyboardId) throw new Error('缺少剧集或分镜身份，无法保存参考')
-  if (assets.some((asset) => !asset.imgUrl)) throw new Error('所选资产尚无参考图片')
+  if (!dramaId || !storyboardId) throw new Error($('缺少剧集或分镜身份，无法保存参考'))
+  if (assets.some((asset) => !asset.imgUrl)) throw new Error($('所选资产尚无参考图片'))
   const currentRefs = (Array.isArray(target.data.refs) ? target.data.refs : []) as LensShotRef[]
   const existing = new Set(currentRefs.map(referenceKey))
   const unique = Array.from(new Map(assets.map((asset) => [referenceKey(asset), asset])).values())
   const additions = unique.filter((asset) => asset.category > 0 && !existing.has(referenceKey(asset)))
   if (sourceNodeId) {
     const source = state.nodes.find((node) => node.id === sourceNodeId)
-    if (!source || (source.data.sourceProjectId && String(source.data.sourceProjectId) !== dramaId)) throw new Error('参考节点不属于当前剧集')
+    if (!source || (source.data.sourceProjectId && String(source.data.sourceProjectId) !== dramaId)) throw new Error($('参考节点不属于当前剧集'))
     const reachable = [targetId]
     const visited = new Set<string>()
     while (reachable.length) {
       const next = reachable.pop()
       if (!next || visited.has(next)) continue
-      if (next === sourceNodeId) throw new Error('该连接会形成循环')
+      if (next === sourceNodeId) throw new Error($('该连接会形成循环'))
       visited.add(next)
       state.edges.filter((edge) => edge.source === next).forEach((edge) => reachable.push(edge.target))
     }
@@ -278,7 +279,7 @@ export async function connectShotReferences(targetId: string, assets: ReferenceA
         const newNode = source
         useRFStore.setState((current) => ({ nodes: [...current.nodes, newNode] }))
       }
-      if (!source) throw new Error('创建参考节点失败')
+      if (!source) throw new Error($('创建参考节点失败'))
       const store = useRFStore.getState()
       if (!store.edges.some((edge) => edge.source === source.id && edge.target === targetId)) {
         store.onConnect({ source: source.id, sourceHandle: 'out-image', target: targetId, targetHandle: null })

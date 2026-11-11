@@ -9,6 +9,7 @@ import { PanelCard } from './PanelCard'
 import RechargeModal from './RechargeModal'
 import { stopPanelWheelPropagation } from './utils/panelWheel'
 import { ApiKeyManagementModal } from './account/ApiKeyManagementModal'
+import { $, $t } from '../canvas/i18n'
 
 function formatCredits(value: number | null | undefined): string {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0
@@ -22,10 +23,10 @@ function formatTime(value: string): string {
 }
 
 function describeLedgerEntryType(entryType: TeamCreditLedgerEntryDto['entryType']): { label: string; color: string } {
-  if (entryType === 'topup') return { label: '充值', color: 'green' }
-  if (entryType === 'reserve') return { label: '冻结', color: 'yellow' }
-  if (entryType === 'release') return { label: '解冻', color: 'blue' }
-  return { label: '扣减', color: 'red' }
+  if (entryType === 'topup') return { label: $('充值'), color: 'green' }
+  if (entryType === 'reserve') return { label: $('冻结'), color: 'yellow' }
+  if (entryType === 'release') return { label: $('解冻'), color: 'blue' }
+  return { label: $('扣减'), color: 'red' }
 }
 
 function formatLedgerAmount(entry: TeamCreditLedgerEntryDto): string {
@@ -35,16 +36,16 @@ function formatLedgerAmount(entry: TeamCreditLedgerEntryDto): string {
 }
 
 function describeTaskStatus(status: VendorCallLogStatus | null): { label: string; color: string } {
-  if (status === 'succeeded') return { label: '成功', color: 'green' }
-  if (status === 'failed') return { label: '失败', color: 'red' }
-  if (status === 'running') return { label: '运行中', color: 'yellow' }
+  if (status === 'succeeded') return { label: $('成功'), color: 'green' }
+  if (status === 'failed') return { label: $('失败'), color: 'red' }
+  if (status === 'running') return { label: $('运行中'), color: 'yellow' }
   return { label: '—', color: 'gray' }
 }
 
 function kindLabel(kind: BillingModelKind | string | null | undefined): string {
-  if (kind === 'image') return '图片'
-  if (kind === 'video') return '视频'
-  if (kind === 'text') return '文本'
+  if (kind === 'image') return $('图片')
+  if (kind === 'video') return $('视频')
+  if (kind === 'text') return $('文本')
   return '—'
 }
 
@@ -230,7 +231,7 @@ export default function AccountPanel(): JSX.Element | null {
       setCatalogModels(Array.isArray(models) ? models : [])
     } catch {
       setCatalogModels([])
-      setModelCostsError('加载模型积分价格失败')
+      setModelCostsError($('加载模型积分价格失败'))
     } finally {
       setModelCostsLoading(false)
     }
@@ -287,7 +288,8 @@ export default function AccountPanel(): JSX.Element | null {
   if (!mounted) return null
 
   const maxHeight = calculateSafeMaxHeight(anchorY, 120)
-  const accountTypeLabel = team?.id?.startsWith('personal_') ? '个人' : '企业'
+  const isPersonalAccount = Boolean(team?.id?.startsWith('personal_'))
+  const accountTypeLabel = isPersonalAccount ? $('个人') : $('企业')
   return (
     <div className="account-panel-anchor" style={{ position: 'fixed', left: 82, top: (anchorY ? anchorY - 100 : 140), zIndex: 200 }} data-ux-panel>
       <Transition className="account-panel-transition" mounted={mounted} transition="pop" duration={140} timingFunction="ease">
@@ -312,26 +314,26 @@ export default function AccountPanel(): JSX.Element | null {
                 <Group className="account-panel-header">
                   <Avatar className="account-panel-avatar" src={user?.avatarUrl} alt={user?.login} radius={999} />
                   <div className="account-panel-user">
-                    <Title className="account-panel-user-name" order={6}>{user?.login || '未登录'}</Title>
+                    <Title className="account-panel-user-name" order={6}>{user?.login || $('未登录')}</Title>
                     {user?.email && <Text className="account-panel-user-email" size="xs" c="dimmed">{user.email}</Text>}
-                    {isGuest && <Text className="account-panel-user-guest" size="xs" c="dimmed">游客模式（仅保存在当前浏览器）</Text>}
+                    {isGuest && <Text className="account-panel-user-guest" size="xs" c="dimmed">{$('游客模式（仅保存在当前浏览器）')}</Text>}
                   </div>
                 </Group>
                 <Divider className="account-panel-divider" my={10} />
                 <Stack className="account-panel-credits" gap={4}>
-                  <Text className="account-panel-credits-title" size="xs" c="dimmed">积分</Text>
+                  <Text className="account-panel-credits-title" size="xs" c="dimmed">{$('积分')}</Text>
                   {isGuest ? (
-                    <Text className="account-panel-credits-guest" size="xs" c="dimmed">游客模式无团队积分账户</Text>
+                    <Text className="account-panel-credits-guest" size="xs" c="dimmed">{$('游客模式无团队积分账户')}</Text>
                   ) : teamLoading ? (
-                    <Text className="account-panel-credits-loading" size="xs" c="dimmed">加载中…</Text>
+                    <Text className="account-panel-credits-loading" size="xs" c="dimmed">{$('加载中…')}</Text>
                   ) : team ? (
                     <Group className="account-panel-credits-values" gap={8} wrap="wrap">
-                      <Text className="account-panel-credits-available" size="xs">可用 {formatCredits(team.creditsAvailable)}</Text>
-                      <Text className="account-panel-credits-frozen" size="xs" c="dimmed">冻结 {formatCredits(team.creditsFrozen)}</Text>
-                      <Text className="account-panel-credits-total" size="xs" c="dimmed">总额 {formatCredits(team.credits)}</Text>
+                      <Text className="account-panel-credits-available" size="xs">{$t('可用 {{count}}', { count: formatCredits(team.creditsAvailable) })}</Text>
+                      <Text className="account-panel-credits-frozen" size="xs" c="dimmed">{$t('冻结 {{count}}', { count: formatCredits(team.creditsFrozen) })}</Text>
+                      <Text className="account-panel-credits-total" size="xs" c="dimmed">{$t('总额 {{count}}', { count: formatCredits(team.credits) })}</Text>
                     </Group>
                   ) : (
-                    <Text className="account-panel-credits-empty" size="xs" c="dimmed">暂无团队积分账户</Text>
+                    <Text className="account-panel-credits-empty" size="xs" c="dimmed">{$('暂无团队积分账户')}</Text>
                   )}
                 </Stack>
                   <Divider className="account-panel-divider" my={10} />
@@ -339,29 +341,29 @@ export default function AccountPanel(): JSX.Element | null {
                   <Group className="account-panel-action-icons" gap={8} justify="space-between" align="flex-start" wrap="nowrap">
                     <Group className="account-panel-action-icons-main" gap={8} wrap="wrap">
                       {isGithubUser && githubLogin && (
-                        <Tooltip className="account-panel-github-tooltip" label="查看 GitHub" withArrow>
-                          <ActionIcon className="account-panel-github" component="a" href={`https://github.com/${githubLogin}`} target="_blank" variant="light" size="md" aria-label="查看 GitHub">
+                        <Tooltip className="account-panel-github-tooltip" label={$('查看 GitHub')} withArrow>
+                          <ActionIcon className="account-panel-github" component="a" href={`https://github.com/${githubLogin}`} target="_blank" variant="light" size="md" aria-label={$('查看 GitHub')}>
                             <IconBrandGithub className="account-panel-github-icon" size={16} />
                           </ActionIcon>
                         </Tooltip>
                       )}
                       {!isGuest && (
-                        <Tooltip className="account-panel-recharge-tooltip" label="充值积分" withArrow>
-                          <ActionIcon className="account-panel-recharge" variant="light" size="md" onClick={() => setRechargeOpen(true)} aria-label="充值积分">
+                        <Tooltip className="account-panel-recharge-tooltip" label={$('充值积分')} withArrow>
+                          <ActionIcon className="account-panel-recharge" variant="light" size="md" onClick={() => setRechargeOpen(true)} aria-label={$('充值积分')}>
                             <IconCreditCard className="account-panel-recharge-icon" size={16} />
                           </ActionIcon>
                         </Tooltip>
                       )}
                       {!isGuest && (
-                        <Tooltip className="account-panel-ledger-tooltip" label="积分流水" withArrow>
-                          <ActionIcon className="account-panel-ledger" variant="light" size="md" onClick={() => setLedgerOpen(true)} aria-label="查看积分流水">
+                        <Tooltip className="account-panel-ledger-tooltip" label={$('积分流水')} withArrow>
+                          <ActionIcon className="account-panel-ledger" variant="light" size="md" onClick={() => setLedgerOpen(true)} aria-label={$('查看积分流水')}>
                             <IconReceipt2 className="account-panel-ledger-icon" size={16} />
                           </ActionIcon>
                         </Tooltip>
                       )}
                       {!isGuest && (
-                        <Tooltip className="account-panel-model-cost-tooltip" label="模型积分价格" withArrow>
-                          <ActionIcon className="account-panel-model-cost" variant="light" size="md" onClick={() => setModelCostsOpen(true)} aria-label="查看模型积分价格">
+                        <Tooltip className="account-panel-model-cost-tooltip" label={$('模型积分价格')} withArrow>
+                          <ActionIcon className="account-panel-model-cost" variant="light" size="md" onClick={() => setModelCostsOpen(true)} aria-label={$('查看模型积分价格')}>
                             <IconCoins className="account-panel-model-cost-icon" size={16} />
                           </ActionIcon>
                         </Tooltip>
@@ -369,31 +371,31 @@ export default function AccountPanel(): JSX.Element | null {
                     </Group>
                     <Stack className="account-panel-action-icons-side" gap={6} align="center">
                       {!isGuest && (
-                        <Tooltip className="account-panel-api-key-tooltip" label="API 管理" withArrow>
-                          <ActionIcon className="account-panel-api-key" variant="light" size="md" onClick={() => setApiKeyModalOpen(true)} aria-label="API 管理">
+                        <Tooltip className="account-panel-api-key-tooltip" label={$('API 管理')} withArrow>
+                          <ActionIcon className="account-panel-api-key" variant="light" size="md" onClick={() => setApiKeyModalOpen(true)} aria-label={$('API 管理')}>
                             <IconApi className="account-panel-api-key-icon" size={16} />
                           </ActionIcon>
                         </Tooltip>
                       )}
-                      <Tooltip className="account-panel-logout-tooltip" label="退出登录" withArrow>
-                        <ActionIcon className="account-panel-logout" variant="light" color="red" size="md" onClick={()=>{ clear(); setActivePanel(null) }} aria-label="退出登录">
+                      <Tooltip className="account-panel-logout-tooltip" label={$('退出登录')} withArrow>
+                        <ActionIcon className="account-panel-logout" variant="light" color="red" size="md" onClick={()=>{ clear(); setActivePanel(null) }} aria-label={$('退出登录')}>
                           <IconLogout2 className="account-panel-logout-icon" size={16} />
                         </ActionIcon>
                       </Tooltip>
                     </Stack>
                   </Group>
-                  <Divider className="account-panel-divider" label="提示词自动补全" labelPosition="left" my={8} />
+                  <Divider className="account-panel-divider" label={$('提示词自动补全')} labelPosition="left" my={8} />
                   <Stack className="account-panel-autocomplete" gap={4}>
-                    <Text className="account-panel-autocomplete-label" size="xs" c={colorScheme === 'dark' ? '#cbd5f5' : '#1f2937'}>补全模式</Text>
+                    <Text className="account-panel-autocomplete-label" size="xs" c={colorScheme === 'dark' ? '#cbd5f5' : '#1f2937'}>{$('补全模式')}</Text>
                     <SegmentedControl
                       className="account-panel-autocomplete-control"
                       size="xs"
                       value={promptSuggestMode}
                       onChange={(v) => setPromptSuggestMode(v as 'off' | 'history' | 'semantic')}
                       data={[
-                        { label: <span className="account-panel-autocomplete-option" style={{ color: colorScheme === 'dark' ? '#f8fafc' : '#0f172a' }}>关闭</span>, value: 'off' },
-                        { label: <span className="account-panel-autocomplete-option" style={{ color: colorScheme === 'dark' ? '#f8fafc' : '#0f172a' }}>历史匹配</span>, value: 'history' },
-                        { label: <span className="account-panel-autocomplete-option" style={{ color: colorScheme === 'dark' ? '#f8fafc' : '#0f172a' }}>语义匹配</span>, value: 'semantic' },
+                        { label: <span className="account-panel-autocomplete-option" style={{ color: colorScheme === 'dark' ? '#f8fafc' : '#0f172a' }}>{$('关闭')}</span>, value: 'off' },
+                        { label: <span className="account-panel-autocomplete-option" style={{ color: colorScheme === 'dark' ? '#f8fafc' : '#0f172a' }}>{$('历史匹配')}</span>, value: 'history' },
+                        { label: <span className="account-panel-autocomplete-option" style={{ color: colorScheme === 'dark' ? '#f8fafc' : '#0f172a' }}>{$('语义匹配')}</span>, value: 'semantic' },
                       ]}
                     />
                   </Stack>
@@ -412,21 +414,21 @@ export default function AccountPanel(): JSX.Element | null {
         className="account-panel-ledger-modal"
         opened={ledgerOpen}
         onClose={() => setLedgerOpen(false)}
-        title="我的积分流水"
+        title={$('我的积分流水')}
         size="xl"
         centered
       >
         <Stack className="account-panel-ledger-stack" gap="sm">
           <Group className="account-panel-ledger-header" justify="space-between" align="center">
             <Group className="account-panel-ledger-header-left" gap={8}>
-              <Badge className="account-panel-ledger-account-type" variant="light" color={accountTypeLabel === '个人' ? 'blue' : 'grape'}>
+              <Badge className="account-panel-ledger-account-type" variant="light" color={isPersonalAccount ? 'blue' : 'grape'}>
                 {accountTypeLabel}
               </Badge>
               <Text className="account-panel-ledger-account-id" size="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>
                 {team?.id || '—'}
               </Text>
             </Group>
-            <Tooltip className="account-panel-ledger-refresh-tooltip" label="刷新" withArrow>
+            <Tooltip className="account-panel-ledger-refresh-tooltip" label={$('刷新')} withArrow>
               <ActionIcon
                 className="account-panel-ledger-refresh"
                 variant="subtle"
@@ -442,21 +444,21 @@ export default function AccountPanel(): JSX.Element | null {
           {ledgerLoading && !ledgerRows.length ? (
             <Group className="account-panel-ledger-loading" gap={8} align="center">
               <Loader className="account-panel-ledger-loading-icon" size="sm" />
-              <Text className="account-panel-ledger-loading-text" size="sm" c="dimmed">加载中…</Text>
+              <Text className="account-panel-ledger-loading-text" size="sm" c="dimmed">{$('加载中…')}</Text>
             </Group>
           ) : !ledgerRows.length ? (
-            <Text className="account-panel-ledger-empty" size="sm" c="dimmed">暂无流水</Text>
+            <Text className="account-panel-ledger-empty" size="sm" c="dimmed">{$('暂无流水')}</Text>
           ) : (
             <Table className="account-panel-ledger-table" striped highlightOnHover withTableBorder withColumnBorders>
               <Table.Thead className="account-panel-ledger-table-head">
                 <Table.Tr className="account-panel-ledger-table-head-row">
-                  <Table.Th className="account-panel-ledger-table-head-cell">时间</Table.Th>
-                  <Table.Th className="account-panel-ledger-table-head-cell">类型</Table.Th>
-                  <Table.Th className="account-panel-ledger-table-head-cell">积分</Table.Th>
-                  <Table.Th className="account-panel-ledger-table-head-cell">状态</Table.Th>
-                  <Table.Th className="account-panel-ledger-table-head-cell">模型/厂商</Table.Th>
-                  <Table.Th className="account-panel-ledger-table-head-cell">任务</Table.Th>
-                  <Table.Th className="account-panel-ledger-table-head-cell">备注</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('时间')}</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('类型')}</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('积分')}</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('状态')}</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('模型/厂商')}</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('任务')}</Table.Th>
+                  <Table.Th className="account-panel-ledger-table-head-cell">{$('备注')}</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody className="account-panel-ledger-table-body">
@@ -489,7 +491,7 @@ export default function AccountPanel(): JSX.Element | null {
                             <Text className="account-panel-ledger-task-id" size="xs" c="dimmed">{it.taskId.slice(0, 10)}…</Text>
                             <CopyButton value={it.taskId} timeout={1200}>
                               {({ copied, copy }) => (
-                                <Tooltip className="account-panel-ledger-task-copy-tooltip" label={copied ? '已复制' : '复制'} withArrow>
+                                <Tooltip className="account-panel-ledger-task-copy-tooltip" label={copied ? $('已复制') : $('复制')} withArrow>
                                   <ActionIcon className="account-panel-ledger-task-copy" variant="subtle" size="sm" onClick={copy} aria-label="copy-task-id">
                                     {copied ? <IconCheck className="account-panel-ledger-task-copy-icon" size={14} /> : <IconCopy className="account-panel-ledger-task-copy-icon" size={14} />}
                                   </ActionIcon>
@@ -518,14 +520,14 @@ export default function AccountPanel(): JSX.Element | null {
         className="account-panel-model-cost-modal"
         opened={modelCostsOpen}
         onClose={() => setModelCostsOpen(false)}
-        title="模型积分消耗价格"
+        title={$('模型积分消耗价格')}
         size="lg"
         centered
       >
         <Stack className="account-panel-model-cost-stack" gap="sm">
           <Group className="account-panel-model-cost-header" justify="space-between" align="center">
-            <Text className="account-panel-model-cost-subtitle" size="xs" c="dimmed">任务成功后按「模型 + 规格（如时长/横竖屏/pro-fast）」优先扣分，未命中规格时回退模型默认扣分。</Text>
-            <Tooltip className="account-panel-model-cost-refresh-tooltip" label="刷新" withArrow>
+            <Text className="account-panel-model-cost-subtitle" size="xs" c="dimmed">{$('任务成功后按「模型 + 规格（如时长/横竖屏/pro-fast）」优先扣分，未命中规格时回退模型默认扣分。')}</Text>
+            <Tooltip className="account-panel-model-cost-refresh-tooltip" label={$('刷新')} withArrow>
               <ActionIcon
                 className="account-panel-model-cost-refresh"
                 variant="subtle"
@@ -541,19 +543,19 @@ export default function AccountPanel(): JSX.Element | null {
           {modelCostsLoading && !modelCostRows.length ? (
             <Group className="account-panel-model-cost-loading" gap={8} align="center">
               <Loader className="account-panel-model-cost-loading-icon" size="sm" />
-              <Text className="account-panel-model-cost-loading-text" size="sm" c="dimmed">加载中…</Text>
+              <Text className="account-panel-model-cost-loading-text" size="sm" c="dimmed">{$('加载中…')}</Text>
             </Group>
           ) : !modelCostRows.length ? (
-            <Text className="account-panel-model-cost-empty" size="sm" c="dimmed">{modelCostsError || '暂无可用模型价格配置'}</Text>
+            <Text className="account-panel-model-cost-empty" size="sm" c="dimmed">{modelCostsError || $('暂无可用模型价格配置')}</Text>
           ) : (
             <Table className="account-panel-model-cost-table" striped highlightOnHover withTableBorder withColumnBorders>
               <Table.Thead className="account-panel-model-cost-table-head">
                 <Table.Tr className="account-panel-model-cost-table-head-row">
-                  <Table.Th className="account-panel-model-cost-table-head-cell">模型</Table.Th>
-                  <Table.Th className="account-panel-model-cost-table-head-cell">规格</Table.Th>
-                  <Table.Th className="account-panel-model-cost-table-head-cell">类型</Table.Th>
-                  <Table.Th className="account-panel-model-cost-table-head-cell">扣分（积分）</Table.Th>
-                  <Table.Th className="account-panel-model-cost-table-head-cell">状态</Table.Th>
+                  <Table.Th className="account-panel-model-cost-table-head-cell">{$('模型')}</Table.Th>
+                  <Table.Th className="account-panel-model-cost-table-head-cell">{$('规格')}</Table.Th>
+                  <Table.Th className="account-panel-model-cost-table-head-cell">{$('类型')}</Table.Th>
+                  <Table.Th className="account-panel-model-cost-table-head-cell">{$('扣分（积分）')}</Table.Th>
+                  <Table.Th className="account-panel-model-cost-table-head-cell">{$('状态')}</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody className="account-panel-model-cost-table-body">
@@ -567,7 +569,7 @@ export default function AccountPanel(): JSX.Element | null {
                     </Table.Td>
                     <Table.Td className="account-panel-model-cost-table-cell">
                       <Text className="account-panel-model-cost-spec" size="xs" c={it.specKey ? undefined : 'dimmed'}>
-                        {it.specKey || '默认'}
+                        {it.specKey || $('默认')}
                       </Text>
                     </Table.Td>
                     <Table.Td className="account-panel-model-cost-table-cell">
@@ -578,7 +580,7 @@ export default function AccountPanel(): JSX.Element | null {
                     </Table.Td>
                     <Table.Td className="account-panel-model-cost-table-cell">
                       <Badge className="account-panel-model-cost-status" variant="light" color={it.enabled ? 'green' : 'gray'}>
-                        {it.enabled ? '启用' : '停用'}
+                        {it.enabled ? $('启用') : $('停用')}
                       </Badge>
                     </Table.Td>
                   </Table.Tr>

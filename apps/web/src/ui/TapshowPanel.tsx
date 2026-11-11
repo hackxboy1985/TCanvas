@@ -26,6 +26,7 @@ import { setTapImageDragData } from '../canvas/dnd/setTapImageDragData'
 import { useRFStore } from '../canvas/store'
 import { useAuth } from '../auth/store'
 import { stopPanelWheelPropagation } from './utils/panelWheel'
+import { $, $t } from '../canvas/i18n'
 
 function formatDate(ts: string) {
   const date = new Date(ts)
@@ -86,7 +87,7 @@ export default function TapshowPanel(): JSX.Element | null {
       }
     } catch (err: any) {
       console.error(err)
-      toast(err?.message || '加载资产失败', 'error')
+      toast(err?.message || $('加载资产失败'), 'error')
       setAssets([])
     } finally {
       setLoading(false)
@@ -133,20 +134,20 @@ export default function TapshowPanel(): JSX.Element | null {
   const handleCopy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      toast('已复制链接', 'success')
+      toast($('已复制链接'), 'success')
     } catch (err) {
       console.error(err)
-      toast('复制失败，请手动复制', 'error')
+      toast($('复制失败，请手动复制'), 'error')
     }
   }
 
   const handleViewPrompt = React.useCallback((asset: PublicAssetDto) => {
     const prompt = String(asset.prompt || '').trim()
     if (!prompt) {
-      toast('该作品暂无可展示提示词', 'info')
+      toast($('该作品暂无可展示提示词'), 'info')
       return
     }
-    const title = String(asset.name || (asset.type === 'video' ? '视频作品' : '图片作品') || 'TapShow 作品').trim()
+    const title = String(asset.name || (asset.type === 'video' ? $('视频作品') : $('图片作品')) || $('TapShow 作品')).trim()
     setActivePrompt({ title, prompt })
     setPromptModalOpen(true)
   }, [])
@@ -156,10 +157,10 @@ export default function TapshowPanel(): JSX.Element | null {
     if (!prompt) return
     try {
       await navigator.clipboard.writeText(prompt)
-      toast('已复制提示词', 'success')
+      toast($('已复制提示词'), 'success')
     } catch (err) {
       console.error(err)
-      toast('复制提示词失败，请手动复制', 'error')
+      toast($('复制提示词失败，请手动复制'), 'error')
     }
   }, [activePrompt?.prompt])
 
@@ -201,11 +202,11 @@ export default function TapshowPanel(): JSX.Element | null {
                 <Stack className="tapshow-panel-header-info" gap={2}>
                   <Title className="tapshow-panel-title" order={6}>TapShow</Title>
                   <Text className="tapshow-panel-subtitle" size="xs" c="dimmed">
-                    展示公开图片 / 视频作品，不再限定为当前 publicBase 托管地址
+                    {$('展示公开图片 / 视频作品，不再限定为当前 publicBase 托管地址')}
                   </Text>
                 </Stack>
                 <Group className="tapshow-panel-header-actions" gap="xs">
-                  <Tooltip className="tapshow-panel-preview-tooltip" label="全屏预览" withArrow>
+                  <Tooltip className="tapshow-panel-preview-tooltip" label={$('全屏预览')} withArrow>
                     <ActionIcon
                       className="tapshow-panel-preview-action"
                       size="sm"
@@ -226,7 +227,7 @@ export default function TapshowPanel(): JSX.Element | null {
                     </ActionIcon>
                   </Tooltip>
                   {webcutUrl && (
-                    <Tooltip className="tapshow-panel-webcut-tooltip" label="打开 WebCut" withArrow>
+                    <Tooltip className="tapshow-panel-webcut-tooltip" label={$('打开 WebCut')} withArrow>
                       <ActionIcon
                         className="tapshow-panel-webcut-action"
                         size="sm"
@@ -240,7 +241,7 @@ export default function TapshowPanel(): JSX.Element | null {
                       </ActionIcon>
                     </Tooltip>
                   )}
-                  <Tooltip className="tapshow-panel-refresh-tooltip" label="刷新" withArrow>
+                  <Tooltip className="tapshow-panel-refresh-tooltip" label={$('刷新')} withArrow>
                     <ActionIcon
                       className="tapshow-panel-refresh-action"
                       size="sm"
@@ -252,7 +253,7 @@ export default function TapshowPanel(): JSX.Element | null {
                     </ActionIcon>
                   </Tooltip>
                   <Button className="tapshow-panel-close" size="xs" variant="subtle" onClick={() => setActivePanel(null)}>
-                    关闭
+                    {$('关闭')}
                   </Button>
                 </Group>
               </Group>
@@ -263,7 +264,7 @@ export default function TapshowPanel(): JSX.Element | null {
                     <Group className="tapshow-panel-loading-group" gap="xs">
                       <Loader className="tapshow-panel-loading-icon" size="sm" />
                       <Text className="tapshow-panel-loading-text" size="xs" c="dimmed">
-                        加载中…
+                        {$('加载中…')}
                       </Text>
                     </Group>
                   </Center>
@@ -271,13 +272,13 @@ export default function TapshowPanel(): JSX.Element | null {
                   <>
                     {!hasAnyAssets && !loading && (
                       <Text className="tapshow-panel-empty" size="xs" c="dimmed">
-                        暂无公开作品。只要资产记录里带有图片 / 视频类型和 URL，就会出现在这里。
+                        {$('暂无公开作品。只要资产记录里带有图片 / 视频类型和 URL，就会出现在这里。')}
                       </Text>
                     )}
                     {hasAnyAssets && (
                       <Group className="tapshow-panel-filter" justify="space-between" align="center" mb="xs">
                         <Text className="tapshow-panel-filter-text" size="sm" c="dimmed">
-                          TapShow 公开作品（默认显示全部，可切换视频 / 图片）
+                          {$('TapShow 公开作品（默认显示全部，可切换视频 / 图片）')}
                         </Text>
                         <SegmentedControl
                           className="tapshow-panel-filter-control"
@@ -288,16 +289,16 @@ export default function TapshowPanel(): JSX.Element | null {
                           value={mediaFilter}
                           onChange={(v) => setMediaFilter(v as any)}
                           data={[
-                            { value: 'video', label: '视频' },
-                            { value: 'image', label: '图片' },
-                            { value: 'all', label: '全部' },
+                            { value: 'video', label: $('视频') },
+                            { value: 'image', label: $('图片') },
+                            { value: 'all', label: $('全部') },
                           ]}
                         />
                       </Group>
                     )}
                     {hasAnyAssets && !loading && filteredAssets.length === 0 && (
                       <Text className="tapshow-panel-filter-empty" size="xs" c="dimmed">
-                        当前筛选下暂无作品。
+                        {$('当前筛选下暂无作品。')}
                       </Text>
                     )}
                     {visibleAssets.length > 0 && (
@@ -315,7 +316,7 @@ export default function TapshowPanel(): JSX.Element | null {
                             {columnAssets.map((asset) => {
                           const isVideo = asset.type === 'video'
                           const cover = asset.thumbnailUrl || asset.url
-                          const label = asset.name || (isVideo ? '视频资产' : '图片资产')
+                          const label = asset.name || (isVideo ? $('视频资产') : $('图片资产'))
                           return (
                             <PanelCard
                               className="tapshow-panel-card"
@@ -385,7 +386,7 @@ export default function TapshowPanel(): JSX.Element | null {
                                       isVideo ? <IconPlayerPlay className="tapshow-panel-card-type-icon" size={12} /> : <IconPhoto className="tapshow-panel-card-type-icon" size={12} />
                                     }
                                   >
-                                    {isVideo ? '视频' : '图片'}
+                                    {isVideo ? $('视频') : $('图片')}
                                   </Badge>
                                   {asset.modelKey && (
                                     <Badge className="tapshow-panel-card-model" size="xs" variant="light">
@@ -416,7 +417,7 @@ export default function TapshowPanel(): JSX.Element | null {
                                 </Text>
                                 <Group className="tapshow-panel-card-actions" justify="flex-end" gap={4}>
                                   {asset.prompt && (
-                                    <Tooltip className="tapshow-panel-card-prompt-tooltip" label="查看提示词" withArrow>
+                                    <Tooltip className="tapshow-panel-card-prompt-tooltip" label={$('查看提示词')} withArrow>
                                       <ActionIcon
                                         className="tapshow-panel-card-prompt-action"
                                         size="sm"
@@ -428,7 +429,7 @@ export default function TapshowPanel(): JSX.Element | null {
                                     </Tooltip>
                                   )}
                                   {asset.url && (
-                                    <Tooltip className="tapshow-panel-card-preview-tooltip" label="预览" withArrow>
+                                    <Tooltip className="tapshow-panel-card-preview-tooltip" label={$('预览')} withArrow>
                                       <ActionIcon
                                         className="tapshow-panel-card-preview-action"
                                         size="sm"
@@ -446,7 +447,7 @@ export default function TapshowPanel(): JSX.Element | null {
                                     </Tooltip>
                                   )}
                                   {asset.url && (
-                                    <Tooltip className="tapshow-panel-card-add-tooltip" label="加入画布" withArrow>
+                                    <Tooltip className="tapshow-panel-card-add-tooltip" label={$('加入画布')} withArrow>
                                       <ActionIcon
                                         className="tapshow-panel-card-add-action"
                                         size="sm"
@@ -477,7 +478,7 @@ export default function TapshowPanel(): JSX.Element | null {
                                     </Tooltip>
                                   )}
                                   {asset.url && (
-                                    <Tooltip className="tapshow-panel-card-copy-tooltip" label="复制链接" withArrow>
+                                    <Tooltip className="tapshow-panel-card-copy-tooltip" label={$('复制链接')} withArrow>
                                       <ActionIcon
                                         className="tapshow-panel-card-copy-action"
                                         size="sm"
@@ -508,18 +509,18 @@ export default function TapshowPanel(): JSX.Element | null {
         className="tapshow-panel-prompt-modal"
         opened={promptModalOpen}
         onClose={() => setPromptModalOpen(false)}
-        title={`提示词 · ${activePrompt?.title || 'TapShow 作品'}`}
+        title={$t('提示词 · {{title}}', { title: activePrompt?.title || $('TapShow 作品') })}
         size="lg"
         centered
       >
         <Stack className="tapshow-panel-prompt-modal-stack" gap="sm">
           <Group className="tapshow-panel-prompt-modal-actions" justify="flex-end">
             <Button className="tapshow-panel-prompt-modal-copy" size="xs" variant="light" leftSection={<IconCopy size={14} />} onClick={() => { void handleCopyPrompt() }}>
-              复制提示词
+              {$('复制提示词')}
             </Button>
           </Group>
           <Text className="tapshow-panel-prompt-modal-content" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-            {String(activePrompt?.prompt || '').trim() || '暂无提示词'}
+            {String(activePrompt?.prompt || '').trim() || $('暂无提示词')}
           </Text>
         </Stack>
       </Modal>

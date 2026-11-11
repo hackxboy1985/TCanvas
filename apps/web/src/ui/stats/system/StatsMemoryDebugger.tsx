@@ -17,6 +17,7 @@ import { searchMemoryEntries, type MemoryEntryDto, type MemoryScopeType, type Me
 import { toast } from '../../toast'
 import { PanelCard } from '../../PanelCard'
 import { InlinePanel } from '../../InlinePanel'
+import { $, $t } from '../../../canvas/i18n'
 
 const scopeOptions: Array<{ value: MemoryScopeType; label: string }> = [
   { value: 'user', label: 'user' },
@@ -78,9 +79,9 @@ export default function StatsMemoryDebugger({ className }: { className?: string 
       })
       setItems(result.items)
       setResponseText(prettyJson(result))
-      toast(`查询完成：${result.items.length} 条`, 'success')
+      toast($t('查询完成：{{length}} 条', { length: result.items.length }), 'success')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'memory 查询失败'
+      const message = err instanceof Error ? err.message : $('memory 查询失败')
       setItems([])
       setResponseText(message)
       toast(message, 'error')
@@ -93,10 +94,10 @@ export default function StatsMemoryDebugger({ className }: { className?: string 
     <PanelCard className={rootClassName}>
       <Group className="stats-memory-debugger__header" justify="space-between" align="center" wrap="wrap" gap="sm">
         <Group className="stats-memory-debugger__header-left" gap={8} align="center">
-          <Text className="stats-memory-debugger__title" fw={700} size="sm">用户记忆调试</Text>
+          <Text className="stats-memory-debugger__title" fw={700} size="sm">{ $('用户记忆调试') }</Text>
           <Badge className="stats-memory-debugger__badge" size="xs" variant="light">/memory/search</Badge>
         </Group>
-        <Tooltip className="stats-memory-debugger__refresh-tooltip" label="查询" withArrow>
+        <Tooltip className="stats-memory-debugger__refresh-tooltip" label={ $('查询') } withArrow>
           <ActionIcon className="stats-memory-debugger__refresh" variant="light" onClick={() => void runSearch()} loading={loading}>
             <IconRefresh className="stats-memory-debugger__refresh-icon" size={16} />
           </ActionIcon>
@@ -110,7 +111,7 @@ export default function StatsMemoryDebugger({ className }: { className?: string 
           <TextInput
             className="stats-memory-debugger__query"
             label="Query"
-            placeholder="输入关键词..."
+            placeholder={ $('输入关键词...') }
             value={query}
             onChange={(e) => setQuery(e.currentTarget.value)}
             w={300}
@@ -154,7 +155,7 @@ export default function StatsMemoryDebugger({ className }: { className?: string 
             onClick={() => void runSearch()}
             loading={loading}
           >
-            搜索
+            { $('搜索') }
           </Button>
         </Group>
 
@@ -169,7 +170,7 @@ export default function StatsMemoryDebugger({ className }: { className?: string 
 
         <Stack className="stats-memory-debugger__results" gap="xs">
           {items.length === 0 ? (
-            <Text className="stats-memory-debugger__empty" size="sm" c="dimmed">暂无结果</Text>
+            <Text className="stats-memory-debugger__empty" size="sm" c="dimmed">{ $('暂无结果') }</Text>
           ) : (
             items.map((item) => (
               <InlinePanel className="stats-memory-debugger__item" key={item.id}>

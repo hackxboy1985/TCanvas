@@ -18,6 +18,7 @@ import {
   IconPencil,
   IconCopy,
 } from '@tabler/icons-react'
+import { $ } from '../../canvas/i18n'
 
 export type AssetViewMode = 'grid' | 'list'
 export type AssetDensity = 'comfortable' | 'compact'
@@ -68,11 +69,11 @@ export default function AssetToolbar(props: {
           className="asset-panel-toolbar-search"
           value={query}
           onChange={(e) => onQueryChange(e.currentTarget.value)}
-          placeholder="搜索资产：名称 / prompt / tag"
+          placeholder={$('搜索资产：名称 / prompt / tag')}
           leftSection={<IconSearch size={16} />}
           rightSection={
             query ? (
-              <Tooltip label="清空搜索" withArrow>
+              <Tooltip label={$('清空搜索')} withArrow>
                 <ActionIcon
                   className="asset-panel-toolbar-clear-search"
                   size="sm"
@@ -92,9 +93,9 @@ export default function AssetToolbar(props: {
           value={sort}
           onChange={(v) => onSortChange((v as AssetSort) || 'updated_desc')}
           data={[
-            { value: 'updated_desc', label: '按更新时间' },
-            { value: 'created_desc', label: '按创建时间' },
-            { value: 'name_asc', label: '按名称 A-Z' },
+            { value: 'updated_desc', label: $('按更新时间') },
+            { value: 'created_desc', label: $('按创建时间') },
+            { value: 'name_asc', label: $('按名称 A-Z') },
           ]}
           allowDeselect={false}
           styles={{ input: { width: 160 } }}
@@ -130,8 +131,8 @@ export default function AssetToolbar(props: {
           value={density}
           onChange={(v) => onDensityChange((v as AssetDensity) || 'comfortable')}
           data={[
-            { value: 'comfortable', label: '舒展' },
-            { value: 'compact', label: '紧凑' },
+            { value: 'comfortable', label: $('舒展') },
+            { value: 'compact', label: $('紧凑') },
           ]}
           size="xs"
         />
@@ -145,7 +146,7 @@ export default function AssetToolbar(props: {
           onClick={onClearFilters}
           leftSection={<IconX size={14} />}
         >
-          清空筛选
+          {$('清空筛选')}
         </Button>
       </Group>
 
@@ -158,9 +159,9 @@ export default function AssetToolbar(props: {
               variant="light"
               onClick={onSelectAllPage}
             >
-              全选当前页
+              {$('全选当前页')}
             </Button>
-            <Tooltip label="复制选中项链接" withArrow>
+            <Tooltip label={$('复制选中项链接')} withArrow>
               <ActionIcon
                 className="asset-panel-toolbar-copy"
                 size="sm"
@@ -170,7 +171,7 @@ export default function AssetToolbar(props: {
                 <IconCopy size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label={canRenameSingle ? '重命名（仅单选）' : '重命名仅支持单选'} withArrow>
+            <Tooltip label={canRenameSingle ? $('重命名（仅单选）') : $('重命名仅支持单选')} withArrow>
               <ActionIcon
                 className="asset-panel-toolbar-rename"
                 size="sm"
@@ -181,7 +182,7 @@ export default function AssetToolbar(props: {
                 <IconPencil size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="删除选中" withArrow>
+            <Tooltip label={$('删除选中')} withArrow>
               <ActionIcon
                 className="asset-panel-toolbar-delete"
                 size="sm"

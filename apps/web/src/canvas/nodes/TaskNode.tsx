@@ -126,15 +126,15 @@ const STYLE_CONVERT_EDIT_TYPES = new Set<PoseEditMode>(['sketch', 'depthmap', 'c
 
 /** 锚点类型中文标签（与「锚点绑定」下拉文案保持一致） */
 const ANCHOR_KIND_LABELS: Record<string, string> = {
-  character: '角色',
-  scene: '场景',
-  prop: '道具',
-  staging: '站位参考',
-  shot: '分镜',
-  story: '剧情',
-  asset: '资产',
-  context: '上下文',
-  authority_base_frame: '权威基底帧',
+  character: $('角色'),
+  scene: $('场景'),
+  prop: $('道具'),
+  staging: $('站位参考'),
+  shot: $('分镜'),
+  story: $('剧情'),
+  asset: $('资产'),
+  context: $('上下文'),
+  authority_base_frame: $('权威基底帧'),
 }
 import { useImageViewEditor, type ImageViewEditorApplyPayload } from './taskNode/ImageViewEditor'
 import { TaskNodeHandles } from './taskNode/components/TaskNodeHandles'
@@ -232,13 +232,14 @@ import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { getCanvasTaskStatus, runTaskByCanvas } from '../../api/lens'
 import { ensureCanvasNodeAssetId, getLensCanvasFlowId, readCanvasNodeAssetId } from '../utils/canvasNodeAssetId'
 import { isLensMode, readLensModelQualities } from '../../config/useModelOptions'
+import { $, $t } from '../i18n'
 
 /** lens 生图质量档位中文名（后端 others.qualities 取值：medium/high/xhigh/max） */
 const LENS_QUALITY_LABELS: Record<string, string> = {
-  medium: '标准',
-  high: '高清',
-  xhigh: '超高清',
-  max: '最高',
+  medium: $('标准'),
+  high: $('高清'),
+  xhigh: $('超高清'),
+  max: $('最高'),
 }
 
 /**
@@ -368,7 +369,7 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
         // eslint-disable-next-line no-await-in-loop
         status = await getCanvasTaskStatus(submitted.taskId)
       } catch (error: unknown) {
-        lastQueryError = error instanceof Error && error.message ? error.message : '查询任务状态失败'
+        lastQueryError = error instanceof Error && error.message ? error.message : $('查询任务状态失败')
         // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => window.setTimeout(r, 1500))
         continue
@@ -376,25 +377,25 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
       if (status.status === 'SUCCESS') {
         const fileUrl = typeof status.fileUrl === 'string' ? status.fileUrl.split(',')[0].trim() : ''
         if (!fileUrl) {
-          throw new Error('单镜头微调失败：任务已完成但未返回图片地址')
+          throw new Error($('单镜头微调失败：任务已完成但未返回图片地址'))
         }
         return fileUrl
       }
       // 失败终态：FAILED=渠道失败、ERROR=多次重试后最终失败、CANCEL=已取消，
       // 三种都必须立即终止，不能当成「排队中」继续轮询到超时。
       if (status.status === 'FAILED' || status.status === 'ERROR') {
-        throw new Error(status.resMsg?.trim() || status.remark?.trim() || '单镜头微调失败：任务执行失败')
+        throw new Error(status.resMsg?.trim() || status.remark?.trim() || $('单镜头微调失败：任务执行失败'))
       }
       if (status.status === 'CANCEL') {
-        throw new Error(status.resMsg?.trim() || status.remark?.trim() || '单镜头微调失败：任务已取消')
+        throw new Error(status.resMsg?.trim() || status.remark?.trim() || $('单镜头微调失败：任务已取消'))
       }
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => window.setTimeout(r, 1500))
     }
     throw new Error(
       lastQueryError
-        ? `单镜头微调失败：任务仍在执行但状态查询失败（${lastQueryError}），请稍后在任务记录中确认结果`
-        : '单镜头微调失败：任务轮询超时',
+        ? $t('单镜头微调失败：任务仍在执行但状态查询失败（{{v1}}），请稍后在任务记录中确认结果', { v1: lastQueryError })
+        : $('单镜头微调失败：任务轮询超时'),
     )
   }
 
@@ -441,7 +442,7 @@ async function runPoseImageEditTask(input: PoseImageEditTaskInput): Promise<stri
   }
 
   if (result.status !== 'succeeded') {
-    throw new Error('单镜头微调失败：任务未成功完成')
+    throw new Error($('单镜头微调失败：任务未成功完成'))
   }
   return readFirstImageUrlFromTaskResult(result)
 }
@@ -501,12 +502,12 @@ type ToolbarMetaAction = {
 }
 
 const PRODUCTION_LAYER_LABELS: Record<string, string> = {
-  evidence: '证据',
-  constraints: '约束',
-  anchors: '锚点',
-  expansion: '扩展',
-  execution: '执行',
-  results: '结果',
+  evidence: $('证据'),
+  constraints: $('约束'),
+  anchors: $('锚点'),
+  expansion: $('扩展'),
+  execution: $('执行'),
+  results: $('结果'),
 }
 
 const PRODUCTION_LAYER_BADGE_COLORS: Record<string, string> = {
@@ -519,9 +520,9 @@ const PRODUCTION_LAYER_BADGE_COLORS: Record<string, string> = {
 }
 
 const APPROVAL_STATUS_LABELS: Record<string, string> = {
-  needs_confirmation: '待确认',
-  approved: '已确认',
-  rejected: '已拒绝',
+  needs_confirmation: $('待确认'),
+  approved: $('已确认'),
+  rejected: $('已拒绝'),
 }
 
 const APPROVAL_STATUS_BADGE_COLORS: Record<string, string> = {
@@ -572,7 +573,7 @@ function buildStoryboardSelectionContextOrThrow(
     ...input,
   })
   if (!normalized) {
-    throw new Error('分镜选择协议构造失败')
+    throw new Error($('分镜选择协议构造失败'))
   }
   return normalized
 }
@@ -1123,9 +1124,9 @@ function extractStoryboardFirstFrameCandidates(
     })
   }
 
-  push(data?.imageUrl, '主图')
+  push(data?.imageUrl, $('主图'))
   imageResults.forEach((it, index: number) =>
-    push(it?.url, typeof it?.title === 'string' ? it.title.trim() : `候选 ${index + 1}`),
+    push(it?.url, typeof it?.title === 'string' ? it.title.trim() : $t('候选 {{v1}}', { v1: index + 1 })),
   )
   return fallback.slice(0, 16)
 }
@@ -1223,11 +1224,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     status === 'running' ? '#8b5cf6' :
     status === 'queued' ? '#f59e0b' : 'rgba(127,127,127,.6)'
   const statusLabel =
-    status === 'success' ? '已完成' :
-    status === 'error' ? '异常' :
-    status === 'canceled' ? '已取消' :
-    status === 'running' ? '生成中' :
-    status === 'queued' ? '排队中' : '待命'
+    status === 'success' ? $('已完成') :
+    status === 'error' ? $('异常') :
+    status === 'canceled' ? $('已取消') :
+    status === 'running' ? $('生成中') :
+    status === 'queued' ? $('排队中') : $('待命')
   const { colorScheme } = useMantineColorScheme()
   const theme = useMantineTheme()
   const isDarkUi = colorScheme === 'dark'
@@ -1452,7 +1453,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           normalizedFromLegacy: false,
           mode: 'text' as const,
         },
-        errorMessage: error instanceof Error ? error.message : 'structuredPrompt 解析失败',
+        errorMessage: error instanceof Error ? error.message : $('structuredPrompt 解析失败'),
       }
     }
   }, [data, rawPrompt])
@@ -2022,7 +2023,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         },
       ]),
     })
-    toast('锚点类型已切换为：' + (ANCHOR_KIND_LABELS[nextKind] || nextKind))
+    toast($('锚点类型已切换为：') + (ANCHOR_KIND_LABELS[nextKind] || nextKind))
   }, [anchorBindingLabel, data, id, primaryImageForAnchorBinding, primarySemanticAnchor, updateNodeData])
 
   const anchorBindStatusText = React.useMemo(() => {
@@ -2032,29 +2033,29 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (!anchorKind && !anchorLabel && !anchorRefId) return ''
     const anchorKindLabel =
       anchorKind === 'character'
-        ? '角色'
+        ? $('角色')
         : anchorKind === 'scene'
-          ? '场景'
+          ? $('场景')
           : anchorKind === 'prop'
-            ? '道具'
+            ? $('道具')
             : anchorKind === 'shot'
-              ? '分镜'
+              ? $('分镜')
               : anchorKind === 'story'
-                ? '剧情'
+                ? $('剧情')
                 : anchorKind === 'asset'
-                  ? '资产'
+                  ? $('资产')
                   : anchorKind === 'context'
-                    ? '上下文'
+                    ? $('上下文')
                     : anchorKind === 'authority_base_frame'
-                      ? '权威基底帧'
+                      ? $('权威基底帧')
                       : anchorKind === 'staging'
-                        ? '站位参考'
+                        ? $('站位参考')
                         : anchorKind
     const parts: string[] = []
-    if (anchorKindLabel) parts.push(`当前锚点：${anchorKindLabel}`)
-    if (anchorLabel) parts.push(`名称：${anchorLabel}`)
-    if (primarySemanticAnchor?.referenceView === 'three_view') parts.push('参考视图：三视图')
-    if (anchorRefId) parts.push(`引用ID：${anchorRefId}`)
+    if (anchorKindLabel) parts.push($t('当前锚点：{{v1}}', { v1: anchorKindLabel }))
+    if (anchorLabel) parts.push($t('名称：{{v1}}', { v1: anchorLabel }))
+    if (primarySemanticAnchor?.referenceView === 'three_view') parts.push($('参考视图：三视图'))
+    if (anchorRefId) parts.push($t('引用ID：{{v1}}', { v1: anchorRefId }))
     return parts.join(' · ')
   }, [primarySemanticAnchor])
 
@@ -2094,7 +2095,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       ''
     ).trim()
     if (!targetUrl) {
-      toast('请先上传或生成图片', 'error')
+      toast($('请先上传或生成图片'), 'error')
       return
     }
 
@@ -2104,7 +2105,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const apiKey = (ui.publicApiKey || '').trim()
       const token = getAuthToken()
       if (!apiKey && !token) {
-        toast('请先登录后再试', 'error')
+        toast($('请先登录后再试'), 'error')
         return
       }
       const resolveRemoteImageUrl = async (raw: string): Promise<{ url: string; assetId?: string } | null> => {
@@ -2142,8 +2143,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const resolved = await resolveRemoteImageUrl(targetUrl)
       if (!resolved?.url) {
         const hint = targetUrl.startsWith('blob:')
-          ? '本地图片需要先登录并上传到 OSS 才能反推提示词'
-          : '反推提示词仅支持 http(s) 图片链接（请先上传到 OSS）'
+          ? $('本地图片需要先登录并上传到 OSS 才能反推提示词')
+          : $('反推提示词仅支持 http(s) 图片链接（请先上传到 OSS）')
         toast(hint, 'error')
         return
       }
@@ -2166,12 +2167,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       if (nextPrompt) {
         setPrompt(nextPrompt)
         updateNodeData(id, { prompt: nextPrompt })
-        toast('已根据图片生成提示词', 'success')
+        toast($('已根据图片生成提示词'), 'success')
       } else {
-        toast('模型未返回提示词，请稍后重试', 'error')
+        toast($('模型未返回提示词，请稍后重试'), 'error')
       }
     } catch (error: any) {
-      const message = typeof error?.message === 'string' ? error.message : '反推提示词失败'
+      const message = typeof error?.message === 'string' ? error.message : $('反推提示词失败')
       toast(message, 'error')
     } finally {
       setReversePromptLoading(false)
@@ -2457,7 +2458,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (!isProjectDocNode) return
     const projectId = typeof currentProject?.id === 'string' ? currentProject.id.trim() : ''
     if (!projectId) {
-      toast('请先选择项目，再保存文档素材', 'warning')
+      toast($('请先选择项目，再保存文档素材'), 'warning')
       return
     }
 
@@ -2468,7 +2469,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const promptText = typeof prompt === 'string' ? prompt.trim() : ''
     const content = latestText || promptText
     if (!content) {
-      toast('当前没有可保存的文本内容', 'warning')
+      toast($('当前没有可保存的文本内容'), 'warning')
       return
     }
 
@@ -2508,7 +2509,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         savedId = updated.id
       } else {
         const created = await createServerAsset({
-          name: `${(data as any)?.label || '文档'}-${new Date().toLocaleString()}`,
+          name: `${(data as any)?.label || $('文档')}-${new Date().toLocaleString()}`,
           projectId,
           data: materialData,
         })
@@ -2521,9 +2522,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         materialChapter: inferredChapter,
         materialSavedAt: nowIso,
       })
-      toast('已保存到项目素材', 'success')
+      toast($('已保存到项目素材'), 'success')
     } catch (error: any) {
-      toast(error?.message || '保存项目素材失败', 'error')
+      toast(error?.message || $('保存项目素材失败'), 'error')
     } finally {
       setMaterialSaving(false)
     }
@@ -2770,11 +2771,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const semanticRoleBinding = resolveSemanticNodeRoleBinding(nodeData)
     const semanticVisualBinding = resolveSemanticNodeVisualReferenceBinding(nodeData)
     if (!anchorLabel) {
-      toast('请先填写锚点名称', 'warning')
+      toast($('请先填写锚点名称'), 'warning')
       return
     }
     if (!imageUrl) {
-      toast('当前节点还没有可用主图，请先生成图片后再绑定', 'warning')
+      toast($('当前节点还没有可用主图，请先生成图片后再绑定'), 'warning')
       return
     }
     if (bindAnchorLoading) return
@@ -2791,7 +2792,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           assetRefs: mergedAssetMentionRefs,
         })
         if (assetConflict) {
-          toast(`绑定失败：@${assetConflict.mention} 已被资产引用占用（${assetConflict.displayName}）`, 'error')
+          toast($t('绑定失败：@{{v1}} 已被资产引用占用（{{v2}}）', { v1: assetConflict.mention, v2: assetConflict.displayName }), 'error')
           return
         }
 
@@ -2823,7 +2824,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
               },
             }),
           })
-          toast(`已绑定角色锚点：${anchorLabel}`, 'success')
+          toast($t('已绑定角色锚点：{{v1}}', { v1: anchorLabel }), 'success')
           return
         }
 
@@ -2879,9 +2880,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         })
         notifyAssetRefresh()
         if (resolvedSourceBookId) {
-          toast(`已绑定角色锚点并同步到工作台：${anchorLabel}`, 'success')
+          toast($t('已绑定角色锚点并同步到工作台：{{v1}}', { v1: anchorLabel }), 'success')
         } else {
-          toast(`已绑定角色锚点：${anchorLabel}；当前节点缺少唯一书籍上下文，未同步到书籍 roleCards`, 'info')
+          toast($t('已绑定角色锚点：{{v1}}；当前节点缺少唯一书籍上下文，未同步到书籍 roleCards', { v1: anchorLabel }), 'info')
         }
         return
       }
@@ -2921,7 +2922,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
             }),
           })
           notifyAssetRefresh()
-          toast(`已绑定${anchorKind === 'scene' ? '场景' : '道具'}锚点并同步到工作台：${anchorLabel}`, 'success')
+          toast($t('已绑定{{v1}}锚点并同步到工作台：{{v2}}', { v1: anchorKind === 'scene' ? $('场景') : $('道具'), v2: anchorLabel }), 'success')
           return
         }
 
@@ -2942,7 +2943,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
             },
           }),
         })
-        toast(`已绑定${anchorKind === 'scene' ? '场景' : '道具'}锚点：${anchorLabel}`, 'success')
+        toast($t('已绑定{{v1}}锚点：{{v2}}', { v1: anchorKind === 'scene' ? $('场景') : $('道具'), v2: anchorLabel }), 'success')
         return
       }
 
@@ -2959,10 +2960,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           },
         }),
       })
-      toast(`已绑定锚点：${anchorLabel}`, 'success')
+      toast($t('已绑定锚点：{{v1}}', { v1: anchorLabel }), 'success')
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '绑定锚点失败'
-      toast(errorMessage || '绑定锚点失败', 'error')
+      const errorMessage = err instanceof Error ? err.message : $('绑定锚点失败')
+      toast(errorMessage || $('绑定锚点失败'), 'error')
     } finally {
       setBindAnchorLoading(false)
     }
@@ -3035,18 +3036,18 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const parts: string[] = []
     const currentRefId = String((data as any)?.assetRefId || primaryBindableAsset?.assetRefId || '').trim()
     const currentAssetId = String((data as any)?.assetId || primaryBindableAsset?.assetId || '').trim()
-    if (currentRefId) parts.push(`引用ID：${currentRefId}`)
-    if (currentAssetId) parts.push(`资产ID：${currentAssetId}`)
+    if (currentRefId) parts.push($t('引用ID：{{v1}}', { v1: currentRefId }))
+    if (currentAssetId) parts.push($t('资产ID：{{v1}}', { v1: currentAssetId }))
     return parts.join(' · ')
   }, [data, primaryBindableAsset])
   const handleBindPrimaryAssetReference = React.useCallback(() => {
     const nextRefId = toMentionUsername(assetBindingId)
     if (!nextRefId) {
-      toast('请先填写引用ID', 'warning')
+      toast($('请先填写引用ID'), 'warning')
       return
     }
     if (!primaryBindableAsset?.url) {
-      toast('当前节点还没有可绑定的图片或视频结果', 'warning')
+      toast($('当前节点还没有可绑定的图片或视频结果'), 'warning')
       return
     }
     const roleConflict = findMentionRefConflict({
@@ -3054,7 +3055,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       roleRefs: projectRoleRefs,
     })
     if (roleConflict) {
-      toast(`绑定失败：@${roleConflict.mention} 已被角色卡占用（${roleConflict.displayName}）`, 'error')
+      toast($t('绑定失败：@{{v1}} 已被角色卡占用（{{v2}}）', { v1: roleConflict.mention, v2: roleConflict.displayName }), 'error')
       return
     }
     const nextAssetName = primaryBindableAsset.assetName || String((data as any)?.label || '').trim() || nextRefId
@@ -3100,7 +3101,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     }
     updateNodeData(id, patch)
     setAssetBindingId(nextRefId)
-    toast(`已绑定引用ID：@${nextRefId}`, 'success')
+    toast($t('已绑定引用ID：@{{v1}}', { v1: nextRefId }), 'success')
   }, [assetBindingId, data, id, imagePrimaryIndex, imageResults, primaryBindableAsset, projectRoleRefs, updateNodeData, videoPrimaryIndex, videoResults])
   const handleMentionApplied = React.useCallback((item: MentionSuggestionItem) => {
     if (item.source !== 'asset') return
@@ -3308,7 +3309,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     ({ cameraControl, lightingRig }: ImageViewEditorApplyPayload) => {
       const normalizedBaseImageUrl = String(basePoseImage || '').trim()
       if (!normalizedBaseImageUrl) {
-        toast('请先上传或生成图片', 'warning')
+        toast($('请先上传或生成图片'), 'warning')
         return
       }
 
@@ -3318,7 +3319,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const shouldPersistLighting = hasActiveImageLightingRig(normalizedLightingRig)
 
       if (!shouldPersistCamera && !shouldPersistLighting) {
-        toast('请先启用角度或灯光控制', 'warning')
+        toast($('请先启用角度或灯光控制'), 'warning')
         return
       }
 
@@ -3351,12 +3352,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           ...(shouldPersistCamera ? { imageCameraControl: normalizedCameraControl } : null),
           ...(shouldPersistLighting ? { imageLightingRig: normalizedLightingRig } : null),
         },
-        '图片编辑配置已生成，但未能创建新节点',
+        $('图片编辑配置已生成，但未能创建新节点'),
       )
       if (!newDerivedNodeId) return
 
       runNodeDagToTarget(newDerivedNodeId, useRFStore.getState, useRFStore.setState, { concurrency: 1 }).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : '新图片编辑生成启动失败'
+        const message = error instanceof Error ? error.message : $('新图片编辑生成启动失败')
         console.error('auto run image view edit failed', error)
         toast(message, 'error')
       })
@@ -3587,7 +3588,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
 
       if (mode === 'size' && shouldOverwriteInPlace) {
         if (!normalizedResizedImageUrl) {
-          toast('尺寸调整失败：未返回新图地址', 'error')
+          toast($('尺寸调整失败：未返回新图地址'), 'error')
           return
         }
         const currentResults = Array.isArray((data as any)?.imageResults) ? ([...(data as any).imageResults] as any[]) : []
@@ -3610,7 +3611,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           size: nextImageEditSize,
           aspect: nextImageEditAspect,
         })
-        toast(`镜头 ${resolvedTargetIndex + 1} 已按 ${nextImageEditSize} 尺寸更新`, 'success')
+        toast($t('镜头 {{v1}} 已按 {{v2}} 尺寸更新', { v1: resolvedTargetIndex + 1, v2: nextImageEditSize }), 'success')
         return
       }
 
@@ -3621,7 +3622,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
             const apiKey = (ui.publicApiKey || '').trim()
             const token = getAuthToken()
             if (!apiKey && !token) {
-              toast('请先登录后再试', 'error')
+              toast($('请先登录后再试'), 'error')
               return
             }
             const persist = ui.assetPersistenceEnabled
@@ -3712,7 +3713,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
               })
             }
             if (!nextUrl) {
-              throw new Error('单镜头微调失败：未返回图片地址')
+              throw new Error($('单镜头微调失败：未返回图片地址'))
             }
 
             const currentResults = Array.isArray((data as any)?.imageResults) ? ([...(data as any).imageResults] as any[]) : []
@@ -3824,9 +3825,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
               size: nextImageEditSize,
               aspect: nextImageEditAspect,
             })
-            toast(`镜头 ${resolvedTargetIndex + 1} 已更新（覆盖当前节点）`, 'success')
+            toast($t('镜头 {{v1}} 已更新（覆盖当前节点）', { v1: resolvedTargetIndex + 1 }), 'success')
           } catch (err: any) {
-            toast(err?.message || '单镜头更新失败', 'error')
+            toast(err?.message || $('单镜头更新失败'), 'error')
           } finally {
             editingShotSourceIndexRef.current = null
             setEditingShotSourceIndex(null)
@@ -3838,7 +3839,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
 
       if (mode === 'size') {
         if (!normalizedResizedImageUrl) {
-          toast('尺寸调整失败：未返回新图地址', 'error')
+          toast($('尺寸调整失败：未返回新图地址'), 'error')
           return
         }
         const newDerivedNodeId = createDerivedImageNode(
@@ -3856,10 +3857,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
             imageEditSize: nextImageEditSize,
             size: nextImageEditSize,
           },
-          '尺寸调整已完成，但未能创建新图像节点',
+          $('尺寸调整已完成，但未能创建新图像节点'),
         )
         if (!newDerivedNodeId) return
-        toast(`已生成 ${nextImageEditSize} 新图`, 'success')
+        toast($t('已生成 {{v1}} 新图', { v1: nextImageEditSize }), 'success')
         return
       }
 
@@ -3882,18 +3883,18 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           poseReferenceImages: normalizedRefs.slice(0, 8),
           poseMaskUrl: normalizedMaskGuideUrl || null,
         },
-        '图片编辑已保存，但未能创建新图像节点',
+        $('图片编辑已保存，但未能创建新图像节点'),
       )
       if (!newDerivedNodeId) return
 
       if (!effectivePrompt) {
-        toast('已创建新图片编辑节点，请填写提示词后再运行', 'info')
+        toast($('已创建新图片编辑节点，请填写提示词后再运行'), 'info')
         return
       }
 
       runNodeDagToTarget(newDerivedNodeId, useRFStore.getState, useRFStore.setState, { concurrency: 1 }).catch((err) => {
         console.error('auto run pose image failed', err)
-        toast(err?.message || '新图片编辑生成启动失败', 'error')
+        toast(err?.message || $('新图片编辑生成启动失败'), 'error')
       })
     },
     [createDerivedImageNode, currentProject?.id, data, editingShotSourceIndex, findVendorForModel, id, imageEditSize, imageModel, kind, prompt, sampleCount, updateNodeData],
@@ -4048,7 +4049,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       })
       setMosaicPreviewUrl(canvas.toDataURL('image/png'))
       if (failedUrls.length) {
-        setMosaicPreviewError(`已移除 ${failedUrls.length} 张过期或不可访问的图片`)
+        setMosaicPreviewError($t('已移除 {{v1}} 张过期或不可访问的图片', { v1: failedUrls.length }))
         setMosaicSelected((prev) => prev.filter((url) => !failedUrls.includes(url)))
         setMosaicInvalidUrls((prev) => Array.from(new Set([...prev, ...failedUrls])))
       }
@@ -4062,7 +4063,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         setMosaicSelected((prev) => prev.filter((url) => !failedUrls.includes(url)))
         setMosaicInvalidUrls((prev) => Array.from(new Set([...prev, ...failedUrls])))
       }
-      const message = error instanceof Error ? error.message : '预览生成失败，请检查图片是否可跨域访问'
+      const message = error instanceof Error ? error.message : $('预览生成失败，请检查图片是否可跨域访问')
       setMosaicPreviewError(message)
     } finally {
       setMosaicPreviewLoading(false)
@@ -4072,7 +4073,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     (url: string, checked?: boolean) => {
       if (!url) return
       if (mosaicInvalidUrls.includes(url)) {
-        toast('该图片已失效，请选择其他图片', 'error')
+        toast($('该图片已失效，请选择其他图片'), 'error')
         return
       }
       setMosaicSelected((prev) => {
@@ -4104,7 +4105,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const handleMosaicSave = React.useCallback(async () => {
     const picked = mosaicSelected.slice(0, mosaicLimit)
     if (!picked.length) {
-      toast('请至少选择 1 张图片', 'error')
+      toast($('请至少选择 1 张图片'), 'error')
       return
     }
     try {
@@ -4124,13 +4125,13 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       if (result.failedUrls.length) {
         setMosaicSelected((prev) => prev.filter((url) => !result.failedUrls.includes(url)))
         setMosaicInvalidUrls((prev) => Array.from(new Set([...prev, ...result.failedUrls])))
-        toast(`已移除 ${result.failedUrls.length} 张过期图片，已用剩余图片拼图`, 'info')
+        toast($t('已移除 {{v1}} 张过期图片，已用剩余图片拼图', { v1: result.failedUrls.length }), 'info')
       }
       const blob: Blob = await new Promise((resolve, reject) => {
         try {
           result.canvas.toBlob((canvasBlob) => {
             if (canvasBlob) resolve(canvasBlob)
-            else reject(new Error('未生成拼图结果'))
+            else reject(new Error($('未生成拼图结果')))
           }, 'image/png')
         } catch (error) {
           reject(error)
@@ -4140,14 +4141,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const file = new File([blob], fileName, { type: 'image/png' })
       const hosted = await uploadServerAssetFile(file, fileName, { taskKind: 'mosaic' })
       const hostedUrl = typeof hosted?.data?.url === 'string' ? hosted.data.url.trim() : ''
-      if (!hostedUrl) throw new Error('拼图已生成，但上传到 OSS 失败')
+      if (!hostedUrl) throw new Error($('拼图已生成，但上传到 OSS 失败'))
 
       const existing = Array.isArray((data as any)?.imageResults) ? (data as any)?.imageResults : []
       const sanitizedExisting = existing.filter((item: unknown) => {
         const url = typeof (item as { url?: unknown })?.url === 'string' ? String((item as { url: string }).url).trim() : ''
         return Boolean(url) && REMOTE_IMAGE_URL_REGEX.test(url)
       })
-      const merged = [...sanitizedExisting, { url: hostedUrl, title: mosaicTitle || '拼图' }]
+      const merged = [...sanitizedExisting, { url: hostedUrl, title: mosaicTitle || $('拼图') }]
       const primaryIndex = merged.length - 1
       setNodeStatus(id, 'success', {
         progress: 100,
@@ -4176,9 +4177,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         },
       })
       setMosaicModalOpen(false)
-      toast('拼图已更新', 'success')
+      toast($('拼图已更新'), 'success')
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '拼图生成失败'
+      const message = error instanceof Error ? error.message : $('拼图生成失败')
       toast(message, 'error')
     }
   }, [
@@ -4296,7 +4297,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   ) => {
     const nextPrompt = typeof basePrompt === 'string' ? basePrompt.trim() : prompt.trim()
     if (!nextPrompt) {
-      throw new Error('请先输入提示词，再切到 JSON 模式')
+      throw new Error($('请先输入提示词，再切到 JSON 模式'))
     }
 
     return refineStructuredImagePrompt({
@@ -4356,15 +4357,15 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
    */
   const polishBillingSuffix = React.useMemo(() => {
     if (!polishBillingPreview) return ''
-    if (polishBillingPreview.free) return `（免费${polishBillingPreview.freeRemain}次）`
-    return `（${polishBillingPreview.credit}积分）`
+    if (polishBillingPreview.free) return $t('（免费{{v1}}次）', { v1: polishBillingPreview.freeRemain })
+    return $t('（{{v1}}积分）', { v1: polishBillingPreview.credit })
   }, [polishBillingPreview])
   const handleRefineImagePrompt = React.useCallback(async () => {
     if (!canUseStructuredPromptEditor || viewOnly || structuredPromptRefineLoading) return
 
     const currentPrompt = prompt.trim()
     if (!currentPrompt) {
-      toast('请先输入提示词，再进行 AI 润色', 'warning')
+      toast($('请先输入提示词，再进行 AI 润色'), 'warning')
       return
     }
 
@@ -4385,15 +4386,15 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       if (polishBilling) {
         toast(
           polishBilling.free
-            ? `AI 润色完成（本次免费，今日剩余 ${polishBilling.freeRemain} 次）`
-            : `AI 润色完成（已扣 ${polishBilling.charged} 积分）`,
+            ? $t('AI 润色完成（本次免费，今日剩余 {{v1}} 次）', { v1: polishBilling.freeRemain })
+            : $t('AI 润色完成（已扣 {{v1}} 积分）', { v1: polishBilling.charged }),
           'success',
         )
       } else {
-        toast('AI 润色完成', 'success')
+        toast($('AI 润色完成'), 'success')
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '生成结构化 JSON 失败'
+      const message = error instanceof Error ? error.message : $('生成结构化 JSON 失败')
       toast(message, 'error')
     } finally {
       setStructuredPromptRefineLoading(false)
@@ -4417,7 +4418,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const handleAdoptPolish = () => {
     if (!polishPreview || viewOnly) return
     if (prompt.trim() !== polishPreview.before.trim()) {
-      toast('当前提示词已变化，请重新润色，避免覆盖新修改', 'warning')
+      toast($('当前提示词已变化，请重新润色，避免覆盖新修改'), 'warning')
       return
     }
     setPolishOriginal({ prompt, structuredPrompt: structuredPromptValue, promptEditorMode: isStructuredPromptMode ? 'structured' : 'text' })
@@ -4425,7 +4426,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     setPrompt(polishPreview.after)
     updateNodeData(id, { prompt: polishPreview.after, structuredPrompt: polishPreview.structured, promptEditorMode: isStructuredPromptMode ? 'structured' : 'text' })
     setPolishPreview(null)
-    toast('已采用到当前编辑内容，尚未保存到 Lens 资产', 'success')
+    toast($('已采用到当前编辑内容，尚未保存到 Lens 资产'), 'success')
   }
   /** 恢复本次采用前的输入；不重新请求 AI，也不触发计费。 */
   const handleRestorePolish = () => {
@@ -4442,9 +4443,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     try {
       setSavingAssetPrompt(true)
       await saveLensAssetPrompt({ category: Number(record.assetCategory), entityId: String(record.entityId || ''), dramaId: String(record.sourceProjectId || ''), prompt })
-      toast('提示词已保存到 Lens 资产', 'success')
+      toast($('提示词已保存到 Lens 资产'), 'success')
     } catch (error) {
-      toast(error instanceof Error ? error.message : '保存资产提示词失败', 'error')
+      toast(error instanceof Error ? error.message : $('保存资产提示词失败'), 'error')
     } finally {
       setSavingAssetPrompt(false)
     }
@@ -4455,12 +4456,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const threeViewEnabled = (data as Record<string, unknown>).threeViewEnabled !== false
   const promptPolishActions = canUseStructuredPromptEditor ? (
     <Group className="tc-task-node__polish-actions" gap={4} wrap="nowrap">
-      {lastPolishComparison ? <Button className="tc-task-node__polish-compare" size="compact-xs" variant="subtle" onClick={() => setShowLastPolishComparison(true)}>查看对比</Button> : null}
-      {polishOriginal ? <Button className="tc-task-node__polish-restore" size="compact-xs" variant="subtle" disabled={viewOnly} onClick={handleRestorePolish}>恢复润色前</Button> : null}
+      {lastPolishComparison ? <Button className="tc-task-node__polish-compare" size="compact-xs" variant="subtle" onClick={() => setShowLastPolishComparison(true)}>{$('查看对比')}</Button> : null}
+      {polishOriginal ? <Button className="tc-task-node__polish-restore" size="compact-xs" variant="subtle" disabled={viewOnly} onClick={handleRestorePolish}>{$('恢复润色前')}</Button> : null}
       {roleProjectionNode ? (
         <Tooltip
           className="tc-task-node__three-view-tooltip"
-          label="勾选后提交生图会拼接三视图与生图前置提示词（默认勾选）"
+          label={$("勾选后提交生图会拼接三视图与生图前置提示词（默认勾选）")}
           position="top"
           openDelay={0}
           withArrow
@@ -4473,13 +4474,13 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
               checked={threeViewEnabled}
               disabled={viewOnly}
               onChange={(event) => updateNodeData(id, { threeViewEnabled: event.currentTarget.checked })}
-              label="三视图"
+              label={$("三视图")}
             />
           </span>
         </Tooltip>
       ) : null}
-      {typeof (data as Record<string, unknown>).assetCategory === 'number' && String((data as Record<string, unknown>).entityId ?? '').trim() ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>保存提示词</Button> : null}
-      <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>{'AI润色'}</Button>
+      {typeof (data as Record<string, unknown>).assetCategory === 'number' && String((data as Record<string, unknown>).entityId ?? '').trim() ? <Button className="tc-task-node__prompt-save" size="compact-xs" variant="default" loading={savingAssetPrompt} disabled={viewOnly || structuredPromptRefineLoading} onClick={() => { void handleSaveAssetPrompt() }}>{$('保存提示词')}</Button> : null}
+      <Button className="tc-task-node__prompt-refine" size="compact-xs" variant="light" loading={structuredPromptRefineLoading} disabled={viewOnly} onClick={() => { void handleRefineImagePrompt() }}>{$('AI润色')}</Button>
       {/* 费用说明：免费显示「（免费N次）」，免费用尽显示「（N积分）」；单独用 Text 渲染，不并入按钮文字 */}
       {polishBillingSuffix ? (
         <Text className="tc-task-node__prompt-refine-cost" size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{polishBillingSuffix}</Text>
@@ -4490,7 +4491,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const handleStructuredPromptModeChange = React.useCallback((next: boolean) => {
     if (!isPromptEditorAdmin || !structuredPromptValue || viewOnly || structuredPromptRefineLoading) return
     if (next && resolveCompiledImagePrompt({ structuredPrompt: structuredPromptValue, promptEditorMode: 'structured' }).trim() !== prompt.trim()) {
-      toast('提示词已修改，请先点击 AI 润色更新结构化内容', 'warning')
+      toast($('提示词已修改，请先点击 AI 润色更新结构化内容'), 'warning')
       return
     }
     updateNodeData(id, { promptEditorMode: next ? 'structured' : 'text' })
@@ -4765,7 +4766,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       : selectedConfiguredImageAspectOption?.label || aspect
   const summaryVideoResolution = React.useMemo(() => {
     if (!isVideoNode) return ''
-    return selectedConfiguredResolutionOption?.label || effectiveVideoResolution || '未设定'
+    return selectedConfiguredResolutionOption?.label || effectiveVideoResolution || $('未设定')
   }, [effectiveVideoResolution, isVideoNode, selectedConfiguredResolutionOption])
   // 图片比例显示当前比例，不能复用图片编辑节点的像素尺寸说明。
   const summaryResolution = isVideoNode
@@ -4775,7 +4776,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const configuredLabel =
       configuredOrientationOptions.find((option) => option.value === orientation)?.label || ''
     if (configuredLabel) return configuredLabel
-    return orientation === 'portrait' ? '竖屏' : '横屏'
+    return orientation === 'portrait' ? $('竖屏') : $('横屏')
   }, [configuredOrientationOptions, orientation])
   const summaryExec = `${sampleCount} x`
   const billingNodeKind = React.useMemo<NodeKind>(() => {
@@ -4815,14 +4816,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   )
   const requiredCreditsLabel = React.useMemo(() => {
     if (!(isVideoNode || coreKind === 'image')) return null
-    if (requiredGenerationCredits === null || (isLensMode() && !selectedActiveModelOption?.pricing)) return '积分未配置'
-    return `${requiredGenerationCredits}积分`
+    if (requiredGenerationCredits === null || (isLensMode() && !selectedActiveModelOption?.pricing)) return $('积分未配置')
+    return $t('{{v1}}积分', { v1: requiredGenerationCredits })
   }, [coreKind, isVideoNode, requiredGenerationCredits, selectedActiveModelOption])
   const promptPresetOptions = React.useMemo(
     () =>
       presetItems.map((item) => ({
         value: item.id,
-        label: `${item.title}${item.scope === 'base' ? '（基础）' : ''}`,
+        label: `${item.title}${item.scope === 'base' ? $('（基础）') : ''}`,
       })),
     [presetItems],
   )
@@ -5050,7 +5051,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       ? [{
           key: 'video_resolution',
           binding: 'resolution' as const,
-          title: '分辨率',
+          title: $('分辨率'),
           summary: summaryVideoResolution,
           options: configuredVideoResolutionOptions,
           onChange: handleToolbarVideoResolutionChange,
@@ -5115,7 +5116,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           key: control.key,
           binding: control.binding,
           title: control.label,
-          summary: selectedConfiguredImageResolutionOption?.label || imageResolution || '分辨率',
+          summary: selectedConfiguredImageResolutionOption?.label || imageResolution || $('分辨率'),
           options: configuredImageResolutionOptions,
           onChange: (value: string) => {
             setImageResolution(value)
@@ -5212,7 +5213,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       setPresetItems([])
       // 显式失败：清空列表；提示按「类型 + 错误」去重，避免画布上每个节点各弹一次
       if (shouldNoticeLlmNodePresetLoadError(presetType, err)) {
-        toast(err instanceof Error ? err.message : '加载节点预设失败', 'error')
+        toast(err instanceof Error ? err.message : $('加载节点预设失败'), 'error')
       }
     } finally {
       setPresetLoading(false)
@@ -5247,7 +5248,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const title = newPresetTitle.trim()
     const promptText = newPresetPrompt.trim()
     if (!title || !promptText) {
-      toast('请填写预设名称和提示词', 'error')
+      toast($('请填写预设名称和提示词'), 'error')
       return
     }
     setPresetSaving(true)
@@ -5272,9 +5273,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           llmPresetTitle: created.title,
         })
       }
-      toast('预设创建成功', 'success')
+      toast($('预设创建成功'), 'success')
     } catch (err: any) {
-      toast(err?.message || '创建预设失败', 'error')
+      toast(err?.message || $('创建预设失败'), 'error')
     } finally {
       setPresetSaving(false)
     }
@@ -5479,7 +5480,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         progress: typeof data?.progress === 'number' && Number.isFinite(data.progress) ? data.progress : null,
       } satisfies AdoptedAssetMetadata,
     })
-    toast(`已采纳第 ${idx + 1} 个视频`, 'success')
+    toast($t('已采纳第 {{v1}} 个视频', { v1: idx + 1 }), 'success')
   }, [data?.progress, id, updateNodeData, videoResults])
 
 	  const videoContent = !isVideoNode
@@ -5511,14 +5512,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
 		            : () => {
 	              const src = videoResults[videoPrimaryIndex]?.url || videoUrl || ''
               if (!src) {
-                toast('暂无可剪辑的视频', 'error')
+                toast($('暂无可剪辑的视频'), 'error')
                 return
               }
 
               const baseTitle =
                 (videoResults[videoPrimaryIndex]?.title || videoTitle || '').trim() ||
                 'clip'
-              const nextTitle = `${baseTitle}-剪辑`
+              const nextTitle = $t('{{v1}}-剪辑', { v1: baseTitle })
 
               openWebCutVideoEditModal({
                 nodeId: id,
@@ -5539,7 +5540,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
                   const after = useRFStore.getState()
                   const newNode = after.nodes.find((n) => !beforeIds.has(n.id))
                   if (!newNode) {
-                    toast('剪辑已上传，但未能创建新视频节点', 'error')
+                    toast($('剪辑已上传，但未能创建新视频节点'), 'error')
                     return
                   }
 
@@ -5573,7 +5574,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const handleImageUpload = React.useCallback(async (files: File[]) => {
     if (!supportsImageUpload) return
     if (nodeHasUploadIntent || nodeHasPendingUploads) {
-      toast('当前节点仍有图片上传中，请等待完成后再试', 'info')
+      toast($('当前节点仍有图片上传中，请等待完成后再试'), 'info')
       return
     }
 
@@ -5586,12 +5587,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const deduped = dedupeLocalFiles(picked, (file) => file.name || 'Image')
       if (deduped.skippedCount > 0) {
         useUploadRuntimeStore.getState().recordDuplicateBlocked(deduped.skippedCount)
-        toast(`已跳过 ${deduped.skippedCount} 个同批次重复文件`, 'info')
+        toast($t('已跳过 {{v1}} 个同批次重复文件', { v1: deduped.skippedCount }), 'info')
       }
 
       const MAX_BYTES = 30 * 1024 * 1024
       const tooLarge = deduped.uniqueFiles.filter((f) => (typeof f.size === 'number' ? f.size : 0) > MAX_BYTES)
-      if (tooLarge.length) toast(`有 ${tooLarge.length} 张图片超过 30MB，已跳过`, 'error')
+      if (tooLarge.length) toast($t('有 {{v1}} 张图片超过 30MB，已跳过', { v1: tooLarge.length }), 'error')
       const valid = deduped.uniqueFiles.filter((f) => (typeof f.size === 'number' ? f.size : 0) <= MAX_BYTES)
       if (!valid.length) return
 
@@ -5634,7 +5635,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       }
 
       const uploadIntoNode = async (nodeId: string, file: File, localUrl: string): Promise<boolean> => {
-        const imageTitle = typeof file?.name === 'string' && file.name.trim() ? file.name.trim() : '上传图片'
+        const imageTitle = typeof file?.name === 'string' && file.name.trim() ? file.name.trim() : $('上传图片')
         const requestKey = `${nodeId}:${file.name}:${file.size}:${file.lastModified}`
         const localPreviewResourceId = resourceManager.buildResourceId({
           url: localUrl,
@@ -5722,7 +5723,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         if (await uploadIntoNode(id, firstFile, firstLocalUrl)) successCount += 1
       } catch (error) {
         console.error('Failed to upload image:', error)
-        toast('上传图片失败，请稍后再试', 'error')
+        toast($('上传图片失败，请稍后再试'), 'error')
       }
 
       for (const p of extraPrepared) {
@@ -5730,12 +5731,12 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           if (await uploadIntoNode(p.id, p.file, p.localUrl)) successCount += 1
         } catch (error) {
           console.error('Failed to upload image:', error)
-          toast('上传图片失败，请稍后再试', 'error')
+          toast($('上传图片失败，请稍后再试'), 'error')
         }
       }
 
       if (successCount === 0) {
-        toast('已添加图片，但未能托管到 OSS/R2，将仅使用本地预览（无法用于远程任务）', 'error')
+        toast($('已添加图片，但未能托管到 OSS/R2，将仅使用本地预览（无法用于远程任务）'), 'error')
       }
 
       if (successCount > 0 && extraPrepared.length) {
@@ -5761,7 +5762,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       }
     } catch (error) {
       console.error('Failed to upload image:', error)
-      toast('上传图片失败，请稍后再试', 'error')
+      toast($('上传图片失败，请稍后再试'), 'error')
     } finally {
       useUploadRuntimeStore.getState().finishNodeImageUpload(id)
     }
@@ -5772,7 +5773,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const isImageExpired = Boolean((data as any)?.expired || (data as any)?.imageExpired)
   // GenerationOverlay 已覆盖 running/queued 状态；本地上传仍需独立提示，避免组件 remount 后丢失“上传中”事实。
   const showImageStateOverlay = Boolean(isImageNode && (isImageExpired || isUploadingImage))
-  const imageStateLabel = isUploadingImage ? '上传中' : isImageExpired ? '已过期' : null
+  const imageStateLabel = isUploadingImage ? $('上传中') : isImageExpired ? $('已过期') : null
 
   const isCanvasMediaNode = coreKind === 'image' || coreKind === 'video'
   // lens 投影节点（角色/场景/道具）：即使属于媒体节点也渲染顶部栏（类型 + 名称）
@@ -6091,7 +6092,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       type StoryboardHistoryItem = ProjectBookStoryboardHistoryDto['items'][number]
       const chapterNo = Math.max(1, Math.trunc(Number(novelStoryboardProgressMeta.chapter || 1)))
       const taskId = String(novelStoryboardProgressMeta.taskId || '').trim()
-      const runTitle = `分镜渐进续写 · ${new Date().toLocaleString()}`
+      const runTitle = $t('分镜渐进续写 · {{v1}}', { v1: new Date().toLocaleString() })
       const runGoal = '仅生成当前全书进度的下一组 25 镜头（从当前节点继续）'
       const beforeHistory = await listProjectBookStoryboardHistory(
         novelStoryboardProgressMeta.projectId,
@@ -6217,7 +6218,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       )
       const effectiveBatch = generatedBatch
       if (!effectiveBatch.length) {
-        throw new Error(lastRunError || '后端已执行但未产出可用分镜历史；禁止使用本地模板回退，请检查 agents 日志与上游产物')
+        throw new Error(lastRunError || $('后端已执行但未产出可用分镜历史；禁止使用本地模板回退，请检查 agents 日志与上游产物'))
       }
 
       const historyChapter = chapterOf(effectiveBatch[0])
@@ -6265,21 +6266,21 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         const shotNo = shotNoOf(item)
         const script = String(item.script || '').trim()
         if (!script) {
-          throw new Error(`分镜历史缺少脚本：shotNo=${shotNo}`)
+          throw new Error($t('分镜历史缺少脚本：shotNo={{v1}}', { v1: shotNo }))
         }
         const imageUrl = String(item.selectedImageUrl || item.imageUrl || '').trim()
         const roleBindings = Array.isArray(item.roleCardAnchors)
           ? item.roleCardAnchors.map((anchor) => ({
               kind: 'role' as const,
               refId: String(anchor.cardId || '').trim() || undefined,
-              label: String(anchor.roleName || '').trim() || '角色锚点',
+              label: String(anchor.roleName || '').trim() || $('角色锚点'),
               imageUrl: String(anchor.imageUrl || '').trim(),
             }))
           : []
         const genericReferenceBindings = Array.isArray(item.references)
           ? item.references.map((reference) => ({
               kind: 'reference' as const,
-              label: String(reference.label || '').trim() || '参考图',
+              label: String(reference.label || '').trim() || $('参考图'),
               imageUrl: String(reference.url || '').trim(),
             }))
           : []
@@ -6312,7 +6313,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const tailFrameUrl = imageShotItems.length > 0 ? imageShotItems[imageShotItems.length - 1]?.imageUrl || '' : ''
       const chunkReferenceBindings = normalizeStoryboardReferenceBindings([
         ...(tailFrameUrl
-          ? [{ kind: 'continuity_tail' as const, label: '本组尾帧', imageUrl: tailFrameUrl }]
+          ? [{ kind: 'continuity_tail' as const, label: $('本组尾帧'), imageUrl: tailFrameUrl }]
           : []),
         ...shotItems.flatMap((item) => item.referenceBindings),
       ])
@@ -6375,17 +6376,17 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       )
       const imageResults = imageShotItems.map((item) => ({
         url: item.imageUrl,
-        title: `镜头 ${item.shotNo}`,
+        title: $t('镜头 {{v1}}', { v1: item.shotNo }),
         shotPrompt: item.script,
         storyboardSelectionContext: buildFrameSelectionContext(item, {
-          title: `镜头 ${item.shotNo}`,
+          title: $t('镜头 {{v1}}', { v1: item.shotNo }),
           imageUrl: item.imageUrl,
         }),
       }))
       const primaryImageUrl = imageResults[0]?.url || ''
       const primaryShotNo = imageShotItems[0]?.shotNo || shotStart
       const chunkSelectionContext = buildChunkSelectionContext({
-        title: `分镜续写 · 任务 ${taskId} 镜头${shotStart}-${shotEnd}`,
+        title: $t('分镜续写 · 任务 {{v1}} 镜头{{v2}}-{{v3}}', { v1: taskId, v2: shotStart, v3: shotEnd }),
         imageUrl: primaryImageUrl || undefined,
       })
 
@@ -6402,7 +6403,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const shotScriptNodeIds = shotItems
         .map((item, idx) => (
           createReplayTaskNode(
-            `镜头脚本 ${item.shotNo} · 任务 ${taskId}`,
+            $t('镜头脚本 {{v1}} · 任务 {{v2}}', { v1: item.shotNo, v2: taskId }),
             {
               kind: 'storyboardScript',
               autoLabel: false,
@@ -6419,7 +6420,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
               storyboardShotEnd: item.shotNo,
               storyboardShotNo: item.shotNo,
               storyboardSelectionContext: buildFrameSelectionContext(item, {
-                title: `镜头脚本 ${item.shotNo} · 任务 ${taskId}`,
+                title: $t('镜头脚本 {{v1}} · 任务 {{v2}}', { v1: item.shotNo, v2: taskId }),
               }),
               status: 'success',
               progress: 100,
@@ -6432,7 +6433,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
 
       const anchorNodeId = roleRefs.length
         ? createReplayTaskNode(
-            `角色锚点 · 任务 ${taskId} 镜头${shotStart}-${shotEnd}`,
+            $t('角色锚点 · 任务 {{v1}} 镜头{{v2}}-{{v3}}', { v1: taskId, v2: shotStart, v3: shotEnd }),
             {
               kind: 'image',
               autoLabel: false,
@@ -6444,9 +6445,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
               roleCardReferenceImages: roleRefs,
               imageUrl: roleRefs[0],
               imagePrimaryIndex: 0,
-              imageResults: roleRefs.map((url, idx) => ({ url, title: `角色锚点 ${idx + 1}` })),
+              imageResults: roleRefs.map((url, idx) => ({ url, title: $t('角色锚点 {{v1}}', { v1: idx + 1 }) })),
               storyboardSelectionContext: buildChunkSelectionContext({
-                title: `角色锚点 · 任务 ${taskId} 镜头${shotStart}-${shotEnd}`,
+                title: $t('角色锚点 · 任务 {{v1}} 镜头{{v2}}-{{v3}}', { v1: taskId, v2: shotStart, v3: shotEnd }),
                 imageUrl: roleRefs[0],
               }),
               status: 'success',
@@ -6457,7 +6458,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           )
         : ''
 
-      const storyboardNodeId = createReplayTaskNode(`分镜续写 · 任务 ${taskId} 镜头${shotStart}-${shotEnd}`, {
+      const storyboardNodeId = createReplayTaskNode($t('分镜续写 · 任务 {{v1}} 镜头{{v2}}-{{v3}}', { v1: taskId, v2: shotStart, v3: shotEnd }), {
         kind: 'novelStoryboard',
         autoLabel: false,
         storyboardCount: groupSize,
@@ -6488,7 +6489,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         progress: 100,
       })
       if (!storyboardNodeId) {
-        toast('创建后续分镜节点失败', 'error')
+        toast($('创建后续分镜节点失败'), 'error')
         return
       }
       const scriptGroupNodeIds = [...shotScriptNodeIds, anchorNodeId].filter(Boolean)
@@ -6609,10 +6610,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           targetHandle: 'in-image-wide',
         })
       }
-      toast(`已创建后续分镜节点（任务 ${taskId} · 镜头${shotStart}-${shotEnd}）`, 'success')
+      toast($t('已创建后续分镜节点（任务 {{v1}} · 镜头{{v2}}-{{v3}}）', { v1: taskId, v2: shotStart, v3: shotEnd }), 'success')
     } catch (err: any) {
       console.error(err)
-      toast(err?.message || '生成后续分镜失败', 'error')
+      toast(err?.message || $('生成后续分镜失败'), 'error')
     } finally {
       setNovelStoryboardContinueLoading(false)
     }
@@ -6623,7 +6624,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (status === 'running' || status === 'queued') {
       syncCreationSessionCheckpoint({
         id: novelStoryboardSessionId,
-        title: novelStoryboardProgressMeta.chapter > 0 ? `AI 创作 · 第${novelStoryboardProgressMeta.chapter}章` : 'AI 创作',
+        title: novelStoryboardProgressMeta.chapter > 0 ? $t('AI 创作 · 第{{v1}}章', { v1: novelStoryboardProgressMeta.chapter }) : $('AI 创作'),
         status: 'running',
         unitType: 'storyboard_chunk',
         currentIndex: Math.max(0, novelStoryboardCurrentIndex),
@@ -6631,8 +6632,8 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         currentNodeId: id,
         currentTaskId: novelStoryboardProgressMeta.taskId,
         summary: novelStoryboardCurrentIndex > 0
-          ? `正在生成第 ${novelStoryboardCurrentIndex} 个创作单元`
-          : '正在生成当前创作单元',
+          ? $t('正在生成第 {{v1}} 个创作单元', { v1: novelStoryboardCurrentIndex })
+          : $('正在生成当前创作单元'),
         updatedAt: Date.now(),
       })
       return
@@ -6640,7 +6641,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     if (status === 'success' && novelStoryboardCanGenerateNext) {
       syncCreationSessionCheckpoint({
         id: novelStoryboardSessionId,
-        title: novelStoryboardProgressMeta.chapter > 0 ? `AI 创作 · 第${novelStoryboardProgressMeta.chapter}章` : 'AI 创作',
+        title: novelStoryboardProgressMeta.chapter > 0 ? $t('AI 创作 · 第{{v1}}章', { v1: novelStoryboardProgressMeta.chapter }) : $('AI 创作'),
         status: 'paused',
         unitType: 'storyboard_chunk',
         currentIndex: Math.max(0, novelStoryboardCurrentIndex),
@@ -6648,14 +6649,14 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
         currentNodeId: id,
         currentTaskId: novelStoryboardProgressMeta.taskId,
         summary: novelStoryboardCurrentIndex > 0
-          ? `第 ${novelStoryboardCurrentIndex} 个创作单元已生成。可在节点上直接继续下一单元。`
-          : '当前创作单元已生成。可在节点上直接继续。',
+          ? $t('第 {{v1}} 个创作单元已生成。可在节点上直接继续下一单元。', { v1: novelStoryboardCurrentIndex })
+          : $('当前创作单元已生成。可在节点上直接继续。'),
         updatedAt: Date.now(),
       })
       return
     }
     if (status === 'error') {
-      failCreationSession(String((data as Record<string, unknown>)?.lastError || '创作单元执行失败'))
+      failCreationSession(String((data as Record<string, unknown>)?.lastError || $('创作单元执行失败')))
     }
   }, [
     data,
@@ -6685,7 +6686,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       ...(shotPrompts.length ? { storyboardShotPrompts: shotPrompts } : null),
       ...(script ? { storyboardScript: script, prompt: script } : null),
     })
-    toast('已迁移为小说分镜节点', 'success')
+    toast($('已迁移为小说分镜节点'), 'success')
   }, [data, id, kind, parseStoryboardShotsFromText, prompt, updateNodeData])
 
   const imageProps = {
@@ -6734,7 +6735,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
           progress: typeof data?.progress === 'number' && Number.isFinite(data.progress) ? data.progress : null,
         } satisfies AdoptedAssetMetadata,
       })
-      toast(`已采纳第 ${idx + 1} 张图片`, 'success')
+      toast($t('已采纳第 {{v1}} 张图片', { v1: idx + 1 }), 'success')
     },
     compact: hideImageMeta,
     showStateOverlay: showImageStateOverlay,
@@ -6752,11 +6753,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const handleEditSingleShot = React.useCallback((input: { url: string; label: string; sourceIndex?: number }) => {
     const shotUrl = String(input?.url || '').trim()
     if (!shotUrl) {
-      toast('镜头图片地址无效，无法编辑', 'error')
+      toast($('镜头图片地址无效，无法编辑'), 'error')
       return
     }
     if (typeof input.sourceIndex !== 'number' || input.sourceIndex < 0) {
-      toast('当前镜头来源不可编辑，请先完成分镜生图再试', 'warning')
+      toast($('当前镜头来源不可编辑，请先完成分镜生图再试'), 'warning')
       return
     }
     const sourceIndex = input.sourceIndex
@@ -6764,7 +6765,11 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       imageResults[imagePrimaryIndex] && typeof imageResults[imagePrimaryIndex]?.title === 'string'
         ? String(imageResults[imagePrimaryIndex]?.title || '').trim()
         : ''
-    const primaryIsShot = primaryTitle.startsWith('镜头')
+    // i18n 无关判断：分镜图标题为「镜头 N」/「Shot N」等，末位数字 = 1-based 镜头序号。
+    // 用「标题末尾数字 === 结果位置 + 1」判断是否为分镜图（首张可能是「合成图」，无尾号 → 需要 +1 偏移）。
+    const primaryShotNoMatch = /(\d+)\s*$/.exec(primaryTitle)
+    const primaryShotNo = primaryShotNoMatch ? Number(primaryShotNoMatch[1]) : null
+    const primaryIsShot = primaryShotNo !== null && primaryShotNo === imagePrimaryIndex + 1
     const shotSourceOffset =
       (kind === 'novelStoryboard' || kind === 'storyboardImage')
         ? (primaryIsShot ? Math.max(0, imagePrimaryIndex) : (imagePrimaryIndex >= 0 ? imagePrimaryIndex + 1 : 1))
@@ -6823,7 +6828,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     })
     const hostedUrl = typeof hosted?.data?.url === 'string' ? hosted.data.url.trim() : ''
     if (!hostedUrl) {
-      throw new Error('分镜已合成，但上传失败')
+      throw new Error($('分镜已合成，但上传失败'))
     }
 
     const sourceNode = useRFStore.getState().nodes.find((node) => String(node.id) === id)
@@ -6832,7 +6837,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       typeof sourceNode?.parentId === 'string' && sourceNode.parentId.trim()
         ? sourceNode.parentId.trim()
         : undefined
-    const composedTitle = `${(typeof data?.label === 'string' && data.label.trim()) || '分镜编辑'} · 合成图`
+    const composedTitle = $t('{{v1}} · 合成图', { v1: (typeof data?.label === 'string' && data.label.trim()) || $($('分镜编辑')) })
     const imageResultsPatch = [{ url: hostedUrl, title: composedTitle }]
 
     updateNodeData(id, {
@@ -6856,7 +6861,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       ...(parentId ? { parentId } : {}),
     })
     notifyAssetRefresh()
-    toast('已输出拼接图片节点', 'success')
+    toast($('已输出拼接图片节点'), 'success')
   }, [addNode, currentProject?.id, data?.label, id, nodeWidth, updateNodeData])
 
   const isRunning = status === 'running' || status === 'queued'
@@ -6879,7 +6884,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     onRun: runNode,
     onCancelRun: () => {
       cancelNodeExecution(id)
-      toast('已请求停止当前任务', 'info')
+      toast($('已请求停止当前任务'), 'info')
     },
   }
 
@@ -7037,7 +7042,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   }, [])
 
   const notifyStoryboardLimit = React.useCallback(() => {
-    toast('分镜总时长上限为 25 秒，请调整各镜头时长', 'error')
+    toast($('分镜总时长上限为 25 秒，请调整各镜头时长'), 'error')
   }, [])
 
   const applyStoryboardChange = React.useCallback(
@@ -7142,21 +7147,21 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const refText = typeof upstreamText === 'string' ? upstreamText.trim() : ''
     const theme = prompt.trim() || refText || String((data as any)?.label || '').trim()
     if (!theme) {
-      toast('请先输入主题或连接参考文本', 'warning')
+      toast($('请先输入主题或连接参考文本'), 'warning')
       return
     }
 
     const styleLabel = (() => {
       switch (storyboardImageStyle) {
         case 'comic':
-          return '美漫'
+          return $('美漫')
         case 'sketch':
-          return '草图'
+          return $('草图')
         case 'strip':
-          return '条漫'
+          return $('条漫')
         case 'realistic':
         default:
-          return '写实'
+          return $('写实')
       }
     })()
 
@@ -7193,7 +7198,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const apiKey = (ui.publicApiKey || '').trim()
       const token = getAuthToken()
       if (!apiKey && !token) {
-        toast('请先登录后再试', 'error')
+        toast($('请先登录后再试'), 'error')
         return
       }
       const persist = ui.assetPersistenceEnabled
@@ -7215,20 +7220,20 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       })
       const raw = extractTextFromTaskResult(taskRes.result).trim()
       if (!raw) {
-        toast('模型未返回分镜脚本，请稍后重试', 'error')
+        toast($('模型未返回分镜脚本，请稍后重试'), 'error')
         return
       }
 
       const normalizedShots = parseStoryboardShotsFromText(raw)
       if (normalizedShots.length !== desiredCount) {
-        throw new Error(`模型返回的分镜脚本数量不符合要求：expected=${desiredCount} actual=${normalizedShots.length}`)
+        throw new Error($t('模型返回的分镜脚本数量不符合要求：expected={{v1}} actual={{v2}}', { v1: desiredCount, v2: normalizedShots.length }))
       }
 
       setPrompt(raw)
       updateNodeData(id, { prompt: raw })
-      toast('已生成分镜脚本', 'success')
+      toast($('已生成分镜脚本'), 'success')
     } catch (error: any) {
-      const message = typeof error?.message === 'string' ? error.message : '生成脚本失败'
+      const message = typeof error?.message === 'string' ? error.message : $('生成脚本失败')
       toast(message, 'error')
     } finally {
       setStoryboardImageScriptLoading(false)
@@ -7306,7 +7311,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const apiKey = (ui.publicApiKey || '').trim()
       const token = getAuthToken()
       if (!apiKey && !token) {
-        toast('请先登录后再试', 'error')
+        toast($('请先登录后再试'), 'error')
         return
       }
       const persist = ui.assetPersistenceEnabled
@@ -7324,7 +7329,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       })
       const raw = extractTextFromTaskResult(taskRes.result).trim()
       if (!raw) {
-        toast('模型未返回分镜脚本，请稍后重试', 'error')
+        toast($('模型未返回分镜脚本，请稍后重试'), 'error')
         return
       }
 
@@ -7332,18 +7337,18 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const firstShotIdx = trimmed.search(/Shot\s+1:\s*/i)
       const normalizedText = firstShotIdx >= 0 ? trimmed.slice(firstShotIdx) : trimmed
       if (!/Shot\s+\d+:\s*/i.test(normalizedText)) {
-        throw new Error('模型未按要求返回 Shot 脚本；禁止使用本地模板回退')
+        throw new Error($('模型未按要求返回 Shot 脚本；禁止使用本地模板回退'))
       }
 
       const parsedScenes = enforceStoryboardTotalLimit(normalizeStoryboardScenes(normalizedText, null))
       if (parsedScenes.length !== desiredCount) {
-        throw new Error(`模型返回的 Shot 数量不符合要求：expected=${desiredCount} actual=${parsedScenes.length}`)
+        throw new Error($t('模型返回的 Shot 数量不符合要求：expected={{v1}} actual={{v2}}', { v1: desiredCount, v2: parsedScenes.length }))
       }
 
       applyStoryboardChange(() => parsedScenes)
-      toast('已生成分镜脚本', 'success')
+      toast($('已生成分镜脚本'), 'success')
     } catch (error: any) {
-      const message = typeof error?.message === 'string' ? error.message : '生成脚本失败'
+      const message = typeof error?.message === 'string' ? error.message : $('生成脚本失败')
       toast(message, 'error')
     } finally {
       setStoryboardScriptLoading(false)
@@ -7371,7 +7376,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
     const { nodes, edges } = useRFStore.getState()
     const upstreamContext = collectUpstreamVideoTextContext(nodes, edges, id)
     if (!upstreamContext.combinedText.trim()) {
-      toast('请先连接上游文本节点，再智能生成视频提示词', 'warning')
+      toast($('请先连接上游文本节点，再智能生成视频提示词'), 'warning')
       return
     }
 
@@ -7410,7 +7415,7 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       const apiKey = (ui.publicApiKey || '').trim()
       const token = getAuthToken()
       if (!apiKey && !token) {
-        toast('请先登录后再试', 'error')
+        toast($('请先登录后再试'), 'error')
         return
       }
       const promptRefineModelAlias = resolvePromptRefineModelAlias()
@@ -7427,16 +7432,16 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
       })
       const nextPrompt = extractTextFromTaskResult(taskRes.result).trim()
       if (!nextPrompt) {
-        throw new Error('模型未返回视频提示词')
+        throw new Error($('模型未返回视频提示词'))
       }
       if (/^ERROR\s*:/i.test(nextPrompt)) {
-        throw new Error(nextPrompt.replace(/^ERROR\s*:\s*/i, '').trim() || '上游文本不足，无法生成视频提示词')
+        throw new Error(nextPrompt.replace(/^ERROR\s*:\s*/i, '').trim() || $('上游文本不足，无法生成视频提示词'))
       }
       setPrompt(nextPrompt)
       updateNodeData(id, { prompt: nextPrompt })
-      toast('已根据上游文本生成视频提示词', 'success')
+      toast($('已根据上游文本生成视频提示词'), 'success')
     } catch (error: unknown) {
-      const message = error instanceof Error && error.message ? error.message : '生成视频提示词失败'
+      const message = error instanceof Error && error.message ? error.message : $('生成视频提示词失败')
       toast(message, 'error')
     } finally {
       setVideoPromptGenerationLoading(false)
@@ -7498,7 +7503,7 @@ const rewritePromptWithCharacters = React.useCallback(
     const apiKey = (ui.publicApiKey || '').trim()
     const token = getAuthToken()
     if (!apiKey && !token) {
-      throw new Error('未登录：请先登录后再试')
+      throw new Error($('未登录：请先登录后再试'))
     }
     const persist = ui.assetPersistenceEnabled
     const taskRes = await runPublicTask(apiKey, {
@@ -7598,7 +7603,7 @@ const rewritePromptWithCharacters = React.useCallback(
           updatedScenes.push({ ...scene, description: nextText })
         }
         if (aiFailed) {
-          setCharacterRewriteError('AI 替换失败，已使用本地规则处理')
+          setCharacterRewriteError($('AI 替换失败，已使用本地规则处理'))
         }
         applyStoryboardChange(() => updatedScenes)
       } else {
@@ -7611,7 +7616,7 @@ const rewritePromptWithCharacters = React.useCallback(
           })
         } catch (err) {
           console.warn('[TaskNode] rewrite via AI failed', err)
-          setCharacterRewriteError(err instanceof Error ? err.message : 'AI 替换失败，使用本地规则处理')
+          setCharacterRewriteError(err instanceof Error ? err.message : $('AI 替换失败，使用本地规则处理'))
         }
         let nextText = (rewritten || '').trim()
         if (!nextText) {
@@ -7672,7 +7677,7 @@ const rewritePromptWithCharacters = React.useCallback(
         tools.push(
           {
             key: 'image-edit',
-            label: '图片编辑',
+            label: $('图片编辑'),
             icon: <IconAdjustments size={16} />,
             onClick: () => openPoseEditor(),
           },
@@ -7682,13 +7687,13 @@ const rewritePromptWithCharacters = React.useCallback(
         tools.push(
           {
             key: 'camera-angle',
-            label: '角度',
+            label: $('角度'),
             icon: <IconCamera size={16} />,
             onClick: () => openCameraEditor(),
           },
           {
             key: 'lighting-edit',
-            label: '打光',
+            label: $('打光'),
             icon: <IconBulb size={16} />,
             onClick: () => openLightingEditor(),
           },
@@ -7697,7 +7702,7 @@ const rewritePromptWithCharacters = React.useCallback(
       if (supportsReversePrompt) {
         tools.push({
           key: 'reverse',
-          label: '反推提示词',
+          label: $('反推提示词'),
           icon: <IconPhotoSearch size={16} />,
           onClick: () => onReversePrompt(),
         })
@@ -7706,7 +7711,7 @@ const rewritePromptWithCharacters = React.useCallback(
     }
     // default tools for other node kinds (kept minimal)
     return [
-      { key: 'extend', label: '扩展', icon: <IconArrowsDiagonal2 size={16} />, onClick: () => {} },
+      { key: 'extend', label: $('扩展'), icon: <IconArrowsDiagonal2 size={16} />, onClick: () => {} },
     ] as { key: string; label: string; icon: JSX.Element; onClick: () => void }[]
   }, [
     hasImageResults,
@@ -7873,10 +7878,10 @@ const rewritePromptWithCharacters = React.useCallback(
   }, [hasImageResults, isVideoNode, hasVideoResults, isAudioNode, imageUrl, imageResults.length, data])
 
   const defaultLabel = React.useMemo(() => {
-    if (isComposerNode || hasVideo || hasVideoResults || schema.category === 'video') return '文生视频'
-    if (hasImageResults) return '图像节点'
-    if (isAudioNode) return '音频节点'
-    if (isSubtitleNode) return '字幕节点'
+    if (isComposerNode || hasVideo || hasVideoResults || schema.category === 'video') return $('文生视频')
+    if (hasImageResults) return $('图像节点')
+    if (isAudioNode) return $('音频节点')
+    if (isSubtitleNode) return $('字幕节点')
     return 'Task'
   }, [hasImageResults, hasVideo, hasVideoResults, isComposerNode, isAudioNode, isSubtitleNode, schema.category])
   const currentLabel = React.useMemo(() => {
@@ -7901,7 +7906,7 @@ const rewritePromptWithCharacters = React.useCallback(
   }, [labelDraft, defaultLabel, id, updateNodeLabel])
   const handleCancelRun = React.useCallback(() => {
     cancelNodeExecution(id)
-    setNodeStatus(id, 'error', { progress: 0, lastError: '任务已取消' })
+    setNodeStatus(id, 'error', { progress: 0, lastError: $('任务已取消') })
   }, [cancelNodeExecution, id, setNodeStatus])
   const shellOutline = 'none'
   const shellShadow = selected ? `${nodeShellShadow}, ${nodeShellGlow}` : nodeShellShadow
@@ -7920,13 +7925,13 @@ const rewritePromptWithCharacters = React.useCallback(
 
     /** 相机 presetId → 中文角度描述 */
     const cameraPresetLabels: Record<string, string> = {
-      front: '正面角度', left: '左侧角度', right: '右侧角度', back: '背面角度',
-      left45: '左45°角度', right45: '右45°角度', topDown: '俯视角度', lowAngle: '仰视角度',
+      front: $('正面角度'), left: $('左侧角度'), right: $('右侧角度'), back: $('背面角度'),
+      left45: $('左45°角度'), right45: $('右45°角度'), topDown: $('俯视角度'), lowAngle: $('仰视角度'),
     }
     /** 灯光 presetId → 中文打光描述 */
     const lightPresetLabels: Record<string, string> = {
-      left: '左侧打光', top: '顶部打光', right: '右侧打光', topLeft: '左上打光',
-      front: '前方打光', topRight: '右上打光', bottom: '底部打光', back: '后方打光',
+      left: $('左侧打光'), top: $('顶部打光'), right: $('右侧打光'), topLeft: $('左上打光'),
+      front: $('前方打光'), topRight: $('右上打光'), bottom: $('底部打光'), back: $('后方打光'),
     }
 
     const cameraRaw = selfData?.imageCameraControl as Record<string, unknown> | undefined
@@ -7939,10 +7944,10 @@ const rewritePromptWithCharacters = React.useCallback(
     const lightingEnabled = Boolean(lightMain?.enabled) || Boolean(lightFill?.enabled)
 
     const parts: string[] = []
-    if (cameraEnabled) parts.push(cameraPresetLabels[String(cameraRaw?.presetId || '')] || '角度')
+    if (cameraEnabled) parts.push(cameraPresetLabels[String(cameraRaw?.presetId || '')] || $('角度'))
     if (lightingEnabled) {
       const activeLight = lightMain?.enabled ? lightMain : lightFill
-      parts.push(lightPresetLabels[String(activeLight?.presetId || '')] || '打光')
+      parts.push(lightPresetLabels[String(activeLight?.presetId || '')] || $('打光'))
     }
 
     // 原节点名：优先取上游连线的源节点标题（真正的「原节点」）；
@@ -7974,7 +7979,7 @@ const rewritePromptWithCharacters = React.useCallback(
       // 不能一律回退成「局部修改」——那不是用户实际执行的操作
       const styleConvertLabel = getEditTypeLabel(String(selfData?.editType || '').trim())
       const isStyleConvert = STYLE_CONVERT_EDIT_TYPES.has(String(selfData?.editType || '').trim() as PoseEditMode)
-      parts.push(isStyleConvert ? styleConvertLabel : (kind === 'image' ? '尺寸调整' : '局部修改'))
+      parts.push(isStyleConvert ? styleConvertLabel : (kind === 'image' ? $('尺寸调整') : $('局部修改')))
     }
 
     const typeText = parts.join('+')
@@ -8003,36 +8008,36 @@ const rewritePromptWithCharacters = React.useCallback(
     let badgeLabel = ''
     if (category === 1) {
       paletteKey = hasParent ? 'clone' : 'role'
-      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? '子造型' : '角色')
+      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? $('子造型') : $('角色'))
     } else if (category === 2) {
       paletteKey = hasParent ? 'subscene' : 'scene'
-      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? '子场景' : '场景')
+      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || (hasParent ? $('子场景') : $('场景'))
     } else if (category === 3) {
       paletteKey = 'prop'
-      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || '道具'
+      badgeLabel = String(nodeData.lensTypeLabel || '').trim() || $('道具')
     } else if (category === 4) {
       // assetCategory=4：站位参考图（如视频抽帧），与 Lens 的站位参考分类一致
       paletteKey = 'free'
-      badgeLabel = '站位参考'
+      badgeLabel = $('站位参考')
     } else if (hasStagingAnchorBinding) {
       // 用户手动把锚点类型改成「站位参考」：角标跟随锚点，优先级高于「编辑」。
       // 这里直接检查绑定的 kind 而不只用 primarySemanticAnchor：后者按优先级列表
       // 取值，若节点还残留 character 等更早期绑定，会盖住 staging 导致角标不更新。
       paletteKey = 'free'
-      badgeLabel = '站位参考'
+      badgeLabel = $('站位参考')
     } else if (category !== null) {
       // 其它未投影为画布节点的资产分类，不显示角标
       return null
     } else if (String(nodeData.refNodeId ?? '').trim()) {
       paletteKey = 'derived'
-      badgeLabel = '编辑'
+      badgeLabel = $('编辑')
     } else if (String(nodeData.source ?? '').trim() === VIDEO_FRAME_SOURCE) {
       // 视频抽帧图：空间站位/画面参考，角标与锚点类型保持一致
       paletteKey = 'free'
-      badgeLabel = '站位参考'
+      badgeLabel = $('站位参考')
     } else {
       paletteKey = 'free'
-      badgeLabel = '自由'
+      badgeLabel = $('自由')
     }
     const tone = isDarkUi ? IMAGE_NODE_BADGE_PALETTE[paletteKey].dark : IMAGE_NODE_BADGE_PALETTE[paletteKey].light
     return {
@@ -8053,7 +8058,7 @@ const rewritePromptWithCharacters = React.useCallback(
     if (!isFreeImageNode) return ''
     const rawLabel = String((data as Record<string, unknown>).label ?? '').trim()
     const schemaLabel = String(schema.label || '').trim()
-    if (!rawLabel || rawLabel === schemaLabel || isAutoGeneratedNodeLabel(rawLabel, schemaLabel)) return '生图'
+    if (!rawLabel || rawLabel === schemaLabel || isAutoGeneratedNodeLabel(rawLabel, schemaLabel)) return $('生图')
     return rawLabel
   })()
   const imageNodeHeaderTitle = derivedSubtitle || (isFreeImageNode ? freeImageHeaderTitle : currentLabel)
@@ -8091,7 +8096,7 @@ const rewritePromptWithCharacters = React.useCallback(
       creationStage: inferredProductionMeta.creationStage,
     })
     appendLog(id, `[${new Date().toLocaleTimeString()}] 已取消锚点`)
-    toast('已取消锚点', 'info')
+    toast($('已取消锚点'), 'info')
   }, [appendLog, id, inferredProductionMeta.creationStage, inferredProductionMeta.productionLayer, updateNodeData])
   const handleApproveAnchor = React.useCallback(() => {
     updateNodeData(id, {
@@ -8100,7 +8105,7 @@ const rewritePromptWithCharacters = React.useCallback(
       approvalStatus: 'approved',
     })
     appendLog(id, `[${new Date().toLocaleTimeString()}] 已确认为锚点`)
-    toast('已确认为锚点', 'success')
+    toast($('已确认为锚点'), 'success')
   }, [appendLog, id, updateNodeData])
   const toolbarMetaActions = React.useMemo(() => {
     const actions: ToolbarMetaAction[] = []
@@ -8109,7 +8114,7 @@ const rewritePromptWithCharacters = React.useCallback(
     if (canToggleAnchor || canToggleApproval) {
       actions.push({
         key: 'toggle-anchor',
-        label: isAnchorActive ? '取消锚点' : '锚点',
+        label: isAnchorActive ? $('取消锚点') : $('锚点'),
         icon: <IconTarget size={16} />,
         onClick: isAnchorActive ? handleUnsetAnchor : handleApproveAnchor,
         active: isAnchorActive,
@@ -8383,7 +8388,7 @@ const rewritePromptWithCharacters = React.useCallback(
   }, [data])
   const smartVideoPromptAction = isVideoNode
     ? {
-        title: '智能生成当前视频提示词',
+        title: $('智能生成当前视频提示词'),
         onClick: () => {
           void handleSmartGenerateVideoPrompt()
         },
@@ -8397,7 +8402,7 @@ const rewritePromptWithCharacters = React.useCallback(
       controlValueStyle={controlValueStyle}
       summaryModelLabel={summaryModelLabel}
       summaryDuration={summaryDuration}
-      summaryQuality={videoHd ? 'HD' : '标准'}
+      summaryQuality={videoHd ? 'HD' : $('标准')}
       summaryResolution={summaryResolution}
       summaryExec={summaryExec}
       showModelMenu={hasModelSelect && modelMenuOptions.length > 0}
@@ -8408,7 +8413,7 @@ const rewritePromptWithCharacters = React.useCallback(
       onDurationChange={handleToolbarDurationChange}
       showQualityMenu={false}
       qualityOptions={[
-        { value: 'standard', label: '标准' },
+        { value: 'standard', label: $('标准') },
         { value: 'hd', label: 'HD' },
       ]}
       onQualityChange={(value) => {
@@ -8417,7 +8422,7 @@ const rewritePromptWithCharacters = React.useCallback(
         updateNodeData(id, { videoHd: next })
       }}
       showResolutionMenu={showResolutionMenu}
-      resolutionTitle={isVideoNode ? '画幅' : '比例'}
+      resolutionTitle={isVideoNode ? $('画幅') : $('比例')}
       resolutionOptions={isVideoNode
         ? configuredSizeOptions
         : configuredImageAspectOptions.length
@@ -8461,7 +8466,7 @@ const rewritePromptWithCharacters = React.useCallback(
       controlValueStyle={controlValueStyle}
       summaryModelLabel={summaryModelLabel}
       summaryDuration={summaryDuration}
-      summaryQuality={videoHd ? 'HD' : '标准'}
+      summaryQuality={videoHd ? 'HD' : $('标准')}
       summaryResolution={summaryResolution}
       summaryExec={summaryExec}
       showModelMenu={hasModelSelect && modelMenuOptions.length > 0}
@@ -8474,7 +8479,7 @@ const rewritePromptWithCharacters = React.useCallback(
       qualityOptions={lensQualityOptions}
       onQualityChange={handleToolbarQualityChange}
       showResolutionMenu={showResolutionMenu}
-      resolutionTitle={isVideoNode ? '画幅' : '比例'}
+      resolutionTitle={isVideoNode ? $('画幅') : $('比例')}
       resolutionOptions={isVideoNode
         ? configuredSizeOptions
         : configuredImageAspectOptions.length
@@ -8538,8 +8543,8 @@ const rewritePromptWithCharacters = React.useCallback(
           variant="subtle"
           size="sm"
           onClick={() => setMediaFocusOptionsOpen((current) => !current)}
-          aria-label="打开媒体节点高级设置"
-          title="更多设置"
+          aria-label={$("打开媒体节点高级设置")}
+          title={$("更多设置")}
         >
           <IconAdjustments size={16} />
         </ActionIcon>
@@ -8550,7 +8555,7 @@ const rewritePromptWithCharacters = React.useCallback(
             <div className="tc-task-node__media-focus-settings-group">
               <Group className="tc-task-node__media-focus-settings-header" justify="space-between" gap={6}>
                 <Text className="tc-task-node__media-focus-settings-label" size="xs" fw={700}>
-                  Veo 图像控制
+                  {$('Veo 图像控制')}
                 </Text>
                 <Badge className="tc-task-node__media-focus-settings-badge" size="xs" color="grape">
                   Veo3
@@ -8558,7 +8563,7 @@ const rewritePromptWithCharacters = React.useCallback(
               </Group>
               {hasStoryboardImageUpstreamForVideo && (
                 <Text className="tc-task-node__media-focus-settings-help" size="xs" c="dimmed">
-                  已连接分镜节点时，会默认把“4图合成图”作为首帧输入。
+                  {$('已连接分镜节点时，会默认把“4图合成图”作为首帧输入。')}
                 </Text>
               )}
               <Group className="tc-task-node__media-focus-settings-actions" gap={6} wrap="wrap">
@@ -8568,7 +8573,7 @@ const rewritePromptWithCharacters = React.useCallback(
                   variant={trimmedFirstFrameUrl ? 'light' : 'subtle'}
                   onClick={() => openVeoModal('first')}
                 >
-                  {trimmedFirstFrameUrl ? '更换首帧' : '选择首帧'}
+                  {trimmedFirstFrameUrl ? $('更换首帧') : $('选择首帧')}
                 </Button>
                 <Button
                   className="tc-task-node__media-focus-settings-button"
@@ -8577,7 +8582,7 @@ const rewritePromptWithCharacters = React.useCallback(
                   disabled={!firstFrameLocked}
                   onClick={() => openVeoModal('last')}
                 >
-                  {trimmedLastFrameUrl ? '更换尾帧' : '选择尾帧'}
+                  {trimmedLastFrameUrl ? $('更换尾帧') : $('选择尾帧')}
                 </Button>
                 <Button
                   className="tc-task-node__media-focus-settings-button"
@@ -8585,12 +8590,12 @@ const rewritePromptWithCharacters = React.useCallback(
                   variant="subtle"
                   onClick={() => openVeoModal('reference')}
                 >
-                  管理参考图
+                  {$('管理参考图')}
                 </Button>
               </Group>
               <Group className="tc-task-node__media-focus-settings-actions" gap={6} wrap="wrap">
                 <Text className="tc-task-node__media-focus-settings-help" size="xs" c="dimmed">
-                  参考图 {veoReferenceImages.length}/{MAX_VEO_REFERENCE_IMAGES}
+                  {$('参考图')} {veoReferenceImages.length}/{MAX_VEO_REFERENCE_IMAGES}
                 </Text>
                 {trimmedFirstFrameUrl && (
                   <Button
@@ -8600,7 +8605,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     color="red"
                     onClick={() => handleSetFirstFrameUrl('')}
                   >
-                    清除首帧
+                    {$('清除首帧')}
                   </Button>
                 )}
                 {trimmedLastFrameUrl && (
@@ -8611,7 +8616,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     color="red"
                     onClick={() => handleSetLastFrameUrl('')}
                   >
-                    清除尾帧
+                    {$('清除尾帧')}
                   </Button>
                 )}
               </Group>
@@ -8628,12 +8633,12 @@ const rewritePromptWithCharacters = React.useCallback(
                         <img
                           className="tc-task-node__media-focus-settings-preview-image nodrag nopan"
                           src={trimmedFirstFrameUrl}
-                          alt="首帧"
+                          alt={$("首帧")}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       </div>
                       <Text className="tc-task-node__media-focus-settings-preview-label" size="xs" c="dimmed">
-                        首帧
+                        {$('首帧')}
                       </Text>
                     </Paper>
                   )}
@@ -8648,12 +8653,12 @@ const rewritePromptWithCharacters = React.useCallback(
                         <img
                           className="tc-task-node__media-focus-settings-preview-image nodrag nopan"
                           src={trimmedLastFrameUrl}
-                          alt="尾帧"
+                          alt={$("尾帧")}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       </div>
                       <Text className="tc-task-node__media-focus-settings-preview-label" size="xs" c="dimmed">
-                        尾帧
+                        {$('尾帧')}
                       </Text>
                     </Paper>
                   )}
@@ -8665,7 +8670,7 @@ const rewritePromptWithCharacters = React.useCallback(
           {allowNodePresetForPrompt && (
             <div className="tc-task-node__media-focus-settings-group">
               <Text className="tc-task-node__media-focus-settings-label" size="xs" fw={700}>
-                预设能力
+                {$('预设能力')}
               </Text>
               <Select
                 className="tc-task-node__media-focus-settings-select"
@@ -8673,11 +8678,11 @@ const rewritePromptWithCharacters = React.useCallback(
                 data={promptPresetOptions}
                 value={selectedPresetId}
                 onChange={handlePresetChange}
-                placeholder={promptPresetOptions.length ? '选择预设能力' : '暂无预设能力'}
+                placeholder={promptPresetOptions.length ? $('选择预设能力') : $('暂无预设能力')}
                 searchable
                 clearable
                 disabled={viewOnly}
-                nothingFoundMessage="没有匹配的预设"
+                nothingFoundMessage={$("没有匹配的预设")}
               />
               {!viewOnly && (
                 <Group className="tc-task-node__media-focus-settings-actions" gap={6}>
@@ -8690,7 +8695,7 @@ const rewritePromptWithCharacters = React.useCallback(
                       setPresetModalOpen(true)
                     }}
                   >
-                    新增预设
+                    {$('新增预设')}
                   </Button>
                   <Button
                     className="tc-task-node__media-focus-settings-button"
@@ -8701,7 +8706,7 @@ const rewritePromptWithCharacters = React.useCallback(
                       setPromptSamplesOpen(true)
                     }}
                   >
-                    提示词示例
+                    {$('提示词示例')}
                   </Button>
                 </Group>
               )}
@@ -8711,21 +8716,21 @@ const rewritePromptWithCharacters = React.useCallback(
           {hasAnchorBinding && (
             <div className="tc-task-node__media-focus-settings-group">
               <Text className="tc-task-node__media-focus-settings-label" size="xs" fw={700}>
-                锚点绑定
+                {$('锚点绑定')}
               </Text>
               <Select
                 className="tc-task-node__media-focus-settings-select"
                 size="xs"
                 data={[
-                  { value: 'character', label: '角色' },
-                  { value: 'scene', label: '场景' },
-                  { value: 'prop', label: '道具' },
-                  { value: 'staging', label: '站位参考' },
-                  { value: 'shot', label: '分镜' },
-                  { value: 'story', label: '剧情' },
-                  { value: 'asset', label: '资产' },
-                  { value: 'context', label: '上下文' },
-                  { value: 'authority_base_frame', label: '权威基底帧' },
+                  { value: 'character', label: $('角色') },
+                  { value: 'scene', label: $('场景') },
+                  { value: 'prop', label: $('道具') },
+                  { value: 'staging', label: $('站位参考') },
+                  { value: 'shot', label: $('分镜') },
+                  { value: 'story', label: $('剧情') },
+                  { value: 'asset', label: $('资产') },
+                  { value: 'context', label: $('上下文') },
+                  { value: 'authority_base_frame', label: $('权威基底帧') },
                 ]}
                 value={anchorBindingKind}
                 onChange={handleAnchorBindingKindChange}
@@ -8736,7 +8741,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 size="xs"
                 value={anchorBindingLabel}
                 onChange={(e) => setAnchorBindingLabel(e.currentTarget.value)}
-                placeholder="例如：方源 / 青茅山宗祠 / 春秋蝉"
+                placeholder={$("例如：方源 / 青茅山宗祠 / 春秋蝉")}
               />
               <Button
                 className="tc-task-node__media-focus-settings-button"
@@ -8747,7 +8752,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 disabled={bindAnchorLoading || !primaryImageForAnchorBinding}
                 onClick={() => { void handleBindPrimaryAnchor() }}
               >
-                绑定当前主图
+                {$('绑定当前主图')}
               </Button>
               {!!anchorBindStatusText && (
                 <Text className="tc-task-node__media-focus-settings-help" size="xs" c="dimmed">
@@ -8760,7 +8765,7 @@ const rewritePromptWithCharacters = React.useCallback(
           {connectedCharacterOptions.length > 0 && (
             <div className="tc-task-node__media-focus-settings-group">
               <Text className="tc-task-node__media-focus-settings-label" size="xs" fw={700}>
-                角色替换
+                {$('角色替换')}
               </Text>
               <Select
                 className="tc-task-node__media-focus-settings-select"
@@ -8783,7 +8788,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 loading={characterRewriteLoading}
                 onClick={() => { void handleApplyCharacterMentions() }}
               >
-                一键替换 @引用
+                {$('一键替换 @引用')}
               </Button>
               {characterRewriteError && (
                 <Text className="tc-task-node__media-focus-settings-help" size="xs" c="red">
@@ -8839,7 +8844,7 @@ const rewritePromptWithCharacters = React.useCallback(
           currentLabel={imageNodeHeaderTitle}
           subtitle={
             derivedSubtitle
-              ? (schema.label || '图片编辑')
+              ? (schema.label || $('图片编辑'))
               : (isLensProjectionNode
                 ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel)
                 : subtitle)
@@ -8916,7 +8921,7 @@ const rewritePromptWithCharacters = React.useCallback(
             {!isLensScriptProjectionNode && freeformSplit && (
               <>
                 <div className="tc-task-node__text-inline-divider" style={{ width: 1, height: 20, background: inlineDividerColor }} />
-                <Tooltip label="用本节点正文拆分镜，按镜头在画布上生成分镜节点与角色/场景/道具节点（不写入剧集分镜表）" position="bottom" withArrow>
+                <Tooltip label={$("用本节点正文拆分镜，按镜头在画布上生成分镜节点与角色/场景/道具节点（不写入剧集分镜表）")} position="bottom" withArrow>
                   <Button
                     className="tc-task-node__text-inline-action tc-task-node__freeform-split-action"
                     variant="light"
@@ -8927,7 +8932,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     leftSection={<IconScissors size={13} />}
                     onClick={() => freeformSplit.splitFreeform(id, textNodePlainText)}
                   >
-                    拆分镜
+                    {$('拆分镜')}
                   </Button>
                 </Tooltip>
               </>
@@ -8945,27 +8950,27 @@ const rewritePromptWithCharacters = React.useCallback(
               </Tooltip>
             ))}
             <div className="tc-task-node__text-inline-divider" style={{ width: 1, height: 20, background: inlineDividerColor }} />
-            <Tooltip label="加粗" position="bottom" withArrow>
+            <Tooltip label={$("加粗")} position="bottom" withArrow>
               <ActionIcon className="tc-task-node__text-inline-action" variant="transparent" size="sm" onClick={() => runRichCommand('bold')}>
                 <IconBold size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="斜体" position="bottom" withArrow>
+            <Tooltip label={$("斜体")} position="bottom" withArrow>
               <ActionIcon className="tc-task-node__text-inline-action" variant="transparent" size="sm" onClick={() => runRichCommand('italic')}>
                 <IconItalic size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="有序列表" position="bottom" withArrow>
+            <Tooltip label={$("有序列表")} position="bottom" withArrow>
               <ActionIcon className="tc-task-node__text-inline-action" variant="transparent" size="sm" onClick={() => applyList(true)}>
                 <IconListNumbers size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="无序列表" position="bottom" withArrow>
+            <Tooltip label={$("无序列表")} position="bottom" withArrow>
               <ActionIcon className="tc-task-node__text-inline-action" variant="transparent" size="sm" onClick={() => applyList(false)}>
                 <IconList size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="分割线" position="bottom" withArrow>
+            <Tooltip label={$("分割线")} position="bottom" withArrow>
               <ActionIcon className="tc-task-node__text-inline-action" variant="transparent" size="sm" onClick={insertDivider}>
                 <IconSeparatorHorizontal size={16} />
               </ActionIcon>
@@ -8981,7 +8986,7 @@ const rewritePromptWithCharacters = React.useCallback(
             >
               <Popover.Target>
                 <div>
-                  <Tooltip label="文字颜色" position="bottom" withArrow>
+                  <Tooltip label={$("文字颜色")} position="bottom" withArrow>
                     <ActionIcon
                       className="tc-task-node__text-inline-action"
                       variant="transparent"
@@ -9023,7 +9028,7 @@ const rewritePromptWithCharacters = React.useCallback(
             >
               <Popover.Target>
                 <div>
-                  <Tooltip label="背景色" position="bottom" withArrow>
+                  <Tooltip label={$("背景色")} position="bottom" withArrow>
                     <ActionIcon
                       className="tc-task-node__text-inline-action"
                       variant="transparent"
@@ -9137,7 +9142,7 @@ const rewritePromptWithCharacters = React.useCallback(
         >
           <Stack className="tc-task-node__doc-preview-stack" gap={6}>
             <Text className="tc-task-node__doc-preview-title" size="xs" c="dimmed">
-              {schema.label || '文稿'}预览
+              {schema.label || $('文稿')}{$('预览')}
             </Text>
             <Text
               className="tc-task-node__doc-preview-content"
@@ -9148,7 +9153,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 lineHeight: 1.45,
               }}
             >
-              {docPreviewText || '当前文稿为空。选中节点后可在底部工具栏编辑，并保存到项目素材。'}
+              {docPreviewText || $('当前文稿为空。选中节点后可在底部工具栏编辑，并保存到项目素材。')}
             </Text>
           </Stack>
         </Paper>
@@ -9205,8 +9210,8 @@ const rewritePromptWithCharacters = React.useCallback(
                     <Group className="tc-task-node__doc-material-row" justify="space-between" gap={8}>
                       <Text className="tc-task-node__doc-material-text" size="xs" c="dimmed">
                         {currentProject?.id
-                          ? `项目素材已关联：${currentProject.name || currentProject.id}`
-                          : '未关联项目：先在顶部选择项目'}
+                          ? $t('项目素材已关联：{{v1}}', { v1: currentProject.name || currentProject.id })
+                          : $('未关联项目：先在顶部选择项目')}
                       </Text>
                       <Button
                         className="tc-task-node__doc-material-save"
@@ -9216,7 +9221,7 @@ const rewritePromptWithCharacters = React.useCallback(
                         loading={materialSaving}
                         disabled={!currentProject?.id}
                       >
-                        保存素材
+                        {$('保存素材')}
                       </Button>
                     </Group>
                   </Paper>
@@ -9244,7 +9249,7 @@ const rewritePromptWithCharacters = React.useCallback(
                       <img
                         className="tc-task-node__composer-upstream-image"
                         src={upstreamImageUrl}
-                        alt="上游图片素材"
+                        alt={$("上游图片素材")}
                         style={{
                           width: '100%',
                           height: 'auto',
@@ -9263,7 +9268,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     <Group className="tc-task-node__character-summary-actions" align="flex-end" gap="xs" wrap="wrap">
                       <Select
                         className="tc-task-node__character-summary-select"
-                        label="替换模型"
+                        label={$("替换模型")}
                         size="xs"
                         withinPortal
                         data={
@@ -9284,7 +9289,7 @@ const rewritePromptWithCharacters = React.useCallback(
                         loading={characterRewriteLoading}
                         onClick={() => { void handleApplyCharacterMentions() }}
                       >
-                        一键替换 @引用
+                        {$('一键替换 @引用')}
                       </Button>
                     </Group>
                     {characterRewriteError && (
@@ -9342,7 +9347,7 @@ const rewritePromptWithCharacters = React.useCallback(
                     )}
                     placeholder={
                       isVideoNode
-                        ? '描述这条视频要生成的画面、动作和情绪'
+                        ? $('描述这条视频要生成的画面、动作和情绪')
                         : undefined
                     }
                     minRows={isVideoNode ? 3 : 2}
@@ -9446,18 +9451,18 @@ const rewritePromptWithCharacters = React.useCallback(
         className="task-node-preset-modal"
         opened={presetModalOpen}
         onClose={() => setPresetModalOpen(false)}
-        title="新增预设能力"
+        title={$("新增预设能力")}
         centered
         size="md"
       >
         <Stack className="task-node-preset-modal__stack" gap="sm">
           <Select
             className="task-node-preset-modal__type"
-            label="类型"
+            label={$("类型")}
             data={[
-              { value: 'text', label: '文本' },
-              { value: 'image', label: '图片' },
-              { value: 'video', label: '视频' },
+              { value: 'text', label: $('文本') },
+              { value: 'image', label: $('图片') },
+              { value: 'video', label: $('视频') },
             ]}
             value={newPresetType}
             onChange={(value) => setNewPresetType((value as LlmNodePresetType) || 'text')}
@@ -9465,15 +9470,15 @@ const rewritePromptWithCharacters = React.useCallback(
           />
           <TextInput
             className="task-node-preset-modal__title"
-            label="预设名称"
-            placeholder="例如：产品卖点增强"
+            label={$("预设名称")}
+            placeholder={$("例如：产品卖点增强")}
             value={newPresetTitle}
             onChange={(e) => setNewPresetTitle(e.currentTarget.value)}
           />
           <Textarea
             className="task-node-preset-modal__prompt"
-            label="提示词"
-            placeholder="输入该预设的提示词模板"
+            label={$("提示词")}
+            placeholder={$("输入该预设的提示词模板")}
             minRows={5}
             value={newPresetPrompt}
             onChange={(e) => setNewPresetPrompt(e.currentTarget.value)}
@@ -9484,19 +9489,19 @@ const rewritePromptWithCharacters = React.useCallback(
               variant="subtle"
               onClick={() => setPresetModalOpen(false)}
             >
-              取消
+              {$('取消')}
             </Button>
             <Button
               className="task-node-preset-modal__save"
               onClick={() => { void handleCreateNodePreset() }}
               loading={presetSaving}
             >
-              保存预设
+              {$('保存预设')}
             </Button>
           </Group>
           {presetLoading && (
             <Text className="task-node-preset-modal__loading" size="xs" c="dimmed">
-              正在同步预设列表...
+              {$('正在同步预设列表...')}
             </Text>
           )}
         </Stack>

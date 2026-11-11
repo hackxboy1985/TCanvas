@@ -27,6 +27,7 @@ import {
   type AiCharacterLibraryCharacterDto,
   type AiCharacterLibrarySyncStateDto,
 } from '../../api/server'
+import { $, $t } from '../../canvas/i18n'
 
 type CharacterFilterState = {
   gender: string
@@ -69,7 +70,7 @@ function normalizeText(value: unknown): string {
 }
 
 function getCharacterDisplayName(character: AiCharacterLibraryCharacterDto): string {
-  return normalizeText(character.identity_hint) || normalizeText(character.character_id) || '未命名角色'
+  return normalizeText(character.identity_hint) || normalizeText(character.character_id) || $('未命名角色')
 }
 
 function buildCharacterSummary(character: AiCharacterLibraryCharacterDto): string {
@@ -162,7 +163,7 @@ function FilterPopover(input: {
                 input.onOpenedChange(false)
               }}
             >
-              清除筛选
+              {$('清除筛选')}
             </button>
           ) : null}
         </Stack>
@@ -247,7 +248,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
         setSelectedCharacterId('')
       }
     } catch (loadError: unknown) {
-      setError(loadError instanceof Error ? loadError.message : '角色库加载失败')
+      setError(loadError instanceof Error ? loadError.message : $('角色库加载失败'))
       setCharacters([])
       setTotal(0)
       setNextOffset(0)
@@ -284,7 +285,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
       setTotal(result.total)
       setSyncState(result.syncState)
     } catch (loadError: unknown) {
-      setError(loadError instanceof Error ? loadError.message : '角色库加载失败')
+      setError(loadError instanceof Error ? loadError.message : $('角色库加载失败'))
     } finally {
       setLoadingMore(false)
     }
@@ -392,8 +393,8 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
     }
   }, [hasMore, loadMoreCharacters, loading, loadingMore])
 
-  const detailTitle = selectedCharacter ? getCharacterDisplayName(selectedCharacter) : 'AI角色库'
-  const syncMetaLabel = syncState?.lastSyncedAt ? `已同步到本地 · ${syncState.lastSyncedAt}` : '本地角色库'
+  const detailTitle = selectedCharacter ? getCharacterDisplayName(selectedCharacter) : $('AI角色库')
+  const syncMetaLabel = syncState?.lastSyncedAt ? $t('已同步到本地 · {{time}}', { time: syncState.lastSyncedAt }) : $('本地角色库')
 
   return (
     <Modal
@@ -410,14 +411,14 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
         <div className="ai-character-library-shell">
           <div className="ai-character-library-header">
             <Text className="ai-character-library-header-title" size="xl" fw={800}>
-              AI角色库
+              {$('AI角色库')}
             </Text>
             <ActionIcon
               className="ai-character-library-header-close"
               variant="subtle"
               color="gray"
               onClick={props.onClose}
-              aria-label="关闭角色库"
+              aria-label={$('关闭角色库')}
             >
               <IconX size={20} />
             </ActionIcon>
@@ -438,7 +439,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                     className={`ai-character-library-sidebar-item${isActive ? ' is-active' : ''}`}
                     onClick={() => setSelectedWorldview(item)}
                   >
-                    <span>{item === 'all' ? '全部角色' : item}</span>
+                    <span>{item === 'all' ? $('全部角色') : item}</span>
                     {item !== 'all' ? <IconChevronRight size={16} /> : null}
                   </button>
                 )
@@ -449,16 +450,16 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                 <Group className="ai-character-library-toolbar" justify="space-between" align="flex-start">
                   <Stack className="ai-character-library-toolbar-copy" gap={4}>
                     <Text className="ai-character-library-toolbar-title" size="lg" fw={700}>
-                      {selectedWorldview === 'all' ? '全部角色' : selectedWorldview}
+                      {selectedWorldview === 'all' ? $('全部角色') : selectedWorldview}
                     </Text>
                     <Text className="ai-character-library-toolbar-subtitle" size="sm" c="dimmed">
-                      当前结果 {filteredCharacters.length} / 本地总数 {total}
+                      {$t('当前结果 {{current}} / 本地总数 {{total}}', { current: filteredCharacters.length, total })}
                     </Text>
                   </Stack>
                   <TextInput
                     className="ai-character-library-search"
                     leftSection={<IconSearch size={14} />}
-                    placeholder="搜索角色、时代、服装或特征"
+                    placeholder={$('搜索角色、时代、服装或特征')}
                     value={searchKeyword}
                     onChange={(event) => setSearchKeyword(event.currentTarget.value)}
                   />
@@ -466,7 +467,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                 <ScrollArea className="ai-character-library-filter-line-scroll" type="never">
                   <Group className="ai-character-library-filter-line" gap={14} wrap="nowrap">
                     <FilterPopover
-                      label="性别"
+                      label={$('性别')}
                       values={filterValueOptions.gender}
                       value={filters.gender}
                       opened={openFilterKey === 'gender'}
@@ -474,7 +475,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, gender: next }))}
                     />
                     <FilterPopover
-                      label="年龄段"
+                      label={$('年龄段')}
                       values={filterValueOptions.ageGroup}
                       value={filters.ageGroup}
                       opened={openFilterKey === 'ageGroup'}
@@ -482,7 +483,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, ageGroup: next }))}
                     />
                     <FilterPopover
-                      label="物种"
+                      label={$('物种')}
                       values={filterValueOptions.species}
                       value={filters.species}
                       opened={openFilterKey === 'species'}
@@ -490,7 +491,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, species: next }))}
                     />
                     <FilterPopover
-                      label="体格"
+                      label={$('体格')}
                       values={filterValueOptions.physique}
                       value={filters.physique}
                       opened={openFilterKey === 'physique'}
@@ -498,7 +499,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, physique: next }))}
                     />
                     <FilterPopover
-                      label="身高"
+                      label={$('身高')}
                       values={filterValueOptions.heightLevel}
                       value={filters.heightLevel}
                       opened={openFilterKey === 'heightLevel'}
@@ -506,7 +507,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, heightLevel: next }))}
                     />
                     <FilterPopover
-                      label="肤色"
+                      label={$('肤色')}
                       values={filterValueOptions.skinColor}
                       value={filters.skinColor}
                       opened={openFilterKey === 'skinColor'}
@@ -514,7 +515,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, skinColor: next }))}
                     />
                     <FilterPopover
-                      label="发长"
+                      label={$('发长')}
                       values={filterValueOptions.hairLength}
                       value={filters.hairLength}
                       opened={openFilterKey === 'hairLength'}
@@ -522,7 +523,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, hairLength: next }))}
                     />
                     <FilterPopover
-                      label="发色"
+                      label={$('发色')}
                       values={filterValueOptions.hairColor}
                       value={filters.hairColor}
                       opened={openFilterKey === 'hairColor'}
@@ -530,7 +531,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onChange={(next) => setFilters((prev) => ({ ...prev, hairColor: next }))}
                     />
                     <FilterPopover
-                      label="气质"
+                      label={$('气质')}
                       values={filterValueOptions.temperament}
                       value={filters.temperament}
                       opened={openFilterKey === 'temperament'}
@@ -559,7 +560,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                   ) : filteredCharacters.length === 0 ? (
                     <Center className="ai-character-library-empty">
                       <Text className="ai-character-library-empty-text" c="dimmed">
-                        当前筛选条件下没有角色
+                        {$('当前筛选条件下没有角色')}
                       </Text>
                     </Center>
                   ) : (
@@ -593,7 +594,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                                 ) : (
                                   <Center className="ai-character-library-card-image ai-character-library-image--empty">
                                     <Text className="ai-character-library-image-empty-label" size="xs" c="dimmed">
-                                      角色立绘
+                                      {$('角色立绘')}
                                     </Text>
                                   </Center>
                                 )}
@@ -644,7 +645,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                     variant="subtle"
                     color="gray"
                     onClick={() => setDetailOpened(false)}
-                    aria-label="返回列表"
+                    aria-label={$('返回列表')}
                   >
                     <IconChevronLeft size={20} />
                   </ActionIcon>
@@ -662,7 +663,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                     color="gray"
                     disabled={currentIndex <= 0}
                     onClick={() => handleStepSelected(-1)}
-                    aria-label="上一个角色"
+                    aria-label={$('上一个角色')}
                   >
                     <IconChevronLeft size={20} />
                   </ActionIcon>
@@ -672,7 +673,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                     color="gray"
                     disabled={currentIndex < 0 || currentIndex >= filteredCharacters.length - 1}
                     onClick={() => handleStepSelected(1)}
-                    aria-label="下一个角色"
+                    aria-label={$('下一个角色')}
                   >
                     <IconChevronRight size={20} />
                   </ActionIcon>
@@ -681,7 +682,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                     variant="subtle"
                     color="gray"
                     onClick={props.onClose}
-                    aria-label="关闭角色库"
+                    aria-label={$('关闭角色库')}
                   >
                     <IconX size={20} />
                   </ActionIcon>
@@ -692,23 +693,23 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                   <div className="ai-character-library-detail-gallery-top">
                     <CharacterGalleryTile
                       className="ai-character-library-gallery-card ai-character-library-gallery-card--portrait"
-                      label="角色立绘"
+                      label={$('角色立绘')}
                       url={selectedCharacter.full_body_image_url}
                     />
                     <CharacterGalleryTile
                       className="ai-character-library-gallery-card ai-character-library-gallery-card--closeup"
-                      label="肖像特写"
+                      label={$('肖像特写')}
                       url={selectedCharacter.closeup_image_url}
                     />
                     <CharacterGalleryTile
                       className="ai-character-library-gallery-card ai-character-library-gallery-card--expression"
-                      label="表情九宫格"
+                      label={$('表情九宫格')}
                       url={selectedCharacter.expression_image_url}
                     />
                   </div>
                   <CharacterGalleryTile
                     className="ai-character-library-gallery-card ai-character-library-gallery-card--three-view"
-                    label="三视图"
+                    label={$('三视图')}
                     url={selectedCharacter.three_view_image_url}
                   />
                 </div>
@@ -716,30 +717,30 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                   <Stack className="ai-character-library-detail-side-stack" gap="lg">
                     <div className="ai-character-library-detail-attributes">
                       <Text className="ai-character-library-detail-section-title" fw={700}>
-                        角色属性
+                        {$('角色属性')}
                       </Text>
                       <div className="ai-character-library-detail-attr-grid">
                         {[
-                          ['大类', selectedCharacter.era],
-                          ['文化区域', selectedCharacter.cultural_region],
-                          ['时代', selectedCharacter.time_period],
-                          ['性别', selectedCharacter.gender],
-                          ['年龄段', selectedCharacter.age_group],
-                          ['物种', selectedCharacter.species],
-                          ['体格', selectedCharacter.physique],
-                          ['身高', selectedCharacter.height_level],
-                          ['肤色', selectedCharacter.skin_color],
-                          ['发长', selectedCharacter.hair_length],
-                          ['发色', selectedCharacter.hair_color],
-                          ['气质', selectedCharacter.temperament],
-                          ['场景', selectedCharacter.scene],
+                          [$('大类'), selectedCharacter.era],
+                          [$('文化区域'), selectedCharacter.cultural_region],
+                          [$('时代'), selectedCharacter.time_period],
+                          [$('性别'), selectedCharacter.gender],
+                          [$('年龄段'), selectedCharacter.age_group],
+                          [$('物种'), selectedCharacter.species],
+                          [$('体格'), selectedCharacter.physique],
+                          [$('身高'), selectedCharacter.height_level],
+                          [$('肤色'), selectedCharacter.skin_color],
+                          [$('发长'), selectedCharacter.hair_length],
+                          [$('发色'), selectedCharacter.hair_color],
+                          [$('气质'), selectedCharacter.temperament],
+                          [$('场景'), selectedCharacter.scene],
                         ].map(([label, value]) => (
                           <div key={`${label}-${value}`} className="ai-character-library-detail-attr-item">
                             <Text className="ai-character-library-detail-attr-label" c="dimmed">
                               {label}
                             </Text>
                             <Text className="ai-character-library-detail-attr-value">
-                              {normalizeText(value) || '未填写'}
+                              {normalizeText(value) || $('未填写')}
                             </Text>
                           </div>
                         ))}
@@ -748,19 +749,19 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
 
                     <div className="ai-character-library-detail-copy-block">
                       <Text className="ai-character-library-detail-section-title" fw={700}>
-                        辨识特征
+                        {$('辨识特征')}
                       </Text>
                       <Text className="ai-character-library-detail-copy">
-                        {normalizeText(selectedCharacter.distinctive_features) || '未填写'}
+                        {normalizeText(selectedCharacter.distinctive_features) || $('未填写')}
                       </Text>
                     </div>
 
                     <div className="ai-character-library-detail-copy-block">
                       <Text className="ai-character-library-detail-section-title" fw={700}>
-                        着装描述
+                        {$('着装描述')}
                       </Text>
                       <Text className="ai-character-library-detail-copy">
-                        {normalizeText(selectedCharacter.outfit) || '未填写'}
+                        {normalizeText(selectedCharacter.outfit) || $('未填写')}
                       </Text>
                     </div>
 
@@ -781,7 +782,7 @@ export function AiCharacterLibraryModal(props: AiCharacterLibraryModalProps): JS
                       onClick={() => { void handleApply() }}
                       disabled={applying}
                     >
-                      {applying ? '应用中…' : '应用到画布'}
+                      {applying ? $('应用中…') : $('应用到画布')}
                     </button>
                   </Stack>
                 </div>

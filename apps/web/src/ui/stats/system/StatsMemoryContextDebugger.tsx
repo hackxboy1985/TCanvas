@@ -5,6 +5,7 @@ import { getMemoryContext, type MemoryContextResponseDto, type MemoryEntryDto } 
 import { toast } from '../../toast'
 import { PanelCard } from '../../PanelCard'
 import { InlinePanel } from '../../InlinePanel'
+import { $ } from '../../../canvas/i18n'
 
 function prettyJson(input: unknown): string {
   try {
@@ -28,7 +29,7 @@ function EntryList({ title, items }: { title: string; items: MemoryEntryDto[] })
         <Badge className="stats-memory-context-debugger__section-badge" size="xs" variant="light">{items.length}</Badge>
       </Group>
       {items.length === 0 ? (
-        <Text className="stats-memory-context-debugger__section-empty" size="xs" c="dimmed">暂无</Text>
+        <Text className="stats-memory-context-debugger__section-empty" size="xs" c="dimmed">{ $('暂无') }</Text>
       ) : (
         items.map((item) => (
           <InlinePanel className="stats-memory-context-debugger__entry" key={item.id} padding="compact">
@@ -76,9 +77,9 @@ export default function StatsMemoryContextDebugger({ className }: { className?: 
       })
       setContext(result.context)
       setResponseText(prettyJson(result))
-      toast('记忆上下文已加载', 'success')
+      toast($('记忆上下文已加载'), 'success')
     } catch (err) {
-      const message = err instanceof Error ? err.message : '加载记忆上下文失败'
+      const message = err instanceof Error ? err.message : $('加载记忆上下文失败')
       setContext(null)
       setResponseText(message)
       toast(message, 'error')
@@ -91,10 +92,10 @@ export default function StatsMemoryContextDebugger({ className }: { className?: 
     <PanelCard className={rootClassName}>
       <Group className="stats-memory-context-debugger__header" justify="space-between" align="center" wrap="wrap" gap="sm">
         <Group className="stats-memory-context-debugger__header-left" gap={8} align="center">
-          <Text className="stats-memory-context-debugger__title" fw={700} size="sm">记忆上下文调试</Text>
+          <Text className="stats-memory-context-debugger__title" fw={700} size="sm">{ $('记忆上下文调试') }</Text>
           <Badge className="stats-memory-context-debugger__badge" size="xs" variant="light">/memory/context</Badge>
         </Group>
-        <Tooltip className="stats-memory-context-debugger__refresh-tooltip" label="加载" withArrow>
+        <Tooltip className="stats-memory-context-debugger__refresh-tooltip" label={ $('加载') } withArrow>
           <ActionIcon className="stats-memory-context-debugger__refresh" variant="light" onClick={() => void runLoad()} loading={loading}>
             <IconRefresh className="stats-memory-context-debugger__refresh-icon" size={16} />
           </ActionIcon>
@@ -111,7 +112,7 @@ export default function StatsMemoryContextDebugger({ className }: { className?: 
           <TextInput className="stats-memory-context-debugger__chapter-id" label="Chapter Id" value={chapterId} onChange={(e) => setChapterId(e.currentTarget.value)} w={160} />
           <TextInput className="stats-memory-context-debugger__limit" label="Limit / Scope" value={limitPerScope} onChange={(e) => setLimitPerScope(e.currentTarget.value)} w={100} />
           <TextInput className="stats-memory-context-debugger__recent-limit" label="Recent Conv" value={recentConversationLimit} onChange={(e) => setRecentConversationLimit(e.currentTarget.value)} w={100} />
-          <Button className="stats-memory-context-debugger__submit" leftSection={<IconSparkles className="stats-memory-context-debugger__submit-icon" size={14} />} onClick={() => void runLoad()} loading={loading}>加载上下文</Button>
+          <Button className="stats-memory-context-debugger__submit" leftSection={<IconSparkles className="stats-memory-context-debugger__submit-icon" size={14} />} onClick={() => void runLoad()} loading={loading}>{ $('加载上下文') }</Button>
         </Group>
 
         {context ? (
@@ -131,7 +132,7 @@ export default function StatsMemoryContextDebugger({ className }: { className?: 
                 <Badge className="stats-memory-context-debugger__recent-badge" size="xs" variant="light">{context.recentConversation.length}</Badge>
               </Group>
               {context.recentConversation.length === 0 ? (
-                <Text className="stats-memory-context-debugger__recent-empty" size="xs" c="dimmed">暂无</Text>
+                <Text className="stats-memory-context-debugger__recent-empty" size="xs" c="dimmed">{ $('暂无') }</Text>
               ) : context.recentConversation.map((item, index) => (
                 <InlinePanel className="stats-memory-context-debugger__recent-item" key={`${item.createdAt}-${index}`} padding="compact">
                   <Text className="stats-memory-context-debugger__recent-role" size="xs" fw={600}>{item.role}</Text>
@@ -142,7 +143,7 @@ export default function StatsMemoryContextDebugger({ className }: { className?: 
             </Stack>
           </Stack>
         ) : (
-          <Text className="stats-memory-context-debugger__empty" size="sm" c="dimmed">输入 scope 后点击“加载上下文”，查看 agents bridge 实际拿到的记忆。</Text>
+          <Text className="stats-memory-context-debugger__empty" size="sm" c="dimmed">{ $('输入 scope 后点击“加载上下文”，查看 agents bridge 实际拿到的记忆。') }</Text>
         )}
 
         <Textarea className="stats-memory-context-debugger__response" label="Raw Response" value={responseText} readOnly autosize minRows={8} />

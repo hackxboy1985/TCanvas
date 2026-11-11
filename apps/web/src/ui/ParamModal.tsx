@@ -3,13 +3,14 @@ import { Modal, TextInput, Textarea, NumberInput, Select, Button, Group } from '
 import { useUIStore } from './uiStore'
 import { useRFStore } from '../canvas/store'
 import { defaultsFor } from '../inspector/forms'
+import { $ } from '../canvas/i18n'
 
 type FormSetter = (k: string, v: any) => void
 
 function renderVideoStoryboardSection(form: any, setField: FormSetter) {
   return (
     <>
-      <Textarea className="param-modal-field" label="分镜/脚本" autosize minRows={4} value={form.storyboard||''} onChange={(e)=>setField('storyboard', e.currentTarget.value)} />
+      <Textarea className="param-modal-field" label={$('分镜/脚本')} autosize minRows={4} value={form.storyboard||''} onChange={(e)=>setField('storyboard', e.currentTarget.value)} />
       <Group className="param-modal-row" grow mt={8}>
         <NumberInput className="param-modal-field" label="Duration(s)" min={1} max={600} value={form.duration||30} onChange={(v)=>setField('duration', Number(v)||30)} />
         <NumberInput className="param-modal-field" label="FPS" min={1} max={60} value={form.fps||24} onChange={(v)=>setField('fps', Number(v)||24)} />
@@ -24,7 +25,7 @@ function renderStoryboardImageSection(form: any, setField: FormSetter) {
       <Group className="param-modal-row" grow mt={2}>
         <NumberInput
           className="param-modal-field"
-          label="分镜数"
+          label={$('分镜数')}
           min={4}
           max={16}
           value={form.storyboardCount ?? 4}
@@ -32,10 +33,10 @@ function renderStoryboardImageSection(form: any, setField: FormSetter) {
         />
         <Select
           className="param-modal-field"
-          label="镜头比例"
+          label={$('镜头比例')}
           data={[
-            { value: '16:9', label: '16:9 横屏' },
-            { value: '9:16', label: '9:16 竖屏' },
+            { value: '16:9', label: $('16:9 横屏') },
+            { value: '9:16', label: $('9:16 竖屏') },
           ]}
           value={form.storyboardAspectRatio === '9:16' ? '9:16' : '16:9'}
           onChange={(v) => setField('storyboardAspectRatio', v === '9:16' ? '9:16' : '16:9')}
@@ -45,12 +46,12 @@ function renderStoryboardImageSection(form: any, setField: FormSetter) {
       <Select
         className="param-modal-field"
         mt={8}
-        label="风格"
+        label={$('风格')}
         data={[
-          { value: 'realistic', label: '写实' },
-          { value: 'comic', label: '美漫' },
-          { value: 'sketch', label: '草图' },
-          { value: 'strip', label: '条漫' },
+          { value: 'realistic', label: $('写实') },
+          { value: 'comic', label: $('美漫') },
+          { value: 'sketch', label: $('草图') },
+          { value: 'strip', label: $('条漫') },
         ]}
         value={form.storyboardStyle || 'realistic'}
         onChange={(v) => setField('storyboardStyle', v || 'realistic')}
@@ -59,12 +60,12 @@ function renderStoryboardImageSection(form: any, setField: FormSetter) {
       <Textarea
         className="param-modal-field"
         mt={8}
-        label="分镜脚本（可选）"
+        label={$('分镜脚本（可选）')}
         autosize
         minRows={6}
         value={form.storyboardScript || ''}
         onChange={(e) => setField('storyboardScript', e.currentTarget.value)}
-        placeholder="建议每行一个镜头提示词；若留空，将使用 Prompt 作为剧情主题。"
+        placeholder={$('建议每行一个镜头提示词；若留空，将使用 Prompt 作为剧情主题。')}
       />
     </>
   )
@@ -79,7 +80,7 @@ function renderPromptSection(form: any, setField: FormSetter) {
       minRows={4}
       value={form.prompt || ''}
       onChange={(e) => setField('prompt', e.currentTarget.value)}
-      placeholder="填写或粘贴生成提示词（英文，可含动作/光影/对白/音效描述）"
+      placeholder={$('填写或粘贴生成提示词（英文，可含动作/光影/对白/音效描述）')}
     />
   )
 }
@@ -87,8 +88,8 @@ function renderPromptSection(form: any, setField: FormSetter) {
 function renderSubtitleAlignSection(form: any, setField: FormSetter) {
   return (
     <>
-      <TextInput className="param-modal-field" label="音频 URL" value={form.audioUrl||''} onChange={(e)=>setField('audioUrl', e.currentTarget.value)} />
-      <Textarea className="param-modal-field" mt={8} label="字幕文本" autosize minRows={4} value={form.transcript||''} onChange={(e)=>setField('transcript', e.currentTarget.value)} />
+      <TextInput className="param-modal-field" label={$('音频 URL')} value={form.audioUrl||''} onChange={(e)=>setField('audioUrl', e.currentTarget.value)} />
+      <Textarea className="param-modal-field" mt={8} label={$('字幕文本')} autosize minRows={4} value={form.transcript||''} onChange={(e)=>setField('transcript', e.currentTarget.value)} />
     </>
   )
 }
@@ -120,8 +121,8 @@ export default function ParamModal(): JSX.Element {
   const isSubtitleAlignKind = kind === 'subtitle'
 
   return (
-    <Modal className="param-modal" opened={!!nodeId} onClose={close} title="参数" centered>
-      {!n && <div className="param-modal-empty">节点不存在</div>}
+    <Modal className="param-modal" opened={!!nodeId} onClose={close} title={$('参数')} centered>
+      {!n && <div className="param-modal-empty">{$('节点不存在')}</div>}
       {n && (
         <div className="param-modal-body">
           {isVideoStoryboardKind && renderVideoStoryboardSection(form, setField)}
@@ -130,8 +131,8 @@ export default function ParamModal(): JSX.Element {
           {isSubtitleAlignKind && renderSubtitleAlignSection(form, setField)}
           <Group className="param-modal-footer" justify="flex-end" mt={12}>
             <Group className="param-modal-footer-actions" gap="xs">
-              <Button className="param-modal-cancel" variant="subtle" onClick={close}>取消</Button>
-              <Button className="param-modal-save" onClick={saveRun}>保存并执行</Button>
+              <Button className="param-modal-cancel" variant="subtle" onClick={close}>{$('取消')}</Button>
+              <Button className="param-modal-save" onClick={saveRun}>{$('保存并执行')}</Button>
             </Group>
           </Group>
         </div>

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { $ } from './i18n'
 
 export type SystemPromptScope = 'image' | 'video' | 'both'
 
@@ -62,36 +63,36 @@ const createId = () => `preset-${Date.now().toString(36)}-${Math.random().toStri
 const DEFAULT_PRESETS: SystemPromptPreset[] = [
   buildPreset(
     'builtin-video-cinematic-director',
-    '电影摄影导演',
-    '用于剧情短片 / Sora，强调镜头语言和氛围',
+    $('电影摄影导演'),
+    $('用于剧情短片 / Sora，强调镜头语言和氛围'),
     'video',
     'You are a cinematic director. Expand the idea into 2-3 English sentences that describe shot size, camera motion, subject performance, lighting mood, environment details, and pacing. Mention 2-3 concrete props or set elements. Avoid technical parameters beyond what is necessary for storytelling.',
   ),
   buildPreset(
     'builtin-video-aerial-doc',
-    '航拍纪录片',
-    '大场面景观 / 航拍视角',
+    $('航拍纪录片'),
+    $('大场面景观 / 航拍视角'),
     'video',
     'You are a documentary aerial cinematographer. Describe the terrain, weather, time-of-day, camera altitude and movement path, plus the relationship between subject and environment. Write in English, keep it within three sentences, and end with one sentence about pacing or transitions.',
   ),
   buildPreset(
     'builtin-image-fashion-studio',
-    '时尚摄影棚',
-    '商业人像 / 服装细节',
+    $('时尚摄影棚'),
+    $('商业人像 / 服装细节'),
     'image',
     'You are a high-end fashion photographer. Rewrite the idea into a concise English prompt (20-40 words) specifying lighting setup (e.g. softbox, rim light), focal length, composition, background texture, fabric details, and facial expression. Finish the prompt with “Shot on 85mm, f/1.8”.',
   ),
   buildPreset(
     'builtin-image-concept-illustration',
-    '概念插画',
-    '氛围插画 / 场景设计',
+    $('概念插画'),
+    $('氛围插画 / 场景设计'),
     'image',
     'You are a concept illustrator. Convert the theme into three concise English sentences describing the subject pose, environment, mood, palette, materials, and storytelling details. Add one more sentence specifying the rendering style (e.g. watercolor, octane render, graphite sketch).',
   ),
   buildPreset(
     'builtin-image-character-deconstruction',
-    '角色深度分解图（中文）',
-    '全景式角色设定拆解，含表情/内着/物品/材质特写，中文模板',
+    $('角色深度分解图（中文）'),
+    $('全景式角色设定拆解，含表情/内着/物品/材质特写，中文模板'),
     'image',
     `角色设定
 你是一位顶尖的游戏与动漫概念美术设计大师 ，擅长制作详尽的角色设定图。你具备“像素级拆解”的能力，能够透视角色的穿着层级、捕捉微表情变化，并将与其相关的物品进行具象化还原。

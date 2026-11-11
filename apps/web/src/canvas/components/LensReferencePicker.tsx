@@ -3,13 +3,14 @@ import { Button, Group, Loader, Modal, Tabs, Text, TextInput } from '@mantine/co
 import { listReferenceAssets } from '../../api/lens'
 import { groupReferenceAssets, ReferenceCategory, referenceKey, type ReferenceAsset, type ReferenceGroup } from '../nodes/lensShotReferences'
 import './lensReferencePicker.css'
+import { $, $t } from '../i18n'
 
-const SCENE_SUBTYPE_LABELS: Record<string, string> = { time: '日夜', weather: '天气', inout: '内外', area: '区域', position: '位置', furniture: '家具', facility: '设施' }
+const SCENE_SUBTYPE_LABELS: Record<string, string> = { time: $('日夜'), weather: $('天气'), inout: $('内外'), area: $('区域'), position: $('位置'), furniture: $('家具'), facility: $('设施') }
 const TABS = [
-  { value: ReferenceCategory.Role, label: '角色' },
-  { value: ReferenceCategory.Scene, label: '场景' },
-  { value: ReferenceCategory.Prop, label: '道具' },
-  { value: ReferenceCategory.Staging, label: '站位参考' },
+  { value: ReferenceCategory.Role, label: $('角色') },
+  { value: ReferenceCategory.Scene, label: $('场景') },
+  { value: ReferenceCategory.Prop, label: $('道具') },
+  { value: ReferenceCategory.Staging, label: $('站位参考') },
 ]
 
 /**
@@ -27,8 +28,8 @@ function isStagingSelectable(asset: ReferenceAsset): boolean {
 
 /** 站位图不可选时的原因提示 */
 function stagingDisabledReason(asset: ReferenceAsset): string {
-  if (asset.state === 1) return '线稿转换中，请等待完成后再选择'
-  if (asset.state === 3) return '线稿转换失败，不可选用'
+  if (asset.state === 1) return $('线稿转换中，请等待完成后再选择')
+  if (asset.state === 3) return $('线稿转换失败，不可选用')
   return ''
 }
 interface Props { opened: boolean; dramaId: string; existingKeys: string[]; onClose: () => void; onConfirm: (assets: ReferenceAsset[]) => Promise<void> }
@@ -48,9 +49,9 @@ export function LensReferencePicker({ opened, dramaId, existingKeys, onClose, on
     if (!opened) return
     let active = true
     setLoading(true); setError(''); setGroups([])
-    if (!dramaId) { setError('缺少剧集身份，无法加载资产'); setLoading(false); return }
+    if (!dramaId) { setError($('缺少剧集身份，无法加载资产')); setLoading(false); return }
     void listReferenceAssets(dramaId, tab).then((rows) => { if (active) setGroups(groupReferenceAssets(tab, rows)) })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : '资产加载失败') })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : $('资产加载失败')) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [opened, dramaId, tab, reload])
@@ -64,21 +65,21 @@ export function LensReferencePicker({ opened, dramaId, existingKeys, onClose, on
     if (savingRef.current || !assets.length) return
     savingRef.current = true; setSaving(true); setError('')
     try { await onConfirm(assets); onClose() }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '参考保存失败') }
+    catch (reason) { setError(reason instanceof Error ? reason.message : $('参考保存失败')) }
     finally { savingRef.current = false; setSaving(false) }
   }
-  return <Modal className="lens-reference-picker nodrag nopan nowheel" opened={opened} onClose={() => { if (!saving) onClose() }} title="从资产库选择参考" centered size="min(1100px, 94vw)" zIndex={4000} closeOnClickOutside={!saving} closeOnEscape={!saving}>
+  return <Modal className="lens-reference-picker nodrag nopan nowheel" opened={opened} onClose={() => { if (!saving) onClose() }} title={ $('从资产库选择参考') } centered size="min(1100px, 94vw)" zIndex={4000} closeOnClickOutside={!saving} closeOnEscape={!saving}>
     <Tabs className="lens-reference-picker__tabs" value={String(tab)} onChange={(value) => { if (value && !saving) { setTab(Number(value)); setKeyword('') } }}>
       <Tabs.List className="lens-reference-picker__tab-list">{TABS.map((item) => <Tabs.Tab className="lens-reference-picker__tab" key={item.value} value={String(item.value)}>{item.label}</Tabs.Tab>)}</Tabs.List>
     </Tabs>
-    <TextInput className="lens-reference-picker__search" aria-label="搜索资产" placeholder="搜索名称或子造型、子场景" value={keyword} onChange={(event) => setKeyword(event.currentTarget.value)} disabled={saving} />
-    {error && <Group className="lens-reference-picker__error" gap="xs"><Text className="lens-reference-picker__error-text" c="red" role="alert" size="sm">{error}</Text><Button className="lens-reference-picker__retry" size="compact-xs" variant="subtle" disabled={saving} onClick={() => setReload((value) => value + 1)}>重新加载</Button></Group>}
+    <TextInput className="lens-reference-picker__search" aria-label={ $('搜索资产') } placeholder={ $('搜索名称或子造型、子场景') } value={keyword} onChange={(event) => setKeyword(event.currentTarget.value)} disabled={saving} />
+    {error && <Group className="lens-reference-picker__error" gap="xs"><Text className="lens-reference-picker__error-text" c="red" role="alert" size="sm">{error}</Text><Button className="lens-reference-picker__retry" size="compact-xs" variant="subtle" disabled={saving} onClick={() => setReload((value) => value + 1)}>{ $('重新加载') }</Button></Group>}
     <div className="lens-reference-picker__body">
       {loading && <Loader className="lens-reference-picker__loader" size="sm" />}
-      {!loading && !error && !visibleGroups.length && <Text className="lens-reference-picker__empty" size="sm">暂无匹配资产</Text>}
+      {!loading && !error && !visibleGroups.length && <Text className="lens-reference-picker__empty" size="sm">{ $('暂无匹配资产') }</Text>}
       <div className={'lens-reference-picker__groups ' + (isFlatTab ? 'lens-reference-picker__groups--props' : '')}>
         {visibleGroups.map((group) => <section className="lens-reference-picker__group" key={group.id}>
-          {!isFlatTab && <Group className="lens-reference-picker__group-header" justify="space-between"><Text className="lens-reference-picker__group-name" size="sm" fw={600}>{group.name}</Text><Text className="lens-reference-picker__group-count" size="xs">{group.items.length}个{tab === ReferenceCategory.Role ? '造型' : '场景'}</Text></Group>}
+          {!isFlatTab && <Group className="lens-reference-picker__group-header" justify="space-between"><Text className="lens-reference-picker__group-name" size="sm" fw={600}>{group.name}</Text><Text className="lens-reference-picker__group-count" size="xs">{ $t('{{count}}个{{type}}', { count: group.items.length, type: tab === ReferenceCategory.Role ? $('造型') : $('场景') }) }</Text></Group>}
           <div className="lens-reference-picker__items">{group.items.map((asset) => {
             const key = referenceKey(asset)
             const linked = existing.has(key)
@@ -88,21 +89,21 @@ export function LensReferencePicker({ opened, dramaId, existingKeys, onClose, on
             const toggle = () => setPicked((previous) => { const next = { ...previous }; if (next[key]) delete next[key]; else next[key] = asset; return next })
             return <article className={'lens-reference-picker__card' + (checked ? ' is-selected' : '') + (stagingBlocked ? ' is-disabled' : '')} key={key} title={stagingBlocked ? stagingDisabledReason(asset) : undefined}>
               <div className={'lens-reference-picker__thumb' + (tab === ReferenceCategory.Role ? ' lens-reference-picker__thumb--role' : '')}>
-                {asset.imgUrl ? <img className="lens-reference-picker__image" src={`${asset.imgUrl}${asset.imgUrl.includes('?') ? '&' : '?'}x-oss-process=image/resize,w_200`} alt={asset.variantName || asset.name} loading="lazy" /> : <Text className="lens-reference-picker__no-image" size="xs">暂无图片</Text>}
-                {asset.parentId && <span className="lens-reference-picker__badge">{tab === ReferenceCategory.Role ? '其他造型' : '子场景'}{asset.subType && SCENE_SUBTYPE_LABELS[asset.subType] ? ' · ' + SCENE_SUBTYPE_LABELS[asset.subType] : ''}</span>}
-                {stagingBlocked && <span className="lens-reference-picker__badge">{asset.state === 1 ? '转换中' : '转换失败'}</span>}
-                {checked && <span className="lens-reference-picker__check">{linked ? '已关联' : '✓'}</span>}
+                {asset.imgUrl ? <img className="lens-reference-picker__image" src={`${asset.imgUrl}${asset.imgUrl.includes('?') ? '&' : '?'}x-oss-process=image/resize,w_200`} alt={asset.variantName || asset.name} loading="lazy" /> : <Text className="lens-reference-picker__no-image" size="xs">{ $('暂无图片') }</Text>}
+                {asset.parentId && <span className="lens-reference-picker__badge">{tab === ReferenceCategory.Role ? $('其他造型') : $('子场景')}{asset.subType && SCENE_SUBTYPE_LABELS[asset.subType] ? ' · ' + SCENE_SUBTYPE_LABELS[asset.subType] : ''}</span>}
+                {stagingBlocked && <span className="lens-reference-picker__badge">{asset.state === 1 ? $('转换中') : $('转换失败')}</span>}
+                {checked && <span className="lens-reference-picker__check">{linked ? $('已关联') : '✓'}</span>}
                 <div className="lens-reference-picker__hover">
-                  <button className="lens-reference-picker__action" type="button" disabled={disabled} onClick={() => { void confirm([asset]) }}>直接添加</button>
-                  <button className="lens-reference-picker__action" type="button" disabled={disabled} aria-pressed={checked} onClick={toggle}>{checked ? '取消' : '选择'}</button>
+                  <button className="lens-reference-picker__action" type="button" disabled={disabled} onClick={() => { void confirm([asset]) }}>{ $('直接添加') }</button>
+                  <button className="lens-reference-picker__action" type="button" disabled={disabled} aria-pressed={checked} onClick={toggle}>{checked ? $('取消') : $('选择')}</button>
                 </div>
               </div>
-              <Text className="lens-reference-picker__label" size="xs" title={asset.name}>{asset.parentId ? (tab === ReferenceCategory.Role ? asset.variantName || '其他造型' : asset.variantName || '子场景') : isFlatTab ? asset.name : group.name}</Text>
+              <Text className="lens-reference-picker__label" size="xs" title={asset.name}>{asset.parentId ? (tab === ReferenceCategory.Role ? asset.variantName || $('其他造型') : asset.variantName || $('子场景')) : isFlatTab ? asset.name : group.name}</Text>
             </article>
           })}</div>
         </section>)}
       </div>
     </div>
-    <Group className="lens-reference-picker__footer" justify="space-between"><Text className="lens-reference-picker__selection-count" size="sm">已选 {selected.length} 项</Text><Group className="lens-reference-picker__buttons"><Button className="lens-reference-picker__cancel" variant="default" disabled={saving} onClick={onClose}>取消</Button><Button className="lens-reference-picker__confirm" loading={saving} disabled={!selected.length} onClick={() => { void confirm(selected) }}>确定添加</Button></Group></Group>
+    <Group className="lens-reference-picker__footer" justify="space-between"><Text className="lens-reference-picker__selection-count" size="sm">{ $t('已选 {{count}} 项', { count: selected.length }) }</Text><Group className="lens-reference-picker__buttons"><Button className="lens-reference-picker__cancel" variant="default" disabled={saving} onClick={onClose}>{ $('取消') }</Button><Button className="lens-reference-picker__confirm" loading={saving} disabled={!selected.length} onClick={() => { void confirm(selected) }}>{ $('确定添加') }</Button></Group></Group>
   </Modal>
 }

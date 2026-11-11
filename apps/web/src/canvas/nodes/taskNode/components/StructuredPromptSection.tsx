@@ -5,6 +5,7 @@ import {
   parseImagePromptSpecV2,
   type ImagePromptSpecV2,
 } from '@tapcanvas/image-prompt-spec'
+import { $, $t } from '../../../i18n'
 
 type StructuredPromptSectionProps = {
   structuredValue: unknown
@@ -41,7 +42,7 @@ export function StructuredPromptSection({
   const commitDraft = React.useCallback(() => {
     const trimmed = draft.trim()
     if (!trimmed) {
-      setLocalError('structuredPrompt 不能为空。')
+      setLocalError($('structuredPrompt 不能为空。'))
       return
     }
 
@@ -49,14 +50,14 @@ export function StructuredPromptSection({
     try {
       parsedJson = JSON.parse(trimmed) as unknown
     } catch (errorValue) {
-      const message = errorValue instanceof Error ? errorValue.message : '未知 JSON 解析错误'
-      setLocalError(`JSON 解析失败：${message}`)
+      const message = errorValue instanceof Error ? errorValue.message : $('未知 JSON 解析错误')
+      setLocalError($t('JSON 解析失败：{{v1}}', { v1: message }))
       return
     }
 
     const parsedSpec = parseImagePromptSpecV2(parsedJson)
     if (!parsedSpec.ok || !parsedSpec.value) {
-      const reason = parsedSpec.ok ? '缺少有效结构化内容' : parsedSpec.error
+      const reason = parsedSpec.ok ? $('缺少有效结构化内容') : parsedSpec.error
       setLocalError(reason)
       return
     }
@@ -84,13 +85,13 @@ export function StructuredPromptSection({
             loading={loading}
             onClick={onRefine}
           >
-            AI 润色
+            {$('AI 润色')}
           </Button>
         </Group>
       ) : null}
       <Textarea
         className="task-node-structured-prompt__textarea"
-        aria-label="结构化提示词 JSON"
+        aria-label={$("结构化提示词 JSON")}
         autosize
         minRows={8}
         maxRows={14}

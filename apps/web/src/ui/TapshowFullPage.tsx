@@ -38,6 +38,7 @@ import { ToastHost, toast } from './toast'
 import { useIsAdmin } from '../auth/isAdmin'
 import { setTapImageDragData } from '../canvas/dnd/setTapImageDragData'
 import { navigateBackOr } from '../utils/spaNavigate'
+import { $, $t } from '../canvas/i18n'
 
 type MediaFilter = 'all' | 'image' | 'video'
 type SortKey = 'createdAt' | 'duration'
@@ -109,7 +110,7 @@ type TapshowCardProps = {
 function TapshowCard({ asset, onPreview, onViewPrompt, className }: TapshowCardProps): JSX.Element {
   const isVideo = asset.type === 'video'
   const cover = asset.thumbnailUrl || asset.url
-  const label = asset.name || (isVideo ? '视频作品' : '图片作品')
+  const label = asset.name || (isVideo ? $('视频作品') : $('图片作品'))
   const subtitle =
     asset.prompt && asset.prompt.trim().length > 0
       ? asset.prompt.trim()
@@ -173,7 +174,7 @@ function TapshowCard({ asset, onPreview, onViewPrompt, className }: TapshowCardP
               color={isVideo ? 'violet' : 'teal'}
               leftSection={isVideo ? <IconPlayerPlay className="tapshow-card-badge-icon" size={12} /> : <IconPhoto className="tapshow-card-badge-icon" size={12} />}
             >
-              {isVideo ? '视频' : '图片'}
+              {isVideo ? $('视频') : $('图片')}
             </Badge>
             {asset.modelKey && (
               <Badge className="tapshow-card-badge" size="xs" radius="md" variant="outline" color="gray">
@@ -191,7 +192,7 @@ function TapshowCard({ asset, onPreview, onViewPrompt, className }: TapshowCardP
             size="sm"
             radius="md"
             variant="subtle"
-            aria-label="在新标签页打开"
+            aria-label={$('在新标签页打开')}
             onClick={(e) => {
               e.stopPropagation()
               if (!asset.url) return
@@ -210,7 +211,7 @@ function TapshowCard({ asset, onPreview, onViewPrompt, className }: TapshowCardP
               size="sm"
               radius="md"
               variant="subtle"
-              aria-label="查看提示词"
+              aria-label={$('查看提示词')}
               onClick={(e) => {
                 e.stopPropagation()
                 onViewPrompt(asset)
@@ -310,7 +311,7 @@ type PublicProjectCardProps = {
 function PublicProjectCard({ item, onOpen, className }: PublicProjectCardProps): JSX.Element {
   const cover = item.cover
   const isVideo = cover.type === 'video'
-  const label = item.project.name || '公开项目'
+  const label = item.project.name || $('公开项目')
   const subtitle = item.project.ownerName || item.project.owner || ''
   const cardClassName = ['tapshow-card', className].filter(Boolean).join(' ')
 
@@ -363,10 +364,10 @@ function PublicProjectCard({ item, onOpen, className }: PublicProjectCardProps):
               color={isVideo ? 'violet' : 'teal'}
               leftSection={isVideo ? <IconPlayerPlay className="tapshow-card-badge-icon" size={12} /> : <IconPhoto className="tapshow-card-badge-icon" size={12} />}
             >
-              {isVideo ? '项目视频' : '项目图片'}
+              {isVideo ? $('项目视频') : $('项目图片')}
             </Badge>
             <Badge className="tapshow-card-badge" size="xs" radius="md" variant="outline" color="gray">
-              公开项目
+              {$('公开项目')}
             </Badge>
           </Group>
           <ActionIcon
@@ -374,7 +375,7 @@ function PublicProjectCard({ item, onOpen, className }: PublicProjectCardProps):
             size="sm"
             radius="md"
             variant="subtle"
-            aria-label="打开分享页"
+            aria-label={$('打开分享页')}
             onClick={(e) => {
               e.stopPropagation()
               onOpen(item)
@@ -458,7 +459,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
       setPublicProjects(showcase)
     } catch (err: any) {
       console.error(err)
-      toast(err?.message || '加载公开项目失败', 'error')
+      toast(err?.message || $('加载公开项目失败'), 'error')
       setPublicProjects([])
     } finally {
       setProjectsLoading(false)
@@ -475,7 +476,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
         setHasLoadedOnce(true)
       } catch (err: any) {
         console.error(err)
-        toast(err?.message || '加载 TapShow 作品失败', 'error')
+        toast(err?.message || $('加载 TapShow 作品失败'), 'error')
       } finally {
         setLoading(false)
         setRefreshing(false)
@@ -532,7 +533,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
     (asset: PublicAssetDto, opts?: { preserveUrl?: boolean }) => {
       if (!asset.url) return
       const isVideo = asset.type === 'video'
-      const label = asset.name || (isVideo ? '视频作品' : '图片作品')
+      const label = asset.name || (isVideo ? $('视频作品') : $('图片作品'))
       openPreview({ url: asset.url, kind: isVideo ? 'video' : 'image', name: label })
       if (!opts?.preserveUrl) {
         const next = buildTapshowUrl(asset.id)
@@ -547,10 +548,10 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
   const handleViewPrompt = React.useCallback((asset: PublicAssetDto) => {
     const prompt = String(asset.prompt || '').trim()
     if (!prompt) {
-      toast('该作品暂无可展示提示词', 'info')
+      toast($('该作品暂无可展示提示词'), 'info')
       return
     }
-    const title = String(asset.name || (asset.type === 'video' ? '视频作品' : '图片作品') || 'TapShow 作品').trim()
+    const title = String(asset.name || (asset.type === 'video' ? $('视频作品') : $('图片作品')) || $('TapShow 作品')).trim()
     setActivePrompt({ title, prompt })
     setPromptModalOpen(true)
   }, [])
@@ -560,10 +561,10 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
     if (!prompt) return
     try {
       await navigator.clipboard.writeText(prompt)
-      toast('已复制提示词', 'success')
+      toast($('已复制提示词'), 'success')
     } catch (err) {
       console.error(err)
-      toast('复制提示词失败，请手动复制', 'error')
+      toast($('复制提示词失败，请手动复制'), 'error')
     }
   }, [activePrompt?.prompt])
 
@@ -633,17 +634,17 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                 leftSection={<IconArrowLeft className="tapshow-fullpage-back-icon" size={14} />}
                 onClick={() => navigateBackOr('/')}
               >
-                返回 TapCanvas
+                {$('返回 TapCanvas')}
               </Button>
             </Group>
             <Group className="tapshow-fullpage-header-right" gap={6}>
               {isAdmin && (
-                <Tooltip className="tapshow-fullpage-admin-tooltip" label="看板（仅管理员）" withArrow>
+                <Tooltip className="tapshow-fullpage-admin-tooltip" label={$('看板（仅管理员）')} withArrow>
                   <ActionIcon
                     className="tapshow-fullpage-admin-action"
                     size="sm"
                     variant="subtle"
-                    aria-label="看板"
+                    aria-label={$('看板')}
                     onClick={() => {
                       try {
                         const url = new URL(window.location.href)
@@ -660,12 +661,12 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                   </ActionIcon>
                 </Tooltip>
               )}
-              <Tooltip className="tapshow-fullpage-refresh-tooltip" label="刷新" withArrow>
+              <Tooltip className="tapshow-fullpage-refresh-tooltip" label={$('刷新')} withArrow>
                 <ActionIcon
                   className="tapshow-fullpage-refresh-action"
                   size="sm"
                   variant="subtle"
-                  aria-label="刷新 TapShow 作品"
+                  aria-label={$('刷新 TapShow 作品')}
                   onClick={() => {
                     if (loading || refreshing || projectsLoading) return
                     reloadAssets().catch(() => {})
@@ -681,17 +682,17 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
 
           <Stack className="tapshow-fullpage-hero" gap={6} mb="lg">
             <Title order={2} className="tapshow-fullpage-title">
-              TapShow 作品展
+              {$('TapShow 作品展')}
             </Title>
             <Text className="tapshow-fullpage-subtitle" size="sm" c="dimmed" maw={620}>
-              展示社区里用户公开的图片与视频作品。后续会支持按时长、热度等条件筛选排序。
+              {$('展示社区里用户公开的图片与视频作品。后续会支持按时长、热度等条件筛选排序。')}
             </Text>
           </Stack>
 
           <Stack className="tapshow-fullpage-projects" gap={8} mb="lg">
             <Group className="tapshow-fullpage-projects-header" justify="space-between" align="center" wrap="wrap" gap={8}>
               <Group className="tapshow-fullpage-projects-title" gap={8} align="center">
-                <Title className="tapshow-fullpage-projects-heading" order={4}>公开项目</Title>
+                <Title className="tapshow-fullpage-projects-heading" order={4}>{$('公开项目')}</Title>
                 <Badge className="tapshow-fullpage-projects-count" variant="light" color="gray">
                   {publicProjects.length}
                 </Badge>
@@ -706,14 +707,14 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                     window.open('/share', '_blank', 'noopener,noreferrer')
                   }}
                 >
-                  查看全部
+                  {$('查看全部')}
                 </Button>
-                <Tooltip className="tapshow-fullpage-projects-refresh-tooltip" label="刷新公开项目" withArrow>
+                <Tooltip className="tapshow-fullpage-projects-refresh-tooltip" label={$('刷新公开项目')} withArrow>
                   <ActionIcon
                     className="tapshow-fullpage-projects-refresh-action"
                     size="sm"
                     variant="light"
-                    aria-label="刷新公开项目"
+                    aria-label={$('刷新公开项目')}
                     onClick={() => {
                       if (!projectsLoading) reloadProjects()
                     }}
@@ -725,7 +726,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
               </Group>
             </Group>
             <Text className="tapshow-fullpage-projects-desc" size="xs" c="dimmed">
-              默认使用项目内的视频作为封面，其次图片；点击进入分享页，可查看画布与创作过程（只读）。
+              {$('默认使用项目内的视频作为封面，其次图片；点击进入分享页，可查看画布与创作过程（只读）。')}
             </Text>
 
             {projectsLoading && publicProjects.length === 0 ? (
@@ -733,13 +734,13 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                 <Stack className="tapshow-fullpage-projects-loading-stack" gap={8} align="center">
                   <Loader className="tapshow-fullpage-projects-loading-icon" size="sm" />
                   <Text className="tapshow-fullpage-projects-loading-text" size="sm" c="dimmed">
-                    正在加载公开项目…
+                    {$('正在加载公开项目…')}
                   </Text>
                 </Stack>
               </Center>
             ) : publicProjects.length === 0 ? (
               <Text className="tapshow-fullpage-projects-empty" size="sm" c="dimmed">
-                暂无可展示的公开项目（需要项目内至少有一个视频/图片结果作为封面）。
+                {$('暂无可展示的公开项目（需要项目内至少有一个视频/图片结果作为封面）。')}
               </Text>
             ) : (
               <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={{ base: 'md', md: 'lg' }} className="tapshow-grid tapshow-fullpage-projects-grid">
@@ -767,9 +768,9 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                 value={mediaFilter}
                 onChange={(v) => setMediaFilter(v as MediaFilter)}
                 data={[
-                  { value: 'all', label: '全部' },
-                  { value: 'video', label: '视频' },
-                  { value: 'image', label: '图片' },
+                  { value: 'all', label: $('全部') },
+                  { value: 'video', label: $('视频') },
+                  { value: 'image', label: $('图片') },
                 ]}
               />
 
@@ -780,8 +781,8 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                 value={sortKey}
                 onChange={(v) => setSortKey(v as SortKey)}
                 data={[
-                  { value: 'createdAt', label: '按时间' },
-                  { value: 'duration', label: '按时长' },
+                  { value: 'createdAt', label: $('按时间') },
+                  { value: 'duration', label: $('按时长') },
                 ]}
               />
 
@@ -790,7 +791,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                 size="sm"
                 radius="md"
                 variant="light"
-                aria-label="切换排序方向"
+                aria-label={$('切换排序方向')}
                 onClick={() => setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
               >
                 {sortOrder === 'desc' ? <IconSortDescending className="tapshow-fullpage-filter-order-icon" size={14} /> : <IconFilter className="tapshow-fullpage-filter-order-icon" size={14} />}
@@ -798,7 +799,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
             </Group>
 
             <Text className="tapshow-fullpage-count" size="xs" c="dimmed">
-              共 {filteredAssets.length} 个公开作品
+              {$t('共 {{count}} 个公开作品', { count: filteredAssets.length })}
             </Text>
           </Group>
         </Box>
@@ -809,7 +810,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
               <Stack className="tapshow-fullpage-loading-stack" gap={8} align="center">
                 <Loader className="tapshow-fullpage-loading-icon" size="sm" />
                 <Text className="tapshow-fullpage-loading-text" size="sm" c="dimmed">
-                  正在加载作品…
+                  {$('正在加载作品…')}
                 </Text>
               </Stack>
             </Center>
@@ -817,10 +818,10 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
             <Center className="tapshow-fullpage-empty" mih={260}>
               <Stack className="tapshow-fullpage-empty-stack" gap={6} align="center">
                 <Text className="tapshow-fullpage-empty-title" size="sm" fw={500}>
-                  暂无公开作品
+                  {$('暂无公开作品')}
                 </Text>
                 <Text className="tapshow-fullpage-empty-desc" size="xs" c="dimmed" ta="center" maw={420}>
-                  公开上传到 OSS 的图片 / 视频会自动出现在这里。
+                  {$('公开上传到 OSS 的图片 / 视频会自动出现在这里。')}
                 </Text>
               </Stack>
             </Center>
@@ -846,7 +847,7 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
                   setVisibleCount((count) => Math.min(count + 30, filteredAssets.length))
                 }}
               >
-                加载更多
+                {$('加载更多')}
               </Button>
             </Center>
           )}
@@ -856,18 +857,18 @@ function TapshowFullPageInner({ className }: { className?: string }): JSX.Elemen
         className="tapshow-fullpage-prompt-modal"
         opened={promptModalOpen}
         onClose={() => setPromptModalOpen(false)}
-        title={`提示词 · ${activePrompt?.title || 'TapShow 作品'}`}
+        title={$t('提示词 · {{title}}', { title: activePrompt?.title || $('TapShow 作品') })}
         size="lg"
         centered
       >
         <Stack className="tapshow-fullpage-prompt-modal-stack" gap="sm">
           <Group className="tapshow-fullpage-prompt-modal-actions" justify="flex-end">
             <Button className="tapshow-fullpage-prompt-modal-copy" size="xs" variant="light" leftSection={<IconCopy size={14} />} onClick={() => { void handleCopyPrompt() }}>
-              复制提示词
+              {$('复制提示词')}
             </Button>
           </Group>
           <Text className="tapshow-fullpage-prompt-modal-content" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-            {String(activePrompt?.prompt || '').trim() || '暂无提示词'}
+            {String(activePrompt?.prompt || '').trim() || $('暂无提示词')}
           </Text>
         </Stack>
       </Modal>

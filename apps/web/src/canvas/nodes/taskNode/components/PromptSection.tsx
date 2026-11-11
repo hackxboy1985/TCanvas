@@ -1,6 +1,7 @@
 import React from 'react'
 import { ActionIcon, Textarea, Text, Group, Button, TextInput, Badge, Select, Portal } from '@mantine/core'
 import { IconBrain, IconBulb } from '@tabler/icons-react'
+import { $ } from '../../../i18n'
 
 type MentionMenuPosition = {
   left: number
@@ -217,10 +218,10 @@ export function PromptSection({
   const hasStoryboardScriptGenerator = typeof onGenerateStoryboardScript === 'function'
   const brainActive = hasStoryboardScriptGenerator ? true : suggestionsEnabled
   const brainTitle = hasStoryboardScriptGenerator
-    ? 'AI 生成分镜脚本'
+    ? $('AI 生成分镜脚本')
     : suggestionsEnabled
-      ? '智能建议已启用 (Ctrl/Cmd+Space 切换)'
-      : '智能建议已禁用 (Ctrl/Cmd+Space 启用)'
+      ? $('智能建议已启用 (Ctrl/Cmd+Space 切换)')
+      : $('智能建议已禁用 (Ctrl/Cmd+Space 启用)')
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
   const inputWrapRef = React.useRef<HTMLDivElement | null>(null)
   const [activeMention, setActiveMention] = React.useState(0)
@@ -356,15 +357,15 @@ export function PromptSection({
               data={presetOptions || []}
               value={presetValue || null}
               onChange={onPresetChange}
-              placeholder={hasPresetOptions ? '选择预设能力' : '暂无预设能力'}
+              placeholder={hasPresetOptions ? $('选择预设能力') : $('暂无预设能力')}
               searchable
               clearable
               disabled={!!presetDisabled}
-              nothingFoundMessage="没有匹配的预设"
+              nothingFoundMessage={$("没有匹配的预设")}
             />
             {!hasPresetOptions && (
               <Text className="task-node-prompt__preset-empty-hint" size="xs" c="dimmed" mt={4}>
-                还没有可用预设，可点击右侧“新增预设”创建。
+                {$('还没有可用预设，可点击右侧“新增预设”创建。')}
               </Text>
             )}
           </div>
@@ -375,7 +376,7 @@ export function PromptSection({
               variant="light"
               onClick={onOpenCreatePresetModal}
             >
-              新增预设
+              {$('新增预设')}
             </Button>
           )}
         </Group>
@@ -400,7 +401,7 @@ export function PromptSection({
                 variant="subtle"
                 size="xs"
                 onClick={onOpenPromptSamples}
-                title="打开提示词支持共享配置"
+                title={$("打开提示词支持共享配置")}
                 style={{
                   border: 'none',
                   background: isDarkUi ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
@@ -447,8 +448,8 @@ export function PromptSection({
           readOnly={readOnly}
           placeholder={
             readOnly
-              ? (readOnlyHint || '当前为编译后的执行提示词预览')
-              : (placeholder || '在这里输入提示词... (输入6个字符后按 Ctrl/Cmd+Space 激活智能建议)')
+              ? (readOnlyHint || $('当前为编译后的执行提示词预览'))
+              : (placeholder || $('在这里输入提示词... (输入6个字符后按 Ctrl/Cmd+Space 激活智能建议)'))
           }
           value={prompt}
           onChange={(e) => {
@@ -628,15 +629,15 @@ export function PromptSection({
               }}
             >
             <Text className="task-node-prompt__mentions-title" size="xs" c="dimmed" mb={4}>
-              选择引用
+              {$('选择引用')}
             </Text>
             {mentionItems.map((item, idx: number) => {
               const avatar =
                 (typeof item?.profile_picture_url === 'string' && item.profile_picture_url.trim()) ||
                 null
               const username = String(item?.username || '').replace(/^@/, '').trim()
-              const display = String(item?.display_name || item?.username || '角色')
-              const meta = item.source === 'asset' ? '资产引用' : '角色引用'
+              const display = String(item?.display_name || item?.username || $('角色'))
+              const meta = item.source === 'asset' ? $('资产引用') : $('角色引用')
               return (
                 <div
                   className="task-node-prompt__mention"
@@ -679,12 +680,12 @@ export function PromptSection({
             })}
             {mentionLoading && (
               <Text className="task-node-prompt__mention-loading" size="xs" c="dimmed">
-                加载中...
+                {$('加载中...')}
               </Text>
             )}
             {!mentionLoading && mentionItems.length === 0 && (
               <Text className="task-node-prompt__mention-empty" size="xs" c="dimmed">
-                无匹配引用
+                {$('无匹配引用')}
               </Text>
             )}
             </div>
@@ -704,7 +705,7 @@ export function PromptSection({
         >
           <Group className="task-node-prompt__asset-bind-header" justify="space-between" align="center" mb={6}>
             <Text className="task-node-prompt__asset-bind-title" size="xs" fw={600}>
-              引用绑定
+              {$('引用绑定')}
             </Text>
             <Badge className="task-node-prompt__asset-bind-badge" size="xs" variant="light" color="blue">
               @ID
@@ -713,11 +714,11 @@ export function PromptSection({
           <Group className="task-node-prompt__asset-bind-row" gap="xs" align="flex-end" wrap="wrap">
             <TextInput
               className="task-node-prompt__asset-bind-input"
-              label="引用ID"
+              label={$("引用ID")}
               size="xs"
               value={assetBindingId}
               onChange={(e) => setAssetBindingId(e.currentTarget.value)}
-              placeholder="例如：fangyuan_main"
+              placeholder={$("例如：fangyuan_main")}
               style={{ flex: 1, minWidth: 180 }}
             />
             <Button
@@ -728,11 +729,11 @@ export function PromptSection({
               disabled={bindAssetDisabled}
               onClick={onBindPrimaryAssetReference}
             >
-              绑定当前主资产
+              {$('绑定当前主资产')}
             </Button>
           </Group>
           <Text className="task-node-prompt__asset-bind-hint" size="xs" c="dimmed" mt={6}>
-            绑定后，当前主图或主视频会写入该引用ID，后续在提示词中可直接使用 @引用ID。
+            {$('绑定后，当前主图或主视频会写入该引用ID，后续在提示词中可直接使用 @引用ID。')}
           </Text>
           {!!bindAssetStatusText && (
             <Text className="task-node-prompt__asset-bind-status" size="xs" c="dimmed" mt={4}>
@@ -754,27 +755,27 @@ export function PromptSection({
         >
         <Group className="task-node-prompt__anchor-bind-header" justify="space-between" align="center" mb={6}>
           <Text className="task-node-prompt__anchor-bind-title" size="xs" fw={600}>
-            通用锚点绑定
+            {$('通用锚点绑定')}
           </Text>
           <Badge className="task-node-prompt__anchor-bind-badge" size="xs" variant="light" color="grape">
-            使用主图
+            {$('使用主图')}
           </Badge>
         </Group>
         <Group className="task-node-prompt__anchor-bind-row" gap="xs" align="flex-end" wrap="wrap">
           <Select
             className="task-node-prompt__anchor-bind-kind"
-            label="锚点类型"
+            label={$("锚点类型")}
             size="xs"
             data={[
-              { value: 'character', label: '角色' },
-              { value: 'scene', label: '场景' },
-              { value: 'prop', label: '道具' },
-              { value: 'staging', label: '站位参考' },
-              { value: 'shot', label: '分镜' },
-              { value: 'story', label: '剧情' },
-              { value: 'asset', label: '资产' },
-              { value: 'context', label: '上下文' },
-              { value: 'authority_base_frame', label: '权威基底帧' },
+              { value: 'character', label: $('角色') },
+              { value: 'scene', label: $('场景') },
+              { value: 'prop', label: $('道具') },
+              { value: 'staging', label: $('站位参考') },
+              { value: 'shot', label: $('分镜') },
+              { value: 'story', label: $('剧情') },
+              { value: 'asset', label: $('资产') },
+              { value: 'context', label: $('上下文') },
+              { value: 'authority_base_frame', label: $('权威基底帧') },
             ]}
             value={anchorBindingKind}
             onChange={setAnchorBindingKind}
@@ -783,11 +784,11 @@ export function PromptSection({
           />
           <TextInput
             className="task-node-prompt__anchor-bind-input"
-            label="锚点名称"
+            label={$("锚点名称")}
             size="xs"
             value={anchorBindingLabel}
             onChange={(e) => setAnchorBindingLabel(e.currentTarget.value)}
-            placeholder="例如：方源 / 青茅山宗祠 / 春秋蝉"
+            placeholder={$("例如：方源 / 青茅山宗祠 / 春秋蝉")}
             style={{ flex: 1, minWidth: 180 }}
           />
           <Button
@@ -799,11 +800,11 @@ export function PromptSection({
             disabled={bindAnchorDisabled}
             onClick={onBindPrimaryAnchor}
           >
-            绑定当前主图
+            {$('绑定当前主图')}
           </Button>
         </Group>
         <Text className="task-node-prompt__anchor-bind-hint" size="xs" c="dimmed" mt={6}>
-          绑定后，节点当前主图会写入统一的 anchorBindings；角色、场景、道具、分镜和其他资产都走同一套锚点定义。
+          {$('绑定后，节点当前主图会写入统一的 anchorBindings；角色、场景、道具、分镜和其他资产都走同一套锚点定义。')}
         </Text>
         {!!bindAnchorStatusText && (
           <Text className="task-node-prompt__anchor-bind-status" size="xs" c="dimmed" mt={4}>

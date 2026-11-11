@@ -32,6 +32,7 @@ import {
   canvasToPngBlob,
 } from '../storyboardCompose'
 import { useUIStore } from '../../../../ui/uiStore'
+import { $, $t } from '../../../i18n'
 
 type StoryboardEditorContentProps = {
   label: string
@@ -105,7 +106,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
   const collapsedPreviewTitle = collapsedPreviewUrl
     ? (typeof firstCell?.label === 'string' && firstCell.label.trim()
         ? firstCell.label.trim()
-        : '镜头 1')
+        : $('镜头 1'))
     : ''
   const collapsedRemainingCount = React.useMemo(
     () => cells.slice(1).reduce((count, cell) => {
@@ -118,7 +119,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
   const activeCellImageUrl = typeof activeCell?.imageUrl === 'string' ? activeCell.imageUrl.trim() : ''
   const activeCellLabel = typeof activeCell?.label === 'string' && activeCell.label.trim()
     ? activeCell.label.trim()
-    : `镜头 ${normalizedSelectedIndex + 1}`
+    : $t('镜头 {{v1}}', { v1: normalizedSelectedIndex + 1 })
   const activeCellShotNo = typeof activeCell?.shotNo === 'number' && Number.isFinite(activeCell.shotNo)
     ? activeCell.shotNo
     : normalizedSelectedIndex + 1
@@ -127,13 +128,13 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
   const modalSelectedCellImageUrl = typeof modalSelectedCell?.imageUrl === 'string' ? modalSelectedCell.imageUrl.trim() : ''
   const modalSelectedCellLabel = typeof modalSelectedCell?.label === 'string' && modalSelectedCell.label.trim()
     ? modalSelectedCell.label.trim()
-    : `镜头 ${draftSelectedIndex + 1}`
+    : $t('镜头 {{v1}}', { v1: draftSelectedIndex + 1 })
   const modalSelectedCellShotNo = typeof modalSelectedCell?.shotNo === 'number' && Number.isFinite(modalSelectedCell.shotNo)
     ? modalSelectedCell.shotNo
     : draftSelectedIndex + 1
 
   const showToolbar = selected
-  const resolvedLabel = label.trim() || '分镜编辑'
+  const resolvedLabel = label.trim() || $('分镜编辑')
   const tooltipDisabled = !selected
   const collapsedClassName = editMode
     ? 'tc-storyboard-editor__collapsed nodrag'
@@ -220,7 +221,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
   const handleCompose = React.useCallback(async () => {
     const activeCells = cells.filter((cell) => typeof cell.imageUrl === 'string' && cell.imageUrl.trim())
     if (!activeCells.length) {
-      setComposeError('请先放入至少一张图片')
+      setComposeError($('请先放入至少一张图片'))
       return
     }
 
@@ -234,7 +235,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
       const file = new File([blob], fileName, { type: 'image/png' })
       await onComposeToImageNode(file)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '分镜合成失败'
+      const message = error instanceof Error ? error.message : $('分镜合成失败')
       setComposeError(message)
     } finally {
       setComposing(false)
@@ -292,7 +293,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
             <Menu withinPortal position="bottom-start">
               <Menu.Target>
                 <Button className="tc-storyboard-editor__toolbar-button" size="xs" variant="subtle" color="gray">
-                  {STORYBOARD_EDITOR_ASPECT_OPTIONS.find((option) => option.value === aspect)?.label ?? '比例'}
+                  {STORYBOARD_EDITOR_ASPECT_OPTIONS.find((option) => option.value === aspect)?.label ?? $('比例')}
                 </Button>
               </Menu.Target>
               <Menu.Dropdown className="tc-storyboard-editor__toolbar-dropdown">
@@ -311,7 +312,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
             <Menu withinPortal position="bottom-start">
               <Menu.Target>
                 <Button className="tc-storyboard-editor__toolbar-button" size="xs" variant="subtle" color="gray">
-                  {STORYBOARD_EDITOR_GRID_OPTIONS.find((option) => option.value === grid)?.label ?? '网格'}
+                  {STORYBOARD_EDITOR_GRID_OPTIONS.find((option) => option.value === grid)?.label ?? $('网格')}
                 </Button>
               </Menu.Target>
               <Menu.Dropdown className="tc-storyboard-editor__toolbar-dropdown">
@@ -337,7 +338,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
               leftSection={<IconEdit size={14} />}
               onClick={() => onUpdateNodeData({ storyboardEditorEditMode: !editMode })}
             >
-              {editMode ? '退出' : '编辑'}
+              {editMode ? $('退出') : $('编辑')}
             </Button>
 
             <Button
@@ -349,7 +350,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
               loading={composing}
               onClick={() => { void handleCompose() }}
             >
-              合成
+              {$('合成')}
             </Button>
 
             {isRunning ? (
@@ -361,7 +362,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 leftSection={<IconPlayerStop size={14} />}
                 onClick={onCancelRun}
               >
-                停止
+                {$('停止')}
               </Button>
             ) : (
               <Button
@@ -372,7 +373,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 leftSection={<IconPlayerPlay size={14} />}
                 onClick={onRun}
               >
-                执行
+                {$('执行')}
               </Button>
             )}
 
@@ -384,10 +385,10 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
               leftSection={<IconTrash size={14} />}
               onClick={handleClearAll}
             >
-              清空
+              {$('清空')}
             </Button>
 
-            <Tooltip label={collapsed ? '展开面板' : '折叠面板'} disabled={tooltipDisabled} withArrow>
+            <Tooltip label={collapsed ? $('展开面板') : $('折叠面板')} disabled={tooltipDisabled} withArrow>
               <ActionIcon
                 className="tc-storyboard-editor__toolbar-icon"
                 size="lg"
@@ -420,18 +421,18 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
             </div>
             {editMode ? (
               <div className="tc-storyboard-editor__meta-chip" data-active="true">
-                编辑中
+                {$('编辑中')}
               </div>
             ) : null}
             {composedImageUrl ? (
-              <Tooltip label="查看合成图" disabled={tooltipDisabled} withArrow>
+              <Tooltip label={$("查看合成图")} disabled={tooltipDisabled} withArrow>
                 <ActionIcon
                   className="tc-storyboard-editor__meta-icon"
                   size="sm"
                   variant="subtle"
                   color="gray"
-                  aria-label="查看合成图"
-                  onClick={() => openPreview({ url: composedImageUrl, kind: 'image', name: `${resolvedLabel} · 合成图` })}
+                  aria-label={$("查看合成图")}
+                  onClick={() => openPreview({ url: composedImageUrl, kind: 'image', name: $t('{{v1}} · 合成图', { v1: resolvedLabel }) })}
                 >
                   <IconEye size={14} />
                 </ActionIcon>
@@ -455,7 +456,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                   <img
                     className="tc-storyboard-editor__collapsed-preview"
                     src={collapsedPreviewUrl}
-                    alt={collapsedPreviewTitle || '分镜首图'}
+                    alt={collapsedPreviewTitle || $('分镜首图')}
                   />
                   <div className="tc-storyboard-editor__collapsed-overlay" aria-hidden="true" />
                   <Group
@@ -466,7 +467,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                     wrap="nowrap"
                   >
                     <div className="tc-storyboard-editor__collapsed-badge">
-                      首图
+                      {$('首图')}
                     </div>
                     {collapsedRemainingCount > 0 ? (
                       <div className="tc-storyboard-editor__collapsed-count">
@@ -499,8 +500,8 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                       </Text>
                       <Text className="tc-storyboard-editor__collapsed-subtitle" size="xs">
                         {collapsedRemainingCount > 0
-                          ? `${gridConfig.label} · 第 1 格为空 · 其余已填 ${collapsedRemainingCount} 张`
-                          : `${gridConfig.label} · 第 1 格为空，展开后继续拖入镜头图`}
+                          ? $t('{{v1}} · 第 1 格为空 · 其余已填 {{v2}} 张', { v1: gridConfig.label, v2: collapsedRemainingCount })
+                          : $t('{{v1}} · 第 1 格为空，展开后继续拖入镜头图', { v1: gridConfig.label })}
                       </Text>
                     </div>
                   </Group>
@@ -548,10 +549,10 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 <div className="tc-storyboard-editor__preview-empty">
                   <IconPhotoPlus size={18} />
                   <Text className="tc-storyboard-editor__preview-empty-title" size="sm" fw={600}>
-                    当前镜头为空
+                    {$('当前镜头为空')}
                   </Text>
                   <Text className="tc-storyboard-editor__preview-empty-text" size="xs">
-                    {editMode ? '拖入图片到当前选中镜头，或进入弹窗切换其他镜头。' : '点击“切换镜头”查看其他镜头预览。'}
+                    {editMode ? $('拖入图片到当前选中镜头，或进入弹窗切换其他镜头。') : $('点击“切换镜头”查看其他镜头预览。')}
                   </Text>
                 </div>
               )}
@@ -560,7 +561,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 <div className="tc-storyboard-editor__preview-head">
                   <div className="tc-storyboard-editor__preview-chip-row">
                     <div className="tc-storyboard-editor__preview-chip">
-                      镜头 {normalizedSelectedIndex + 1}
+                      {$('镜头')} {normalizedSelectedIndex + 1}
                     </div>
                     <div className="tc-storyboard-editor__preview-chip" data-variant="muted">
                       #{activeCellShotNo}
@@ -576,7 +577,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                       radius="sm"
                       variant="filled"
                       color="dark"
-                      aria-label="预览当前镜头"
+                      aria-label={$("预览当前镜头")}
                       onClick={(event) => {
                         event.preventDefault()
                         event.stopPropagation()
@@ -593,7 +594,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                     {activeCellLabel}
                   </Text>
                   <Text className="tc-storyboard-editor__preview-subtitle" size="xs">
-                    {activeCellPrompt || `${resolvedLabel} · ${gridConfig.label} · 已填 ${filledCount}/${cells.length}`}
+                    {activeCellPrompt || $t('{{v1}} · {{v2}} · 已填 {{v3}}/{{v4}}', { v1: resolvedLabel, v2: gridConfig.label, v3: filledCount, v4: cells.length })}
                   </Text>
                 </div>
               </div>
@@ -608,7 +609,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 leftSection={<IconLayoutGrid size={14} />}
                 onClick={openSwitcher}
               >
-                切换镜头
+                {$('切换镜头')}
               </Button>
               {editMode ? (
                 <Menu withinPortal position="bottom-start">
@@ -619,18 +620,18 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                       variant="subtle"
                       color="gray"
                     >
-                      当前镜头比例
+                      {$('当前镜头比例')}
                     </Button>
                   </Menu.Target>
                   <Menu.Dropdown className="tc-storyboard-editor__cell-aspect-dropdown">
                     <Menu.Label className="tc-storyboard-editor__cell-aspect-dropdown-label">
-                      单格比例
+                      {$('单格比例')}
                     </Menu.Label>
                     <Menu.Item
                       className="tc-storyboard-editor__cell-aspect-dropdown-item"
                       onClick={() => handleCellAspectChange(normalizedSelectedIndex, null)}
                     >
-                      跟随整体（当前 {aspect}）
+                      {$('跟随整体（当前')} {aspect}）
                     </Menu.Item>
                     {STORYBOARD_EDITOR_ASPECT_OPTIONS.map((option) => (
                       <Menu.Item
@@ -651,7 +652,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                   radius="sm"
                   variant="subtle"
                   color="gray"
-                  aria-label="清空当前镜头"
+                  aria-label={$("清空当前镜头")}
                   onClick={() => clearCell(normalizedSelectedIndex)}
                 >
                   <IconX size={14} />
@@ -662,7 +663,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
         )}
 
         <Text className="tc-storyboard-editor__footer" size="xs" c="dimmed" ta="center">
-          {composeError ? composeError : (filledCount ? '外部保留当前选中镜头预览；点击“切换镜头”在弹窗内切换并确认回填。' : '当前没有已选镜头，可先拖入图片，或打开弹窗检查镜头列表。')}
+          {composeError ? composeError : (filledCount ? $('外部保留当前选中镜头预览；点击“切换镜头”在弹窗内切换并确认回填。') : $('当前没有已选镜头，可先拖入图片，或打开弹窗检查镜头列表。'))}
         </Text>
       </div>
 
@@ -670,7 +671,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
         className="tc-storyboard-editor__switcher-modal"
         opened={switcherOpened}
         onClose={closeSwitcher}
-        title="切换镜头"
+        title={$("切换镜头")}
         size="xl"
         centered
       >
@@ -678,16 +679,16 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
           <div className="tc-storyboard-editor__switcher-sidebar">
             <div className="tc-storyboard-editor__switcher-sidebar-head">
               <Text className="tc-storyboard-editor__switcher-title" size="sm" fw={600}>
-                镜头列表
+                {$('镜头列表')}
               </Text>
               <Text className="tc-storyboard-editor__switcher-subtitle" size="xs">
-                左侧切换，右侧确认预览
+                {$('左侧切换，右侧确认预览')}
               </Text>
             </div>
             <div className="tc-storyboard-editor__switcher-list">
               {cells.map((cell, index) => {
                 const cellImageUrl = typeof cell.imageUrl === 'string' ? cell.imageUrl.trim() : ''
-                const cellLabel = typeof cell.label === 'string' && cell.label.trim() ? cell.label.trim() : `镜头 ${index + 1}`
+                const cellLabel = typeof cell.label === 'string' && cell.label.trim() ? cell.label.trim() : $t('镜头 {{v1}}', { v1: index + 1 })
                 const cellShotNo = typeof cell.shotNo === 'number' && Number.isFinite(cell.shotNo) ? cell.shotNo : index + 1
                 return (
                   <button
@@ -716,7 +717,7 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                         {cellLabel}
                       </Text>
                       <Text className="tc-storyboard-editor__switcher-item-text" size="xs">
-                        镜头 {index + 1} · #{cellShotNo}
+                        {$('镜头')} {index + 1} · #{cellShotNo}
                       </Text>
                     </div>
                     {draftSelectedIndex === index ? (
@@ -743,10 +744,10 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 <div className="tc-storyboard-editor__switcher-preview-empty">
                   <IconPhotoPlus size={18} />
                   <Text className="tc-storyboard-editor__switcher-preview-empty-title" size="sm" fw={600}>
-                    这个镜头还没有图片
+                    {$('这个镜头还没有图片')}
                   </Text>
                   <Text className="tc-storyboard-editor__switcher-preview-empty-text" size="xs">
-                    确认后外部会切换到该镜头位，方便继续补图或检查。
+                    {$('确认后外部会切换到该镜头位，方便继续补图或检查。')}
                   </Text>
                 </div>
               )}
@@ -756,20 +757,20 @@ export function StoryboardEditorContent(props: StoryboardEditorContentProps) {
                 {modalSelectedCellLabel}
               </Text>
               <Text className="tc-storyboard-editor__switcher-preview-text" size="xs">
-                镜头 {draftSelectedIndex + 1} · #{modalSelectedCellShotNo} · {resolveStoryboardEditorCellAspect(modalSelectedCell, aspect)}
+                {$('镜头')} {draftSelectedIndex + 1} · #{modalSelectedCellShotNo} · {resolveStoryboardEditorCellAspect(modalSelectedCell, aspect)}
               </Text>
               <Text className="tc-storyboard-editor__switcher-preview-text" size="xs">
                 {typeof modalSelectedCell?.prompt === 'string' && modalSelectedCell.prompt.trim()
                   ? modalSelectedCell.prompt.trim()
-                  : '当前镜头没有附带提示词。'}
+                  : $('当前镜头没有附带提示词。')}
               </Text>
             </div>
             <div className="tc-storyboard-editor__switcher-actions">
               <Button className="tc-storyboard-editor__switcher-action" variant="subtle" color="gray" onClick={closeSwitcher}>
-                取消
+                {$('取消')}
               </Button>
               <Button className="tc-storyboard-editor__switcher-action" onClick={confirmSwitcher}>
-                确定
+                {$('确定')}
               </Button>
             </div>
           </div>

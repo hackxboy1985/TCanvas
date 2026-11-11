@@ -8,6 +8,7 @@ import {
   Button,
 } from '@mantine/core'
 import { IconAdjustments, IconUpload } from '@tabler/icons-react'
+import { $ } from '../../canvas/i18n'
 
 export type MaterialCategory = 'roleCards' | 'docs' | 'all'
 
@@ -79,7 +80,7 @@ export default function AssetFilters(props: {
                 disabled={uploading || isUploadLocked}
                 onClick={onUploadText}
               >
-                上传文本
+                {$('上传文本')}
               </Button>
 
               <Select
@@ -87,11 +88,11 @@ export default function AssetFilters(props: {
                 value={storyboardOutputAspectRatio}
                 onChange={(v) => onStoryboardOutputAspectRatioChange(v || '16:9')}
                 data={[
-                  { value: '16:9', label: '输出画幅 16:9' },
-                  { value: '9:16', label: '输出画幅 9:16' },
-                  { value: '4:3', label: '输出画幅 4:3' },
-                  { value: '3:4', label: '输出画幅 3:4' },
-                  { value: '1:1', label: '输出画幅 1:1' },
+                  { value: '16:9', label: $('输出画幅 16:9') },
+                  { value: '9:16', label: $('输出画幅 9:16') },
+                  { value: '4:3', label: $('输出画幅 4:3') },
+                  { value: '3:4', label: $('输出画幅 3:4') },
+                  { value: '1:1', label: $('输出画幅 1:1') },
                 ]}
                 allowDeselect={false}
                 styles={{ input: { width: 160 } }}
@@ -113,9 +114,9 @@ export default function AssetFilters(props: {
                 value={materialCategory}
                 onChange={(v) => onMaterialCategoryChange((v as MaterialCategory) || 'roleCards')}
                 data={[
-                  { value: 'roleCards', label: '角色卡' },
-                  { value: 'docs', label: '文档素材' },
-                  { value: 'all', label: '全部' },
+                  { value: 'roleCards', label: $('角色卡') },
+                  { value: 'docs', label: $('文档素材') },
+                  { value: 'all', label: $('全部') },
                 ]}
               />
 
@@ -123,7 +124,7 @@ export default function AssetFilters(props: {
                 className="asset-panel-filters-role-search"
                 value={roleCardKeyword}
                 onChange={(e) => onRoleCardKeywordChange(e.currentTarget.value)}
-                placeholder="筛选角色卡：角色名"
+                placeholder={$('筛选角色卡：角色名')}
                 styles={{ input: { width: 200 } }}
               />
             </Group>
@@ -133,7 +134,7 @@ export default function AssetFilters(props: {
                 className="asset-panel-filters-book-select"
                 value={selectedBookId}
                 onChange={(v) => onSelectedBookIdChange(v || '')}
-                data={[{ value: '', label: '选择小说' }, ...books]}
+                data={[{ value: '', label: $('选择小说') }, ...books]}
                 searchable
                 styles={{ input: { width: 240 } }}
               />
