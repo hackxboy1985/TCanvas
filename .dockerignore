@@ -1,0 +1,14 @@
+# Docker 构建上下文（agents-cli 运行镜像，构建上下文 = tapcanvas 仓库根）
+.git
+.github
+**/.DS_Store
+**/target
+**/*.log
+# 排除 workspace 依赖（体积大）；保留 pnpm deploy 生成的 agents-deploy/node_modules
+node_modules/
+apps/*/node_modules/
+packages/*/node_modules/
+# 本地运行时/数据目录
+project-data/
+.pnpm-store/
+.task-checks/

@@ -2,6 +2,8 @@
 node_modules/
 .pnpm-store/
 dist/
+# pnpm --filter agents deploy 生成的自包含部署目录（Docker 构建上下文，构建产物不入库，脚本每次重建）
+agents-deploy/
 .graphify-venv
 .graphify-venv311
 tmp
