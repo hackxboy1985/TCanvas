@@ -221,12 +221,12 @@ export class LLMClient {
   }
 
   private async callChat(request: LLMRequest, retry = 0): Promise<LLMResponse> {
-    assertToolLinkage(request.messages);
-    const toolLinkage = summarizeToolLinkage(request.messages);
+    const messages = dropOrphanToolOutputs(request.messages);
+    const toolLinkage = summarizeToolLinkage(messages);
     const resolvedModel = this.resolveModel(request);
     const payload = {
         model: resolvedModel,
-      messages: [{ role: "system", content: request.system }, ...this.buildChatMessages(request.messages)],
+      messages: [{ role: "system", content: request.system }, ...this.buildChatMessages(messages)],
       tools: this.toChatTools(request.tools),
       stream: this.config.stream,
     };
@@ -237,7 +237,7 @@ export class LLMClient {
       retry,
       stream: this.config.stream,
       systemChars: String(request.system || "").length,
-      messages: request.messages,
+      messages,
       toolDefinitions: payload.tools.length,
       payload,
     });
@@ -316,11 +316,11 @@ export class LLMClient {
   }
 
   private async callResponses(request: LLMRequest, retry = 0): Promise<LLMResponse> {
-    assertToolLinkage(request.messages);
+    const messages = dropOrphanToolOutputs(request.messages);
     const resolvedModel = this.resolveModel(request);
     const payload: JsonObject = {
       model: resolvedModel,
-      input: this.buildResponsesInput(request.messages),
+      input: this.buildResponsesInput(messages),
       tools: this.toResponsesTools(request.tools),
       stream: this.config.stream,
     };
@@ -339,7 +339,7 @@ export class LLMClient {
       retry,
       stream: this.config.stream,
       systemChars: String(request.system || "").length,
-      messages: request.messages,
+      messages,
       toolDefinitions: Array.isArray(payload.tools) ? payload.tools.length : 0,
       payload,
       inputItems: Array.isArray(payload.input) ? payload.input.length : 0,
@@ -1179,16 +1179,25 @@ function summarizeToolLinkage(messages: Message[]) {
   };
 }
 
-function assertToolLinkage(messages: Message[]): void {
+/**
+ * 丢弃没有对应 assistant tool_call 的孤立 tool 消息。
+ * 服务重启、历史裁剪、会话续写都会让历史里留下没有调用方的 tool 结果，
+ * 这类消息会让上游 LLM 直接报错；这里直接丢弃并记录日志，保证会话可以继续。
+ * @param messages 运行时消息历史
+ * @returns 去掉孤立 tool 结果后的消息历史（顺序不变）
+ */
+function dropOrphanToolOutputs(messages: Message[]): Message[] {
   const linkage = summarizeToolLinkage(messages);
-  if (linkage.orphanToolOutputs.length === 0) return;
-  throw new Error(
-    [
-      "运行时消息历史包含孤儿 tool output，已在本地阻止发送到 LLM。",
-      `orphanToolOutputIds=${linkage.orphanToolOutputs.join(", ")}`,
-      `assistantCallIds=${linkage.assistantCallIds.join(", ") || "none"}`,
-      `toolOutputIds=${linkage.toolOutputIds.join(", ") || "none"}`,
-    ].join(" "),
+  if (linkage.orphanToolOutputs.length === 0) return messages;
+  const orphanIds = new Set(linkage.orphanToolOutputs);
+  console.warn("[llm] 丢弃孤立 tool output，会话继续", {
+    orphanToolOutputIds: linkage.orphanToolOutputs,
+    droppedCount: messages.filter(
+      (msg) => msg.role === "tool" && orphanIds.has(String(msg.toolCallId || "").trim()),
+    ).length,
+  });
+  return messages.filter(
+    (msg) => !(msg.role === "tool" && orphanIds.has(String(msg.toolCallId || "").trim())),
   );
 }
 
