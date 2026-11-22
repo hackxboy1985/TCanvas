@@ -29,7 +29,8 @@ import {
   submitSplitShotTask,
   type LensEpisodeTaskStatus,
 } from '../api/lens'
-import { confirmCanvasAction, confirmCanvasActionWithChoice } from '../canvas/components/CanvasConfirmDialog'
+import { confirmCanvasAction } from '../canvas/components/CanvasConfirmDialog'
+import { requestCanvasSplitParams, type CanvasSplitType } from '../canvas/components/CanvasSplitParamsDialog'
 import type { LensScriptGenerationActions, LensScriptTextKind } from '../canvas/CanvasRenderContext'
 import { useUIStore } from '../ui/uiStore'
 import { toast } from '../ui/toast'
@@ -145,7 +146,20 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
     for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
       await delay(POLL_INTERVAL_MS)
       if (pollTokenRef.current !== token) return
-      const task = await getEpisodeTaskStatus(dramaId, episodeNum)
+      let task: LensEpisodeTaskStatus
+      try {
+        task = await getEpisodeTaskStatus(dramaId, episodeNum)
+      } catch (error) {
+        // 「该集还没有拆分镜任务」是正常中间态：无台本时先生成台本、台本完成后自动生图并拆镜，
+        // 拆分镜任务落库前 Redis 里没有映射。此时要结合台本状态判断，台本没在跑也没生成出来才是失败。
+        if (!isNoTaskError(error)) throw error
+        const scriptStatus = await getScriptStatus(dramaId, episodeNum)
+        if (pollTokenRef.current !== token) return
+        if (!scriptStatus.hasRunningTask && !scriptStatus.hasScript) {
+          throw new Error($('台本生成失败或未生成，无法继续拆分镜，请到分镜板查看任务详情'))
+        }
+        continue
+      }
       if (pollTokenRef.current !== token) return
       if (task.status === 'SUCCESS') {
         // 该集最新任务是台本任务（可能刚完成）而不是拆分镜：继续等待拆分镜任务落库
@@ -228,8 +242,9 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
       try {
         // 覆盖确认必须以 lens 业务表为准：画布节点可能被用户删过，count(nodes) 会漏报，
         // 而 commitShotByEpisode 是「整集全量替换」，漏报就会在无提示下覆盖已选图分镜。
-        // 同时先校验本集正文（后端取数口径：台本优先、否则剧本原文）：正文为空时直接提示，
-        // 不应先弹「覆盖分镜」确认（空台本点拆分镜却被问是否覆盖，会让人误以为有内容可拆）。
+        // 拆分镜统一走「智能分镜」口径：必须有台本；没有台本时先生成台本（带拆分参数），
+        // 后端台本完成会自动生成场景图并等待就绪，再自动拆镜；有台本时提交拆镜任务，
+        // 后端会先补齐本集场景图并等待就绪（script.wait-scene-image.enabled 打开时）再拆。
         const [script, storyboards] = await Promise.all([
           getScriptContent(dramaId, episodeNum),
           listStoryboards(dramaId, episodeNum),
@@ -241,56 +256,58 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
           toast($('本集剧本原文与台本均为空，无法拆分镜'), 'warning')
           return
         }
-        // 台本与剧本原文都有内容时，必须先让用户选择用哪一份拆分，不能固定台本优先
-        let source: 'script' | 'novel' = scriptContent ? 'script' : 'novel'
-        if (scriptContent && novelContent) {
-          const picked = await confirmCanvasActionWithChoice({
-            title: $('选择拆分镜内容来源'),
-            message: $('本集同时有台本和剧本原文，请选择用哪一份拆分镜。'),
-            confirmText: $('下一步'),
-            choices: {
-              label: $('内容来源'),
-              defaultValue: 'script',
-              options: [
-                { value: 'script', label: $('台本（默认）') },
-                { value: 'novel', label: $('剧本原文') },
-              ],
-            },
-          })
-          if (!picked.confirmed) return
-          source = picked.choice === 'novel' ? 'novel' : 'script'
-          if (pollTokenRef.current !== token) return
-        }
-        const sourceLabel = source === 'script' ? $('台本') : $('剧本原文')
+        // 拆分方式与参数由用户在弹窗选择（与分镜板 ShotAgentPanel 一致：按时长/按数量 + 每段时长/总分镜数）；
+        // 最大单镜时长取剧配置 maxVideoDuration（与分镜板同源），未配置时用后端默认 15 秒
+        const configuredDuration = Number(useUIStore.getState().lensProjectConfig?.maxVideoDuration)
+        const durationLimit = Number.isFinite(configuredDuration) && configuredDuration >= 1
+          ? Math.trunc(configuredDuration)
+          : DEFAULT_SPLIT_VALUE_SECONDS
+        const splitParams = await requestCanvasSplitParams({ durationLimit })
+        if (!splitParams.confirmed) return
+        if (pollTokenRef.current !== token) return
+        const splitType: CanvasSplitType = splitParams.splitType
+        const splitValue = splitParams.splitValue
         if (storyboards.length > 0) {
-          // 覆盖确认里提示实际来源，避免用户误以为拆的是另一份内容
           const confirmed = await confirmCanvasAction({
             title: $('覆盖分镜'),
-            message: $t('本集已有 {{count}} 个分镜，拆分镜会重新生成并覆盖分镜表（同序号已选图会保留）。本次使用{{sourceLabel}}拆分。是否继续？', { count: storyboards.length, sourceLabel: sourceLabel }),
+            message: $t('本集已有 {{count}} 个分镜，拆分镜会重新生成并覆盖分镜表（同序号已选图会保留）。是否继续？', { count: storyboards.length }),
             confirmText: $('覆盖并拆分镜'),
             danger: true,
           })
           if (!confirmed) return
           if (pollTokenRef.current !== token) return
         }
-        // 不再上传正文：后端按 source 从业务表取数，前端只传身份、来源与拆分参数
-        // 每段时长取剧配置（与分镜板 maxVideoDuration 同源），未配置时用后端默认 15 秒
-        const configuredDuration = Number(useUIStore.getState().lensProjectConfig?.maxVideoDuration)
-        const splitValue = Number.isFinite(configuredDuration) && configuredDuration >= 1
-          ? Math.trunc(configuredDuration)
-          : DEFAULT_SPLIT_VALUE_SECONDS
         setSplitRunning(true)
-        const result = await submitSplitShotTask({
-          dramaId,
-          episodeNum,
-          splitType: 'BY_DURATION',
-          splitValue,
-          saveMode: 'auto',
-          linkSubScene: true,
-          source,
-        })
-        if (!result?.taskQueueId) throw new Error($('后端未返回 taskQueueId'))
-        toast($t('拆分镜任务已提交（{{sourceLabel}}，每段 {{splitValue}} 秒，自动保存），完成后会自动刷新画布', { sourceLabel: sourceLabel, splitValue: splitValue }))
+        if (!scriptContent) {
+          // 无台本：先生成台本；带拆分参数 → 后端台本完成时自动生图、等待、拆镜
+          const result = await submitScriptGen({
+            dramaId,
+            episodeNum,
+            content: novelContent,
+            splitType,
+            splitValue,
+            saveMode: 'auto',
+            linkSubScene: true,
+          })
+          if (!result?.taskQueueId) throw new Error($('后端未返回 taskQueueId'))
+          toast($('本集无台本：已先提交台本生成任务，完成后会自动生成场景图并拆分镜'))
+        } else {
+          // 有台本：直接提交拆镜；后端先补齐缺图并等待就绪（开关打开时）再拆
+          const result = await submitSplitShotTask({
+            dramaId,
+            episodeNum,
+            splitType,
+            splitValue,
+            saveMode: 'auto',
+            linkSubScene: true,
+            source: 'script',
+          })
+          if (!result?.taskQueueId) throw new Error($('后端未返回 taskQueueId'))
+          toast($t('拆分镜任务已提交（台本，{{splitType}} 参数 {{splitValue}}，自动保存），完成后会自动刷新画布', {
+            splitType: splitType === 'BY_DURATION' ? $('按时长') : $('按数量'),
+            splitValue,
+          }))
+        }
         await pollSplitShots(token)
       } catch (error) {
         if (pollTokenRef.current !== token) return

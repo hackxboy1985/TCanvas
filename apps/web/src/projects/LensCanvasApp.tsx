@@ -54,6 +54,7 @@ import { toast } from '../ui/toast'
 import { AssetLibraryModal } from './AssetLibraryModal'
 import { CanvasConfigModal } from './CanvasConfigModal'
 import { CanvasConfirmDialogHost, confirmCanvasAction } from '../canvas/components/CanvasConfirmDialog'
+import { CanvasSplitParamsDialogHost } from '../canvas/components/CanvasSplitParamsDialog'
 import { runNodeRemote } from '../runner/remoteRunner'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
@@ -2623,6 +2624,8 @@ export default function LensCanvasApp(): JSX.Element {
       <PreviewModal />
       {/* 画布内确认弹窗（替代 window.confirm，样式与画布暗色主题一致） */}
       <CanvasConfirmDialogHost />
+      {/* 画布「拆分镜参数」弹窗（拆分方式 + 每段时长/总分镜数） */}
+      <CanvasSplitParamsDialogHost />
       {/* 画布「配置」弹窗（顶部工具栏入口；与 lens 配置页同源） */}
       <CanvasConfigModal
         opened={configModalOpened}

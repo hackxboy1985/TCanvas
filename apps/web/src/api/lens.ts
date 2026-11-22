@@ -669,14 +669,25 @@ export async function submitScriptGen(params: {
   dramaId: string
   episodeNum: number
   content: string
+  /** 可选：传入后后端在台本完成时自动触发拆分镜（画布「拆分镜」无台本时先生成台本用） */
+  splitType?: string
+  splitValue?: number
+  saveMode?: 'auto' | 'manual'
+  linkSubScene?: boolean
 }): Promise<{ taskQueueId?: number | string }> {
+  const body: Record<string, unknown> = {
+    dramaId: params.dramaId,
+    episodeNum: params.episodeNum,
+    content: params.content,
+  }
+  // 仅显式传入时才带拆分参数：不传则后端只生台本，不会自动拆镜（画布「生台本」按钮口径）
+  if (params.splitType) body.splitType = params.splitType
+  if (typeof params.splitValue === 'number') body.splitValue = params.splitValue
+  if (params.saveMode) body.saveMode = params.saveMode
+  if (typeof params.linkSubScene === 'boolean') body.linkSubScene = params.linkSubScene
   return lensFetch<{ taskQueueId?: number | string }>('/api/episode/submitScriptGen', {
     method: 'POST',
-    body: JSON.stringify({
-      dramaId: params.dramaId,
-      episodeNum: params.episodeNum,
-      content: params.content,
-    }),
+    body: JSON.stringify(body),
   })
 }
 
