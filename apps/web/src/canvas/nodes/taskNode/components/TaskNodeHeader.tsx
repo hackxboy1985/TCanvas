@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React from 'react'
 import { ActionIcon, Badge, Text, TextInput } from '@mantine/core'
 import type { IconProps } from '@tabler/icons-react'
 import { IconBrush } from '@tabler/icons-react'
@@ -47,6 +47,8 @@ type TaskNodeHeaderProps = {
   labelInputRef: React.Ref<HTMLInputElement>
   /** 画布缩放补偿系数：>1 时反向放大标题栏，保证标题在屏幕上尺寸不随缩放变小 */
   scale?: number
+  /** 画布当前缩放值：用于二级标题渐隐（<0.5 开始半透明，0.2 完全隐藏） */
+  zoom?: number
 }
 
 /**
@@ -56,24 +58,20 @@ type TaskNodeHeaderProps = {
  * 这里对标题栏反向缩放（1/zoom），并把容器高度同步放大，避免视觉上盖住节点内容。</p>
  */
 function HeaderScaleBox({ scale, children }: { scale: number; children: React.ReactNode }) {
-  const innerRef = useRef<HTMLDivElement | null>(null)
-  const [naturalHeight, setNaturalHeight] = useState(0)
-  useLayoutEffect(() => {
-    const el = innerRef.current
-    if (!el) return
-    const height = el.offsetHeight
-    setNaturalHeight((prev) => (Math.abs(prev - height) > 0.5 ? height : prev))
-  })
   if (scale <= 1) return <>{children}</>
+  // 用 CSS zoom 做反向补偿：zoom 会同时缩放「布局盒」，高度/宽度按真实排版变化，
+  // 不需要每帧测量+setState（之前用 transform + 手量高度会导致缩放到临界档时抖动）
   return (
-    <div className="task-node-header-scale-box" style={{ height: naturalHeight * scale }}>
-      <div
-        ref={innerRef}
-        className="task-node-header-scale-inner"
-        style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: `${100 / scale}%` }}
-      >
-        {children}
-      </div>
+    <div
+      className="task-node-header-scale-box"
+      style={{
+        zoom: scale,
+        width: `${100 / scale}%`,
+        position: 'relative',
+        zIndex: 41,
+      }}
+    >
+      {children}
     </div>
   )
 }
@@ -106,7 +104,14 @@ export function TaskNodeHeader({
   onStartEdit,
   labelInputRef,
   scale = 1,
+  zoom = 1,
 }: TaskNodeHeaderProps) {
+  // 二级标题渐隐：zoom>=0.5 全显示，0.2<=zoom<0.5 线性半透明，zoom<=0.2 完全隐藏（不再占位）
+  const subtitleOpacity = zoom >= 0.5 ? 1 : zoom <= 0.2 ? 0 : (zoom - 0.2) / 0.3
+  const hideSubtitle = subtitleOpacity <= 0
+  // 画布缩小时标题栏被反向放大，节点在屏幕上变窄：隐藏图标/操作/状态等非文字元素，把宽度让给标题，
+  // 否则固定尺寸的图标会挤得标题只剩"陈…"这种省略；一级/二级标题必须始终保留
+  const zoomCompacted = scale > 1
   if (!showMeta) {
     return (
       <HeaderScaleBox scale={scale}>
@@ -120,11 +125,13 @@ export function TaskNodeHeader({
           // 生成中遮罩（inset:0 + backdrop-blur）会盖住整个节点，标题必须叠在遮罩之上才不被糊住
           position: 'relative',
           zIndex: 41,
-          // 类别色条：让图片节点在画布缩放较小、标题被截断时也能靠颜色区分
+          // 类别色条：让图片节点在画布缩放较小、标题被截断时也能靠颜色区分。
+          // 标题栏做了反向缩放补偿，这里的 8px 在屏幕上恒定是 8px（不会随画布缩放变窄），
+          // 因此缩放前后色条与标题的空隙保持一致
           ...(accentColor ? { borderLeft: `3px solid ${accentColor}`, paddingLeft: 8 } : null),
         }}
       >
-        {showIcon && (
+        {showIcon && !zoomCompacted && (
           <div
             className="task-node-header-icon"
             style={{
@@ -156,6 +163,8 @@ export function TaskNodeHeader({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               minWidth: 0,
+              // 缩放补偿时节点在屏幕上很窄：允许标题溢出卡片显示完整文字，不再出现"陈…"
+              ...(zoomCompacted ? { overflow: 'visible', textOverflow: 'clip' } : null),
             }}
             title={currentLabel}
           >
@@ -166,6 +175,11 @@ export function TaskNodeHeader({
               className="task-node-header-subtitle-badge"
               title={subtitleBadge.label}
               style={{
+                opacity: subtitleOpacity,
+                // 缩到 0.2 用 max-height 平滑收起：直接卸载会让标题区高度瞬间塌陷，看起来"抖一下"
+                maxHeight: hideSubtitle ? 0 : 40,
+                overflow: 'hidden',
+                transition: 'opacity 120ms ease, max-height 160ms ease',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -194,13 +208,22 @@ export function TaskNodeHeader({
             <Text
               className="task-node-header-compact-subtitle"
               size="xs"
-              style={{ color: 'rgba(127,127,127,0.85)', fontSize: 11, lineHeight: 1.2, marginTop: 1 }}
+              style={{
+                color: 'rgba(127,127,127,0.85)',
+                fontSize: 11,
+                lineHeight: 1.2,
+                marginTop: 1,
+                opacity: subtitleOpacity,
+                maxHeight: hideSubtitle ? 0 : 40,
+                overflow: 'hidden',
+                transition: 'opacity 120ms ease, max-height 160ms ease',
+              }}
             >
               {subtitle}
             </Text>
           ) : null)}
         </div>
-        {actions}
+        {!zoomCompacted && actions}
         {isNew && (
           <Badge className="task-node-header-new-badge" size="xs" radius="md" color="pink" variant="light">
             {$('新建')}
@@ -227,7 +250,7 @@ export function TaskNodeHeader({
       }}
     >
       <div className="task-node-header-main" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-        {showIcon && (
+        {showIcon && !zoomCompacted && (
           <div
             className="task-node-header-icon"
             style={{
@@ -294,14 +317,25 @@ export function TaskNodeHeader({
                     {$('新建')}
                   </Badge>
                 )}
-                <ActionIcon className="task-node-header-rename" size="sm" variant="subtle" color="gray" title={$("重命名")} onClick={onStartEdit}>
+                {!zoomCompacted && (<ActionIcon className="task-node-header-rename" size="sm" variant="subtle" color="gray" title={$("重命名")} onClick={onStartEdit}>
                   <IconBrush className="task-node-header-rename-icon" size={12} />
-                </ActionIcon>
+                </ActionIcon>)}
               </div>
-              <Text className="task-node-header-subtitle" size="xs" c="dimmed" style={{ marginTop: 2 }}>
+              <Text
+                className="task-node-header-subtitle"
+                size="xs"
+                c="dimmed"
+                style={{
+                  marginTop: 2,
+                  opacity: subtitleOpacity,
+                  maxHeight: hideSubtitle ? 0 : 40,
+                  overflow: 'hidden',
+                  transition: 'opacity 120ms ease, max-height 160ms ease',
+                }}
+              >
                 {subtitle}
               </Text>
-              {metaBadges.length > 0 && (
+              {!zoomCompacted && metaBadges.length > 0 && (
                 <div
                   className="task-node-header-meta-badges"
                   style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}
@@ -324,7 +358,7 @@ export function TaskNodeHeader({
           )}
         </div>
       </div>
-      {showStatus && statusLabel?.trim() && (
+      {showStatus && !zoomCompacted && statusLabel?.trim() && (
         <div
           className="task-node-header-status"
           style={{

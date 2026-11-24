@@ -1437,10 +1437,20 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const updateNodeData = useRFStore(s => s.updateNodeData)
   const deleteEdge = useRFStore(s => s.deleteEdge)
   const appendLog = useRFStore(s => s.appendLog)
-  // 画布缩放档位（量化到 0.05，避免滚轮缩放时每个节点高频重渲染）：
-  // 标题栏按 1/zoom 反向缩放，保证标题在屏幕上的字号不随画布缩小而变小
-  const canvasZoomStep = useStore((state) => Math.round((state.transform?.[2] || 1) * 20) / 20)
-  const headerScale = canvasZoomStep > 0 && canvasZoomStep < 1 ? Math.min(1 / canvasZoomStep, 3) : 1
+  // 画布缩放档位：向上取整到 0.005（ceil 保证补偿系数不会大于真实 1/zoom，
+  // 否则量化误差会让低缩放下的标题反而变大），同时避免每次微小缩放都触发节点重渲染
+  const canvasZoomStep = useStore((state) => Math.ceil((state.transform?.[2] || 1) * 200) / 200)
+  // 缩放补偿：>=0.2 时标题屏幕字号恒定（13px 字号 / 1.2 行高 = 15.6px 屏高）；
+  // 低于 0.2 时允许标题略微收小到 14px 屏高，避免超低缩放下标题比卡片还宽、溢出太多；
+  // 补偿上限 10 = 画布最小缩放 0.1（MIN_ZOOM）的倒数
+  const HEADER_TITLE_LINE_PX = 13 * 1.2
+  // 0.2→0.1 之间线性过渡到 14px 屏高（不在 0.2 处硬切，否则缩放到 20% 会看到标题"跳一下"）
+  const compactTitleFactor = canvasZoomStep < 0.2
+    ? 1 - (1 - 14 / HEADER_TITLE_LINE_PX) * Math.min(1, (0.2 - canvasZoomStep) / 0.1)
+    : 1
+  const headerScale = canvasZoomStep > 0 && canvasZoomStep < 1
+    ? Math.min(1 / canvasZoomStep, 10) * compactTitleFactor
+    : 1
   const addNode = useRFStore(s => s.addNode)
   const rawPrompt = (data as any)?.prompt as string | undefined
   const imagePromptExecutionState = React.useMemo(() => {
@@ -8878,6 +8888,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showStatus={false}
         showSubtitle={Boolean(imageCategoryBadge) || isLensProjectionNode || Boolean(derivedSubtitle)}
         scale={headerScale}
+        zoom={canvasZoomStep}
           onLabelDraftChange={setLabelDraft}
           onCommitLabel={commitLabel}
           onCancelEdit={() => {
