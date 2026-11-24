@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Text, TextInput } from '@mantine/core'
 import type { IconProps } from '@tabler/icons-react'
 import { IconBrush } from '@tabler/icons-react'
@@ -45,6 +45,37 @@ type TaskNodeHeaderProps = {
   onCancelEdit: () => void
   onStartEdit: () => void
   labelInputRef: React.Ref<HTMLInputElement>
+  /** 画布缩放补偿系数：>1 时反向放大标题栏，保证标题在屏幕上尺寸不随缩放变小 */
+  scale?: number
+}
+
+/**
+ * 标题栏缩放补偿容器。
+ *
+ * <p>画布缩放会给整个节点套一层 scale，标题文字在缩小时会变小到看不清。
+ * 这里对标题栏反向缩放（1/zoom），并把容器高度同步放大，避免视觉上盖住节点内容。</p>
+ */
+function HeaderScaleBox({ scale, children }: { scale: number; children: React.ReactNode }) {
+  const innerRef = useRef<HTMLDivElement | null>(null)
+  const [naturalHeight, setNaturalHeight] = useState(0)
+  useLayoutEffect(() => {
+    const el = innerRef.current
+    if (!el) return
+    const height = el.offsetHeight
+    setNaturalHeight((prev) => (Math.abs(prev - height) > 0.5 ? height : prev))
+  })
+  if (scale <= 1) return <>{children}</>
+  return (
+    <div className="task-node-header-scale-box" style={{ height: naturalHeight * scale }}>
+      <div
+        ref={innerRef}
+        className="task-node-header-scale-inner"
+        style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: `${100 / scale}%` }}
+      >
+        {children}
+      </div>
+    </div>
+  )
 }
 
 export function TaskNodeHeader({
@@ -74,9 +105,11 @@ export function TaskNodeHeader({
   onCancelEdit,
   onStartEdit,
   labelInputRef,
+  scale = 1,
 }: TaskNodeHeaderProps) {
   if (!showMeta) {
     return (
+      <HeaderScaleBox scale={scale}>
       <div
         className="task-node-header task-node-header--compact"
         style={{
@@ -174,10 +207,12 @@ export function TaskNodeHeader({
           </Badge>
         )}
       </div>
+      </HeaderScaleBox>
     )
   }
 
   return (
+    <HeaderScaleBox scale={scale}>
     <div
       className="task-node-header"
       style={{
@@ -303,5 +338,6 @@ export function TaskNodeHeader({
         </div>
       )}
     </div>
+    </HeaderScaleBox>
   )
 }

@@ -1437,6 +1437,10 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   const updateNodeData = useRFStore(s => s.updateNodeData)
   const deleteEdge = useRFStore(s => s.deleteEdge)
   const appendLog = useRFStore(s => s.appendLog)
+  // 画布缩放档位（量化到 0.05，避免滚轮缩放时每个节点高频重渲染）：
+  // 标题栏按 1/zoom 反向缩放，保证标题在屏幕上的字号不随画布缩小而变小
+  const canvasZoomStep = useStore((state) => Math.round((state.transform?.[2] || 1) * 20) / 20)
+  const headerScale = canvasZoomStep > 0 && canvasZoomStep < 1 ? Math.min(1 / canvasZoomStep, 3) : 1
   const addNode = useRFStore(s => s.addNode)
   const rawPrompt = (data as any)?.prompt as string | undefined
   const imagePromptExecutionState = React.useMemo(() => {
@@ -8873,6 +8877,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showIcon={false}
         showStatus={false}
         showSubtitle={Boolean(imageCategoryBadge) || isLensProjectionNode || Boolean(derivedSubtitle)}
+        scale={headerScale}
           onLabelDraftChange={setLabelDraft}
           onCommitLabel={commitLabel}
           onCancelEdit={() => {
