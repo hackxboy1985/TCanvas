@@ -65,17 +65,6 @@ type ImageContentProps = {
   } | null
 }
 
-type EmptyUploadGestureState = {
-  pointerId: number
-  startX: number
-  startY: number
-  startedAt: number
-  moved: boolean
-}
-
-const EMPTY_UPLOAD_CLICK_MAX_DURATION_MS = 220
-const EMPTY_UPLOAD_CLICK_MAX_MOVEMENT_PX = 6
-
 export function ImageContent(props: ImageContentProps) {
   const {
     nodeId,
@@ -139,7 +128,6 @@ export function ImageContent(props: ImageContentProps) {
   const isDarkUi = nodeShellText === themeWhite
   const hasVariants = validImageResults.length > 1
   const isExpanded = hasVariants && !!variantsOpen
-  const emptyUploadGestureRef = React.useRef<EmptyUploadGestureState | null>(null)
 
   const frameRadius = 18
   const imageDecoding: 'async' = 'async'
@@ -200,52 +188,6 @@ export function ImageContent(props: ImageContentProps) {
       fileRef.current?.click()
     },
     [fileRef],
-  )
-
-  const resetEmptyUploadGesture = React.useCallback(() => {
-    emptyUploadGestureRef.current = null
-  }, [])
-
-  const handleEmptyPlaceholderPointerDown = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!canUpload || hasPrimaryImage || uploading || !selected) return
-      if (!event.isPrimary) return
-      emptyUploadGestureRef.current = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        startedAt: Date.now(),
-        moved: false,
-      }
-    },
-    [canUpload, hasPrimaryImage, selected, uploading],
-  )
-
-  const handleEmptyPlaceholderPointerMove = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      const gesture = emptyUploadGestureRef.current
-      if (!gesture || gesture.pointerId !== event.pointerId) return
-      if (gesture.moved) return
-      const deltaX = event.clientX - gesture.startX
-      const deltaY = event.clientY - gesture.startY
-      if (Math.hypot(deltaX, deltaY) >= EMPTY_UPLOAD_CLICK_MAX_MOVEMENT_PX) {
-        gesture.moved = true
-      }
-    },
-    [],
-  )
-
-  const handleEmptyPlaceholderClick = React.useCallback(
-    () => {
-      if (!canUpload || hasPrimaryImage || uploading || !selected) return
-      const gesture = emptyUploadGestureRef.current
-      emptyUploadGestureRef.current = null
-      if (!gesture) return
-      const pressedForMs = Date.now() - gesture.startedAt
-      if (gesture.moved || pressedForMs > EMPTY_UPLOAD_CLICK_MAX_DURATION_MS) return
-      fileRef.current?.click()
-    },
-    [canUpload, fileRef, hasPrimaryImage, selected, uploading],
   )
 
   return (
@@ -342,10 +284,6 @@ export function ImageContent(props: ImageContentProps) {
         ) : (
           <div
             className="task-node-image__placeholder"
-            onPointerDown={handleEmptyPlaceholderPointerDown}
-            onPointerMove={handleEmptyPlaceholderPointerMove}
-            onPointerCancel={resetEmptyUploadGesture}
-            onClick={handleEmptyPlaceholderClick}
             style={{
               position: 'absolute',
               inset: 0,
@@ -356,7 +294,7 @@ export function ImageContent(props: ImageContentProps) {
               alignItems: 'center',
               justifyContent: 'center',
               padding: '0 12px',
-              cursor: canUpload && !uploading ? (selected ? 'pointer' : 'grab') : 'default',
+              cursor: 'default',
             }}
           >
             <div
@@ -364,7 +302,8 @@ export function ImageContent(props: ImageContentProps) {
               style={{
                 fontSize: 12,
                 color: mediaOverlayText,
-                opacity: 0.78,
+                // 提示词已单独设底色/字色，父层不能再降透明度，否则文字和底色一起发灰看不清
+                opacity: emptyPromptText && emptyPromptText.trim() ? 1 : 0.78,
                 letterSpacing: 0.2,
                 textAlign: 'center',
               }}
@@ -381,14 +320,20 @@ export function ImageContent(props: ImageContentProps) {
                     textAlign: 'left',
                     letterSpacing: 0,
                     opacity: 1,
+                    boxSizing: 'border-box',
+                    padding: '10px 12px',
+                    borderRadius: 12,
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                    color: isDarkUi ? 'rgba(241, 245, 249, 0.96)' : 'rgba(15, 23, 42, 0.92)',
+                    background: isDarkUi ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)',
+                    border: isDarkUi ? '1px solid rgba(148, 163, 184, 0.28)' : '1px solid rgba(15, 23, 42, 0.08)',
                   }}
                 >
                   {emptyPromptText}
                 </div>
               ) : (
-                selected
-                  ? (compact ? $('单击上传，或拖拽/粘贴图片') : $('单击上传，或拖拽/粘贴图片到画布'))
-                  : (compact ? $('单击聚焦，聚焦后上传') : $('单击聚焦，聚焦后上传，或拖拽/粘贴图片到画布'))
+                compact ? $('拖拽或粘贴图片') : $('拖拽或粘贴图片到画布，或点右上角上传')
               )}
             </div>
           </div>
@@ -476,10 +421,10 @@ export function ImageContent(props: ImageContentProps) {
                 title={hasPrimaryImage ? $('替换/上传图片') : $('上传图片')}
                 aria-label={hasPrimaryImage ? $('替换/上传图片') : $('上传图片')}
                 style={{
-                  width: 26,
-                  height: 26,
+                  width: 34,
+                  height: 34,
                   padding: 0,
-                  borderRadius: 8,
+                  borderRadius: 10,
                   border: `1px solid ${frameBorderColor}`,
                   background: isDarkUi ? 'rgba(0,0,0,0.36)' : 'rgba(255,255,255,0.66)',
                   backdropFilter: 'blur(14px)',
@@ -493,7 +438,7 @@ export function ImageContent(props: ImageContentProps) {
                   opacity: uploading ? 0.78 : 1,
                 }}
               >
-                <IconUpload size={13} stroke={1.9} />
+                <IconUpload size={16} stroke={1.9} />
               </button>
             )}
             {hasVariants && (
