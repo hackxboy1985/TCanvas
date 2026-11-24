@@ -79,7 +79,8 @@ export function TextContent({
       padding="compact"
       style={{
         width: '100%',
-        backgroundColor: textBackgroundTint,
+        // 用 background 而非 backgroundColor：文本节点默认是玻璃渐变底色
+        background: textBackgroundTint,
         display: 'flex',
         flex: 1,
         minHeight: 0,

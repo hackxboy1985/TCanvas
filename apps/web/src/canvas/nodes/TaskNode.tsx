@@ -8204,7 +8204,16 @@ const rewritePromptWithCharacters = React.useCallback(
     }
     return raw
   }, [])
-  const textBackgroundTint = withAlpha(textBackgroundColor, 0.125)
+  // 文本节点卡片底色：默认对齐图片节点的玻璃质感底色，和画布背景拉开层次；
+  // 用户显式设置过自定义背景色时按该色渲染（0.125 在深色画布上几乎不可见，故提高到 0.35）
+  const textNodeHasCustomBackground = Boolean(
+    String((data as { textBackgroundColor?: string } | undefined)?.textBackgroundColor || '').trim(),
+  )
+  const textBackgroundTint = textNodeHasCustomBackground
+    ? withAlpha(textBackgroundColor, 0.35)
+    : (isDarkUi
+      ? 'linear-gradient(180deg, rgba(34,41,52,0.98), rgba(23,29,38,0.98))'
+      : 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,252,0.96))')
   const rawTextHtml = String((data as any)?.textHtml || '').trim()
   React.useEffect(() => {
     const rawHtml = rawTextHtml

@@ -84,6 +84,9 @@ export function TaskNodeHeader({
           alignItems: 'center',
           gap: 12,
           marginBottom: 12,
+          // 生成中遮罩（inset:0 + backdrop-blur）会盖住整个节点，标题必须叠在遮罩之上才不被糊住
+          position: 'relative',
+          zIndex: 41,
           // 类别色条：让图片节点在画布缩放较小、标题被截断时也能靠颜色区分
           ...(accentColor ? { borderLeft: `3px solid ${accentColor}`, paddingLeft: 8 } : null),
         }}
@@ -175,7 +178,19 @@ export function TaskNodeHeader({
   }
 
   return (
-    <div className="task-node-header" style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12, cursor: 'grab' }}>
+    <div
+      className="task-node-header"
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 12,
+        marginBottom: 12,
+        cursor: 'grab',
+        // 同上：标题栏压在生成中遮罩之上，避免一级/二级标题被模糊遮挡
+        position: 'relative',
+        zIndex: 41,
+      }}
+    >
       <div className="task-node-header-main" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
         {showIcon && (
           <div
