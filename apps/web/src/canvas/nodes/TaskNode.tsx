@@ -2,6 +2,7 @@ import React from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position, NodeResizeControl, NodeToolbar, useStore } from '@xyflow/react'
 import { useRFStore } from '../store'
+import { useSelectionRing } from '../utils/useSelectionRing'
 import { useUIStore } from '../../ui/uiStore'
 import { ASSET_REFRESH_EVENT, notifyAssetRefresh } from '../../ui/assetEvents'
 import { ActionIcon, Group, Paper, Popover, Button, Text, Stack, TextInput, Textarea, Select, Loader, Badge, Slider, Modal, Tooltip, Switch, useMantineColorScheme, useMantineTheme } from '@mantine/core'
@@ -8150,8 +8151,10 @@ const rewritePromptWithCharacters = React.useCallback(
   const visibleDefs = uniqueDefs
 
   const shellBackground = 'transparent'
-  const shellBorder = 'none'
-  const shellShadowResolved = 'none'
+  // 通用选中态：描边 + 柔光（按画布缩放反补），与其它节点保持一致；未选中保持原样
+  const selectionRing = useSelectionRing(Boolean(selected), isDarkUi)
+  const shellBorder = selectionRing ? selectionRing.border : 'none'
+  const shellShadowResolved = selectionRing ? selectionRing.boxShadow : 'none'
   const shellPadding = 0
   const shellBackdrop = 'none'
   const textNodePlainText = React.useMemo(

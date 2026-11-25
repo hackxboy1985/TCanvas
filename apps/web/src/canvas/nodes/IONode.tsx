@@ -1,7 +1,9 @@
 import React from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
+import { useMantineColorScheme } from '@mantine/core'
 import { $ } from '../i18n'
+import { useSelectionRing } from '../utils/useSelectionRing'
 
 type Data = { label?: string; kind: 'io-in' | 'io-out'; types?: string[] }
 
@@ -11,7 +13,10 @@ export default function IONode(props: NodeProps): JSX.Element {
   const isIn = data.kind === 'io-in'
   const types = Array.isArray(data.types) && data.types.length ? data.types : ['any']
   const bg = 'var(--canvas-io-bg)'
-  const br = selected ? '1.5px solid var(--canvas-io-border-selected)' : '1px solid var(--canvas-io-border)'
+  const { colorScheme } = useMantineColorScheme()
+  // 通用选中态：描边 + 柔光（按画布缩放反补）
+  const selectionRing = useSelectionRing(Boolean(selected), colorScheme === 'dark')
+  const br = selectionRing ? selectionRing.border : '1px solid var(--canvas-io-border)'
   const itemH = 14
   const paddingY = 6
   const height = Math.max(22, paddingY * 2 + types.length * itemH)
@@ -30,7 +35,7 @@ export default function IONode(props: NodeProps): JSX.Element {
       fontSize: 11,
       borderRadius: 8,
       border: br,
-      boxShadow: '0 8px 16px rgba(0,0,0,.2)',
+      boxShadow: selectionRing ? selectionRing.boxShadow : '0 8px 16px rgba(0,0,0,.2)',
       paddingTop: 4,
     }}>
       <div className="io-node-label" style={{ position: 'absolute', top: 4, left: 6, fontSize: 10, color: 'var(--canvas-node-subtext)' }}>{isIn ? $('入口') : $('出口')}</div>
