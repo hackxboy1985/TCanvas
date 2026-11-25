@@ -1,5 +1,5 @@
 import React from 'react'
-import { ActionIcon, Button, Tooltip } from '@mantine/core'
+import { ActionIcon, Button, Tooltip, type ActionIconProps } from '@mantine/core'
 import { IconList } from '@tabler/icons-react'
 import { useCanvasRenderContext } from '../../../CanvasRenderContext'
 import { readLensAssetTaskIdentity } from '../../../utils/lensAssetTaskIdentity'
@@ -12,7 +12,18 @@ import { $ } from '../../../i18n'
  * <p>自由节点的任务归属是 sceneId(画布flowId)+assetType=10+assetId(节点数字ID)，
  * 与业务资产口径不同，但都有历史任务可查；只显示业务资产会让衍生节点永远没有任务入口。
  */
-export function AssetTaskListButton({ nodeId, data, showLabel = false, onOpen }: { nodeId: string; data: Record<string, unknown>; showLabel?: boolean; onOpen?: (nodeId: string) => void }) {
+type AssetTaskListButtonProps = {
+  nodeId: string
+  data: Record<string, unknown>
+  showLabel?: boolean
+  onOpen?: (nodeId: string) => void
+  /** 图标入口复用所在操作区的样式与尺寸。 */
+  style?: ActionIconProps['style']
+  size?: ActionIconProps['size']
+  radius?: ActionIconProps['radius']
+}
+
+export function AssetTaskListButton({ nodeId, data, showLabel = false, onOpen, style, size = 'sm', radius }: AssetTaskListButtonProps) {
   const { onOpenTaskResult: openDrawer } = useCanvasRenderContext()
   // 生图工具栏使用就地列表；未指定时保留原入口能力，不改原固定抽屉。
   const onOpenTaskResult = onOpen || openDrawer
@@ -33,7 +44,7 @@ export function AssetTaskListButton({ nodeId, data, showLabel = false, onOpen }:
   )
   return (
     <Tooltip className="lens-asset-task-tooltip" label={$("任务记录")} withArrow>
-      <ActionIcon className="lens-asset-task-button nodrag nopan" variant="subtle" color="gray" size="sm"
+      <ActionIcon className="lens-asset-task-button nodrag nopan" variant="subtle" color="gray" size={size} radius={radius} style={style}
         aria-label={$("任务记录")} onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => { event.stopPropagation(); onOpenTaskResult(nodeId) }}>
         <IconList className="lens-asset-task-button-icon" size={16} />

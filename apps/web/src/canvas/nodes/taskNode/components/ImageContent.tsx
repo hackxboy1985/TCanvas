@@ -21,6 +21,8 @@ type ImageResult = {
 
 type ImageContentProps = {
   nodeId: string
+  /** 图片右上角任务入口，与上传按钮共用外观。 */
+  taskActions?: (style: React.CSSProperties) => React.ReactNode
   nodeKind?: string
   selected: boolean
   nodeWidth: number
@@ -68,6 +70,7 @@ type ImageContentProps = {
 export function ImageContent(props: ImageContentProps) {
   const {
     nodeId,
+    taskActions,
     nodeKind,
     selected,
     nodeWidth,
@@ -143,6 +146,23 @@ export function ImageContent(props: ImageContentProps) {
   const frameBorderColor = isDarkUi
     ? 'rgba(255,255,255,0.12)'
     : 'rgba(15,23,42,0.12)'
+  // 上传和任务入口共用基础外观；上传中的反馈只作用于上传按钮。
+  const topActionStyle: React.CSSProperties = {
+    width: 34,
+    height: 34,
+    padding: 0,
+    borderRadius: 10,
+    border: `1px solid ${frameBorderColor}`,
+    background: isDarkUi ? 'rgba(0,0,0,0.36)' : 'rgba(255,255,255,0.66)',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
+    color: mediaOverlayText,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    boxShadow: '0 8px 18px rgba(0,0,0,0.16)',
+  }
   const frameBorderWidth = hasPrimaryImage ? 1 : 1.5
   const frameBorderStyle = hasPrimaryImage ? 'solid' : 'dashed'
   const frameBackground = isDarkUi
@@ -379,7 +399,7 @@ export function ImageContent(props: ImageContentProps) {
           </div>
         )}
 
-        {(canUpload || hasVariants) && (
+        {(canUpload || hasVariants || (zoom >= 0.5 && taskActions)) && (
           <div
             className="task-node-image__top-actions"
             style={{
@@ -421,18 +441,7 @@ export function ImageContent(props: ImageContentProps) {
                 title={hasPrimaryImage ? $('替换/上传图片') : $('上传图片')}
                 aria-label={hasPrimaryImage ? $('替换/上传图片') : $('上传图片')}
                 style={{
-                  width: 34,
-                  height: 34,
-                  padding: 0,
-                  borderRadius: 10,
-                  border: `1px solid ${frameBorderColor}`,
-                  background: isDarkUi ? 'rgba(0,0,0,0.36)' : 'rgba(255,255,255,0.66)',
-                  backdropFilter: 'blur(14px)',
-                  WebkitBackdropFilter: 'blur(14px)',
-                  color: mediaOverlayText,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  ...topActionStyle,
                   cursor: uploading ? 'progress' : 'pointer',
                   boxShadow: uploading ? '0 0 0 2px rgba(59,130,246,0.28)' : '0 8px 18px rgba(0,0,0,0.16)',
                   opacity: uploading ? 0.78 : 1,
@@ -470,6 +479,8 @@ export function ImageContent(props: ImageContentProps) {
                 {variantEntries.length}
               </button>
             )}
+            {/* 任务固定在整个按钮组最右，真实缩放低于 50% 时隐藏。 */}
+            {zoom >= 0.5 && taskActions?.(topActionStyle)}
           </div>
         )}
 
