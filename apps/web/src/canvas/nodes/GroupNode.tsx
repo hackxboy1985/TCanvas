@@ -2,10 +2,8 @@ import React from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { NodeResizeControl } from '@xyflow/react'
 import { IconEdit, IconGripVertical } from '@tabler/icons-react'
-import { useMantineColorScheme } from '@mantine/core'
 import { useRFStore } from '../store'
 import { $ } from '../i18n'
-import { useSelectionRing } from '../utils/useSelectionRing'
 
 type GroupNodeData = {
   label?: string
@@ -15,12 +13,7 @@ type GroupCanvasNode = Node<GroupNodeData, 'groupNode'>
 
 export default function GroupNode({ id, data, selected, dragging }: NodeProps<GroupCanvasNode>): JSX.Element {
   const label = String(data?.label || $('组')).trim() || $('组')
-  const { colorScheme } = useMantineColorScheme()
-  // 通用选中态：描边 + 柔光（按画布缩放反补）；组节点保留虚线语义，仅换色并加柔光
-  const selectionRing = useSelectionRing(Boolean(selected), colorScheme === 'dark')
-  const groupBorder = selectionRing
-    ? selectionRing.border.replace(' solid ', ' dashed ')
-    : `1.5px dashed var(--canvas-group-border)`
+  const borderColor = selected ? 'var(--canvas-group-border-selected)' : 'var(--canvas-group-border)'
   const renameGroup = useRFStore((s) => s.renameGroup)
   const [editing, setEditing] = React.useState(false)
   const [draftLabel, setDraftLabel] = React.useState(label)
@@ -44,10 +37,10 @@ export default function GroupNode({ id, data, selected, dragging }: NodeProps<Gr
         style={{
           width: '100%',
           height: '100%',
-          border: groupBorder,
+          border: `1.5px dashed ${borderColor}`,
           borderRadius: 12,
           background: 'var(--canvas-group-bg)',
-          boxShadow: selectionRing ? selectionRing.boxShadow : 'var(--canvas-group-shadow)',
+          boxShadow: selected ? 'var(--canvas-group-shadow-selected)' : 'var(--canvas-group-shadow)',
           boxSizing: 'border-box',
           position: 'relative',
           transition: 'border-color 120ms ease, box-shadow 120ms ease, background 120ms ease',
