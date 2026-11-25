@@ -5956,6 +5956,25 @@ body {
   color: rgba(15, 23, 42, 0.7);
 }
 
+/* 超低缩放时的节点名牌：标题挂在卡片上方，内部 header 不再保留底部间距/底部外框 */
+.task-node-header-scale-box--nameplate .task-node-header {
+  margin-bottom: 0 !important;
+}
+
+.task-node-header-scale-box--nameplate {
+  background: #2a2e36;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.38);
+  /* 不能 overflow:hidden：超低缩放时标题会被胶囊宽度裁成"陈…"，这里允许横向溢出 */
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+:root[data-mantine-color-scheme="light"] .task-node-header-scale-box--nameplate {
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.16);
+}
+
 .tc-task-node__gen-overlay {
   position: absolute;
   inset: 0;

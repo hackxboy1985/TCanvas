@@ -6704,6 +6704,9 @@ function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>
   }, [data, id, kind, parseStoryboardShotsFromText, prompt, updateNodeData])
 
   const imageProps = {
+    taskActions: isImageNode ? (style: React.CSSProperties) => (
+      <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} onOpen={openAssetTaskPanel} style={style} size={34} radius={10} />
+    ) : undefined,
     nodeId: id,
     nodeKind: kind,
     selected: isSingleSelectionActive,
@@ -8824,6 +8827,56 @@ const rewritePromptWithCharacters = React.useCallback(
     </Popover>
   ) : null
 
+  // 图片类节点的二级标题：直接叠在卡片（图片外框）内部左上角，随卡片缩放，不参与标题补偿
+  // 图片类节点的二级标题：直接叠在卡片（图片外框）内部左上角，随卡片缩放，不随标题补偿
+  const imageCardSubtitleText = derivedSubtitle
+    ? (schema.label || $('图片编辑'))
+    : (isLensProjectionNode
+      ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel)
+      : subtitle)
+  const imageCardSubtitleOverlay = isImageNode && String(imageCardSubtitleText || '').trim() ? (
+    <div
+      className="tc-task-node__card-subtitle"
+      style={{
+        position: 'absolute',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        // 和一级标题顶部对齐（胶囊内文字约在 2~3px 处），顶到卡片顶部边缘
+        top: 2,
+        zIndex: 5,
+        pointerEvents: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+      }}
+    >
+      {imageCategoryBadge ? (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            height: 17,
+            padding: '0 6px',
+            borderRadius: 6,
+            border: `1px solid ${imageCategoryBadge.borderColor}`,
+            background: imageCategoryBadge.background,
+            color: imageCategoryBadge.textColor ?? imageCategoryBadge.color,
+            fontSize: 10.5,
+            fontWeight: 500,
+            lineHeight: '15px',
+            letterSpacing: 0.3,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {imageCategoryBadge.label}
+        </span>
+      ) : (
+        <span style={{ fontSize: 11, lineHeight: 1.2, color: 'rgba(150,160,175,0.92)', whiteSpace: 'nowrap' }}>
+          {imageCardSubtitleText}
+        </span>
+      )}
+    </div>
+  ) : null
+
   return (
     <div
       ref={nodeShellRef}
@@ -8873,7 +8926,7 @@ const rewritePromptWithCharacters = React.useCallback(
           }
           subtitleBadge={imageCategoryBadge}
           accentColor={imageCategoryBadge?.color}
-          actions={<AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} onOpen={openAssetTaskPanel} />}
+          actions={isImageNode ? undefined : <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} onOpen={openAssetTaskPanel} />}
           metaBadges={headerMetaBadges}
           statusLabel={statusLabel}
           statusColor={color}
@@ -8886,7 +8939,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showMeta={false}
         showIcon={false}
         showStatus={false}
-        showSubtitle={Boolean(imageCategoryBadge) || isLensProjectionNode || Boolean(derivedSubtitle)}
+        showSubtitle={!isImageNode && (Boolean(imageCategoryBadge) || isLensProjectionNode || Boolean(derivedSubtitle))}
         scale={headerScale}
         zoom={canvasZoomStep}
           onLabelDraftChange={setLabelDraft}
@@ -9150,7 +9203,11 @@ const rewritePromptWithCharacters = React.useCallback(
         />
       )}
       {/* Content Area for Character/Image/Video/Text kinds */}
+      {/* 二级标题永远叠在卡片内部左上角（随卡片缩放，不参与标题缩放补偿） */}
+      <div style={{ position: 'relative', width: '100%', display: 'flex' }}>
       {mediaBlocks}
+      {imageCardSubtitleOverlay}
+      </div>
       {formBlocks}
       {isProjectDocNode && !isResizableVisualNode && (
         <Paper
@@ -9216,7 +9273,7 @@ const rewritePromptWithCharacters = React.useCallback(
                 useMediaFocusToolbar ? 'tc-task-node__toolbar-content--media' : '',
               ].filter(Boolean).join(' ')}
             >
-              <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} showLabel onOpen={openAssetTaskPanel} />
+              {!isImageNode && <AssetTaskListButton nodeId={id} data={data as Record<string, unknown>} showLabel onOpen={openAssetTaskPanel} />}
               {!useMediaFocusToolbar && controlChipsNode ? (
                 <div className="tc-task-node__toolbar-controls">
                   {controlChipsNode}

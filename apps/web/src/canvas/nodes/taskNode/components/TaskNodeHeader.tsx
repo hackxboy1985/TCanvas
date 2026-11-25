@@ -57,10 +57,68 @@ type TaskNodeHeaderProps = {
  * <p>画布缩放会给整个节点套一层 scale，标题文字在缩小时会变小到看不清。
  * 这里对标题栏反向缩放（1/zoom），并把容器高度同步放大，避免视觉上盖住节点内容。</p>
  */
-function HeaderScaleBox({ scale, children }: { scale: number; children: React.ReactNode }) {
-  if (scale <= 1) return <>{children}</>
+function HeaderScaleBox({
+  scale,
+  variant,
+  zoom,
+  cornerSubtitle,
+  cornerActions,
+  children,
+}: {
+  scale: number
+  /** 超低缩放时的名牌形态：floating=0.2~0.5，mini=<0.2 */
+  variant: 'inline' | 'floating' | 'mini'
+  /** 画布缩放值：用于角落按钮的隐藏阈值 */
+  zoom: number
+  /** 名牌模式下贴在卡片左上角的二级标题（角标或文字） */
+  cornerSubtitle?: React.ReactNode
+  /** 名牌模式下固定在卡片右上角的业务按钮 */
+  cornerActions?: React.ReactNode
+  children: React.ReactNode
+}) {
+  // 统一胶囊叠层：放大时 headerScale=1，胶囊随画布等比放大，不做反向补偿
   // 用 CSS zoom 做反向补偿：zoom 会同时缩放「布局盒」，高度/宽度按真实排版变化，
-  // 不需要每帧测量+setState（之前用 transform + 手量高度会导致缩放到临界档时抖动）
+  // 不需要每帧测量+setState（之前用 transform + 手量高度会导致缩放到临界档时抖动）。
+  // 超低缩放时切换为节点上方的「浮动名牌」：标题不再压住卡片/图片，视觉上更像画布标签
+  {
+    const isMini = variant === 'mini'
+    return (
+      // 标题/按钮合并为同一层绝对叠层：不参与卡片布局，缩放时卡片不上下跳；
+      // 左边距/右边距用 1/scale 补偿，屏幕位置恒定，不会左右漂移
+      <div
+        className="task-node-header-scale-box task-node-header-scale-box--overlay"
+        style={{
+          zoom: scale,
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          // 用 100%（父级=节点宽度）：zoom 已经负责缩放，若再除以 scale 会随缩放变窄，
+          // 右侧按钮就会"一直在动"。100% 保证屏幕右边缘始终贴在卡片右边缘。
+          width: '100%',
+          zIndex: 41,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 8,
+          paddingLeft: `${2 / scale}px`,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          className={`task-node-header-scale-box--nameplate ${isMini ? 'task-node-header-scale-box--mini' : ''}`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            minHeight: isMini ? 20 : 22,
+            padding: `0 ${isMini ? 6 : 7}px`,
+            pointerEvents: 'none',
+          }}
+        >
+          {children}
+        </div>
+
+      </div>
+    )
+  }
   return (
     <div
       className="task-node-header-scale-box"
@@ -69,6 +127,8 @@ function HeaderScaleBox({ scale, children }: { scale: number; children: React.Re
         width: `${100 / scale}%`,
         position: 'relative',
         zIndex: 41,
+        // 卡内模式：标题区严格限制在卡片宽度内，文字不外溢到卡片外
+        overflow: 'hidden',
       }}
     >
       {children}
@@ -106,31 +166,79 @@ export function TaskNodeHeader({
   scale = 1,
   zoom = 1,
 }: TaskNodeHeaderProps) {
-  // 二级标题渐隐：zoom>=0.5 全显示，0.2<=zoom<0.5 线性半透明，zoom<=0.2 完全隐藏（不再占位）
-  const subtitleOpacity = zoom >= 0.5 ? 1 : zoom <= 0.2 ? 0 : (zoom - 0.2) / 0.3
-  const hideSubtitle = subtitleOpacity <= 0
-  // 画布缩小时标题栏被反向放大，节点在屏幕上变窄：隐藏图标/操作/状态等非文字元素，把宽度让给标题，
-  // 否则固定尺寸的图标会挤得标题只剩"陈…"这种省略；一级/二级标题必须始终保留
-  const zoomCompacted = scale > 1
+  // LOD 分级（按设计评审方案 C）：
+  //   zoom>=0.5 卡内完整；0.35~0.5 卡内紧凑（隐藏图标/操作/状态）；0.2~0.35 浮动名牌；<0.2 迷你名牌
+  // 只要画布缩小（zoom<1）就统一用胶囊名牌：不再在 50% 处切换形态，避免视觉突变；
+  // 只有 100% 及以上回到卡内常规标题
+  // 全档统一胶囊叠层（含 100% 以上），不再有卡内常规标题分支
+  const nameplateVariant: 'inline' | 'floating' | 'mini' = zoom < 0.2 ? 'mini' : 'floating'
+  const zoomCompacted = zoom < 1
+  // 二级标题只在卡内模式出现；进入名牌模式后整行不渲染（不留空白）
+  // 胶囊形态下标题区只放一级标题；二级标题由节点侧渲染在卡片内部左上角
+  const showSubtitleRow = false
+  const subtitleOpacity = 1
+  const titleFontSize = nameplateVariant === 'mini' ? 11.7 : 13
+  // 名牌模式下贴在卡片左上角的二级标题：有角标就用角标，否则用灰色小字
+  const cornerSubtitleNode: React.ReactNode = !showSubtitle
+    ? null
+    : subtitleBadge
+      ? (
+          <span
+            className="task-node-header-subtitle-badge"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              height: 17,
+              padding: '0 6px',
+              borderRadius: 6,
+              border: `1px solid ${subtitleBadge.borderColor}`,
+              background: subtitleBadge.background,
+              color: subtitleBadge.textColor ?? subtitleBadge.color,
+              fontSize: 10.5,
+              fontWeight: 500,
+              lineHeight: '15px',
+              letterSpacing: 0.3,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {subtitleBadge.label}
+          </span>
+        )
+      : subtitle.trim()
+        ? (
+            <span style={{ fontSize: 11, lineHeight: 1.2, color: 'rgba(150, 160, 175, 0.92)', whiteSpace: 'nowrap' }}>
+              {subtitle}
+            </span>
+          )
+        : null
   if (!showMeta) {
     return (
-      <HeaderScaleBox scale={scale}>
+      <HeaderScaleBox scale={scale} variant={nameplateVariant} zoom={zoom}>
       <div
         className="task-node-header task-node-header--compact"
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
+          gap: 8,
           marginBottom: 12,
           // 生成中遮罩（inset:0 + backdrop-blur）会盖住整个节点，标题必须叠在遮罩之上才不被糊住
           position: 'relative',
           zIndex: 41,
-          // 类别色条：让图片节点在画布缩放较小、标题被截断时也能靠颜色区分。
-          // 标题栏做了反向缩放补偿，这里的 8px 在屏幕上恒定是 8px（不会随画布缩放变窄），
-          // 因此缩放前后色条与标题的空隙保持一致
-          ...(accentColor ? { borderLeft: `3px solid ${accentColor}`, paddingLeft: 8 } : null),
         }}
       >
+        {/* 类别色条：3×12 的小标记（不是整条标题栏的左边框），避免缩小时像一根旗杆 */}
+        {accentColor && (
+          <span
+            className="task-node-header-accent"
+            style={{
+              width: 3,
+              height: nameplateVariant === 'mini' ? 10 : 12,
+              borderRadius: 1.5,
+              background: accentColor,
+              flexShrink: 0,
+            }}
+          />
+        )}
         {showIcon && !zoomCompacted && (
           <div
             className="task-node-header-icon"
@@ -158,28 +266,26 @@ export function TaskNodeHeader({
             fw={600}
             style={{
               color: nodeShellText,
+              fontSize: titleFontSize,
               lineHeight: 1.2,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               minWidth: 0,
-              // 缩放补偿时节点在屏幕上很窄：允许标题溢出卡片显示完整文字，不再出现"陈…"
+              // 名牌模式：整条标题不能撑破名牌，超出用省略号（名牌最大宽已按 4 个字留够）
               ...(zoomCompacted ? { overflow: 'visible', textOverflow: 'clip' } : null),
             }}
             title={currentLabel}
           >
             {currentLabel}
           </Text>
-          {showSubtitle && (subtitleBadge ? (
+          {showSubtitleRow && (subtitleBadge ? (
             <span
               className="task-node-header-subtitle-badge"
               title={subtitleBadge.label}
               style={{
                 opacity: subtitleOpacity,
-                // 缩到 0.2 用 max-height 平滑收起：直接卸载会让标题区高度瞬间塌陷，看起来"抖一下"
-                maxHeight: hideSubtitle ? 0 : 40,
-                overflow: 'hidden',
-                transition: 'opacity 120ms ease, max-height 160ms ease',
+                transition: 'opacity 120ms ease',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -196,7 +302,6 @@ export function TaskNodeHeader({
                 lineHeight: '17px',
                 letterSpacing: 0.4,
                 whiteSpace: 'nowrap',
-                overflow: 'visible',
                 flexShrink: 0,
                 // 顶部 1px 内高光 + 轻微下沉投影，形成玻璃质感（Raycast 方案核心细节）
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 2px rgba(0,0,0,0.35)',
@@ -214,9 +319,11 @@ export function TaskNodeHeader({
                 lineHeight: 1.2,
                 marginTop: 1,
                 opacity: subtitleOpacity,
-                maxHeight: hideSubtitle ? 0 : 40,
+                transition: 'opacity 120ms ease',
+                maxWidth: '100%',
+                whiteSpace: 'nowrap',
                 overflow: 'hidden',
-                transition: 'opacity 120ms ease, max-height 160ms ease',
+                textOverflow: 'ellipsis',
               }}
             >
               {subtitle}
@@ -235,13 +342,13 @@ export function TaskNodeHeader({
   }
 
   return (
-    <HeaderScaleBox scale={scale}>
+    <HeaderScaleBox scale={scale} variant={nameplateVariant} zoom={zoom}>
     <div
       className="task-node-header"
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
-        gap: 12,
+        alignItems: 'center',
+        gap: 8,
         marginBottom: 12,
         cursor: 'grab',
         // 同上：标题栏压在生成中遮罩之上，避免一级/二级标题被模糊遮挡
@@ -249,6 +356,19 @@ export function TaskNodeHeader({
         zIndex: 41,
       }}
     >
+      {/* 类别色条：同紧凑分支，3×12 小标记 */}
+      {accentColor && (
+        <span
+          className="task-node-header-accent"
+          style={{
+            width: 3,
+            height: nameplateVariant === 'mini' ? 10 : 12,
+            borderRadius: 1.5,
+            background: accentColor,
+            flexShrink: 0,
+          }}
+        />
+      )}
       <div className="task-node-header-main" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
         {showIcon && !zoomCompacted && (
           <div
@@ -296,6 +416,7 @@ export function TaskNodeHeader({
                   fw={600}
                   style={{
                     color: nodeShellText,
+                    fontSize: titleFontSize,
                     lineHeight: 1.2,
                     cursor: 'pointer',
                     flex: 1,
@@ -321,20 +442,24 @@ export function TaskNodeHeader({
                   <IconBrush className="task-node-header-rename-icon" size={12} />
                 </ActionIcon>)}
               </div>
-              <Text
-                className="task-node-header-subtitle"
-                size="xs"
-                c="dimmed"
-                style={{
-                  marginTop: 2,
-                  opacity: subtitleOpacity,
-                  maxHeight: hideSubtitle ? 0 : 40,
-                  overflow: 'hidden',
-                  transition: 'opacity 120ms ease, max-height 160ms ease',
-                }}
-              >
-                {subtitle}
-              </Text>
+              {showSubtitleRow && (
+                <Text
+                  className="task-node-header-subtitle"
+                  size="xs"
+                  c="dimmed"
+                  style={{
+                    marginTop: 2,
+                    opacity: subtitleOpacity,
+                    transition: 'opacity 120ms ease',
+                    maxWidth: '100%',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {subtitle}
+                </Text>
+              )}
               {!zoomCompacted && metaBadges.length > 0 && (
                 <div
                   className="task-node-header-meta-badges"
