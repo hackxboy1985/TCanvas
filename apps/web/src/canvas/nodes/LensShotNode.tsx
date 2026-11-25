@@ -13,7 +13,7 @@
  * 现有 storyboard 节点保留不动。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Handle, Position, NodeToolbar, useReactFlow, type Node, type NodeProps } from '@xyflow/react'
+import { Handle, Position, NodeToolbar, useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
 import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip, Menu } from '@mantine/core'
 import {
   IconBrain,
@@ -962,6 +962,13 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     onOpenTaskResult(id)
   }, [id, onOpenTaskResult])
 
+  // 画布缩放档位（量化到 0.05，避免滚轮缩放时高频重渲染）。
+  // 选中描边/柔光/标题按 1/zoom 反补，保证缩小画布后选中节点依然看得清、定位得到。
+  const canvasZoomStep = useStore((state) => Math.round((state.transform?.[2] || 1) * 20) / 20)
+  const zoomCompensation = canvasZoomStep > 0 && canvasZoomStep < 1 ? Math.min(1 / canvasZoomStep, 3) : 1
+  // 标题反缩放单独限幅：1/zoom 全量会把标题放得过大、压满标题栏，这里封顶 1.6 倍
+  const titleScale = canvasZoomStep > 0 && canvasZoomStep < 1 ? Math.min(1 / canvasZoomStep, 1.6) : 1
+
   // 横屏：宽 800、高按比例（16:9→450）；竖屏：高度限制 720、宽度随高度收窄（9:16→720×405），视频完整不裁切
   const HEADER_HEIGHT = 44
   const REFS_BAR_HEIGHT = 38
@@ -988,10 +995,24 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   const contentChromeHeight = isVideoResult ? VIDEO_CONTENT_CHROME_HEIGHT : 0
   const shellHeight = mediaHeight + contentChromeHeight + HEADER_HEIGHT + (showRefs && refs.length > 0 ? REFS_BAR_HEIGHT : 0)
 
+  // 选中态：描边与外圈按 1/zoom 反补，缩小画布后视觉粗细恒定；柔光半径封顶避免小比例下散成雾。
+  // 未选中节点完全不变，避免干扰其它节点。
+  const selectedBorderWidth = 2 * zoomCompensation
+  const selectedRingWidth = 4 * zoomCompensation
+  const selectedGlowRadius = Math.min(22 * zoomCompensation, 28)
+  const selectedGlowSpread = 2 * zoomCompensation
+  const selectedAccentColor = isDark ? '#4C8DFF' : '#2563eb'
+
   const shell = {
     background: isDark ? 'rgba(15,20,28,0.96)' : 'rgba(255,255,255,0.98)',
-    border: selected ? '1px solid #5b8def' : isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(15,23,42,0.08)',
-    boxShadow: selected ? '0 0 0 3px rgba(91,141,239,0.25), 0 8px 24px rgba(0,0,0,0.12)' : '0 4px 16px rgba(0,0,0,0.08)',
+    border: selected
+      ? `${selectedBorderWidth}px solid ${selectedAccentColor}`
+      : isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(15,23,42,0.08)',
+    boxShadow: selected
+      ? `0 0 0 ${selectedRingWidth}px ${isDark ? 'rgba(76,141,255,0.28)' : 'rgba(37,99,235,0.22)'}, 0 0 ${selectedGlowRadius}px ${selectedGlowSpread}px ${isDark ? 'rgba(76,141,255,0.22)' : 'rgba(37,99,235,0.16)'}, 0 8px 24px rgba(0,0,0,0.12)`
+      : '0 4px 16px rgba(0,0,0,0.08)',
+    // 选中时轻微提亮，让节点从深色画布浮起（未选中不受影响）
+    filter: selected ? 'brightness(1.06)' : undefined,
     color: isDark ? '#f0f0f0' : '#1d2129',
     borderRadius: 12,
     // 宽度随视频比例、高度随视频比例（+顶部栏/引用行高）
@@ -1009,9 +1030,55 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       <Handle className="lens-shot-handle" type="source" position={Position.Right} />
 
       {/* 顶部栏：分镜号 + 时长（紧跟序号左侧）+ 状态圆点（时长取分镜 time 字段或视频实际时长） */}
-      <div className="lens-shot-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 44, padding: '0 12px', borderBottom: '1px solid rgba(127,127,127,0.18)', fontSize: 30, fontWeight: 600, lineHeight: 1 }}>
+      {/* 标题栏按 1/zoom 反向缩放：画布缩小时标题在屏幕上的字号不变，配合 ban 选中描边便于定位。
+          容器高度同步放大，避免反缩放后盖住下方视频内容。 */}
+      <div
+        className="lens-shot-header-scale-box"
+        style={{
+          height: HEADER_HEIGHT * (titleScale > 1 ? titleScale : 1),
+          flex: '0 0 auto',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+      <div
+        className="lens-shot-header"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          height: 44,
+          padding: '0 12px',
+          borderBottom: '1px solid rgba(127,127,127,0.18)',
+          // 标题基准字号 22px：与时长胶囊、选中胶囊同一视觉尺度，反缩放后也不至于撑满标题栏
+          fontSize: 22,
+          fontWeight: 600,
+          lineHeight: 1.25,
+          ...(titleScale > 1
+            ? { transform: `scale(${titleScale})`, transformOrigin: 'top left', width: `${100 / titleScale}%` }
+            : null),
+        }}
+      >
         <span className="lens-shot-order" style={{ display: 'inline-flex', alignItems: 'baseline' }}>
-          {$('分镜')}{data.storyboardOrder ?? '-'}
+          {/* 「分镜X」标题本身套胶囊样式（与时长胶囊同构），选中时高亮为品类蓝；不再额外渲染「选中」标签 */}
+          <span
+            className="lens-shot-order-chip"
+            style={selected ? {
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 600,
+              fontSize: 22,
+              color: isDark ? '#EAF2FF' : '#1D4ED8',
+              background: isDark ? 'linear-gradient(135deg,#1B3A6B,#24508C)' : 'rgba(37,99,235,0.12)',
+              border: isDark ? '1px solid rgba(96,165,250,0.62)' : '1px solid rgba(37,99,235,0.32)',
+              padding: '1px 10px',
+              borderRadius: 999,
+              lineHeight: 1.25,
+            } : undefined}
+          >
+            {$('分镜')}{data.storyboardOrder ?? '-'}
+          </span>
           {mediaSeconds != null && (
             <span className="lens-shot-duration" style={{ fontWeight: 600, marginLeft: 14, fontSize: 22, color: '#8ab4ff', background: 'rgba(91,141,239,0.16)', padding: '1px 9px', borderRadius: 999, lineHeight: 1.2 }}>
               {formatSeconds(mediaSeconds)}
@@ -1038,6 +1105,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
           )}
           <StatusDot data={data} />
         </span>
+      </div>
       </div>
 
       {/* 中间区：视频（复用视频节点 VideoContent）/ 图片 / 脚本 */}
