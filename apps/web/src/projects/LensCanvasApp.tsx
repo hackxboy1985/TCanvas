@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
-import { Button, Group, Select, Switch, Text, LoadingOverlay, Alert, Modal, Progress, ActionIcon } from '@mantine/core'
+import { Button, Group, Switch, Text, LoadingOverlay, Alert, Modal, Progress, ActionIcon } from '@mantine/core'
 import { IconBoxMultiple, IconLanguage, IconSettings, IconWand } from '@tabler/icons-react'
 import Canvas from '../canvas/Canvas'
 import PreviewModal from '../ui/PreviewModal'
@@ -58,6 +58,7 @@ import { CanvasSplitParamsDialogHost } from '../canvas/components/CanvasSplitPar
 import { runNodeRemote } from '../runner/remoteRunner'
 import { LENS_ASSET_MEDIA_HEIGHT, LENS_ASSET_NODE_WIDTH } from './lensCanvasNodeLayout'
 import { IMAGE_NODE_DEFAULT_HEIGHT, IMAGE_NODE_DEFAULT_WIDTH } from '../canvas/utils/constants'
+import { LensEpisodeSelect } from './LensEpisodeSelect'
 
 import { $, $t, getCurrentLanguage, setLanguage } from '../canvas/i18n'
 /** 读取 URL query 参数 */
@@ -2495,14 +2496,10 @@ export default function LensCanvasApp(): JSX.Element {
       <Group className="lens-canvas-topbar" p={8} gap="xs" justify="space-between">
         <Group gap="xs">
           <Text size="sm" fw={600}>{ $('画布') }</Text>
-          <Select
-            className="lens-canvas-episode-select"
-            size="xs"
-            placeholder={$('选集')}
-            value={String(episodeNum)}
-            onChange={(v) => { const next = Number(v); if (Number.isFinite(next)) void switchEpisode(next) }}
-            data={episodeOptions.length > 0 ? episodeOptions : [{ value: String(episodeNum), label: $t('第{{episodeNum}}集', { episodeNum: episodeNum }) }]}
-            w={180}
+          <LensEpisodeSelect
+            episodeNum={episodeNum}
+            onChange={(next) => { void switchEpisode(next) }}
+            options={episodeOptions.length > 0 ? episodeOptions : [{ value: String(episodeNum), label: $t('第{{episodeNum}}集', { episodeNum: episodeNum }) }]}
           />
           {/* <Switch
             className="lens-canvas-refs-switch"
