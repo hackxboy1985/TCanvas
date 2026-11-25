@@ -231,6 +231,53 @@ body {
   outline: none !important;
 }
 
+/* ==========================================================================
+   节点选中态（统一）：描边 + 柔光
+   - 用 React Flow 的 .selected 外层伪元素绘制，节点组件与业务逻辑完全不需要改
+   - 描边宽度 / 外圈扩散 / 柔光半径按 --tc-inv-zoom（Canvas 写入的 1/zoom）反补，
+     保证任何缩放级别下选中描边的视觉粗细恒定，缩小画布后仍能快速定位节点
+   - 只在选中时出现，未选中节点外观不变
+   ========================================================================== */
+:root {
+  --tc-selection-accent: #4c8dff;
+  --tc-selection-ring: rgba(76, 141, 255, 0.28);
+  --tc-selection-glow: rgba(76, 141, 255, 0.22);
+}
+
+:root[data-mantine-color-scheme='light'] {
+  --tc-selection-accent: #2563eb;
+  --tc-selection-ring: rgba(37, 99, 235, 0.22);
+  --tc-selection-glow: rgba(37, 99, 235, 0.16);
+}
+
+.react-flow__node-taskNode.selected::after,
+.react-flow__node-ioNode.selected::after,
+.react-flow__node-groupNode.selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  border: calc(2px * var(--tc-inv-zoom, 1)) solid var(--tc-selection-accent);
+  box-shadow:
+    0 0 0 calc(4px * var(--tc-inv-zoom, 1)) var(--tc-selection-ring),
+    0 0 calc(22px * var(--tc-inv-zoom, 1)) calc(2px * var(--tc-inv-zoom, 1)) var(--tc-selection-glow);
+}
+
+/* 各节点类型的圆角与其外壳保持一致；分组节点保留虚线语义 */
+.react-flow__node-taskNode.selected::after {
+  border-radius: 22px;
+}
+
+.react-flow__node-ioNode.selected::after {
+  border-radius: 8px;
+}
+
+.react-flow__node-groupNode.selected::after {
+  border-radius: 12px;
+  border-style: dashed;
+}
+
 .tc-group-node__resize-control {
   width: 14px;
   height: 14px;
@@ -8586,6 +8633,12 @@ body {
 
 .tc-ai-chat__mention-item:hover {
   background: rgba(127, 127, 127, 0.12);
+}
+
+/* 键盘 ↑/↓ 高亮项：与 hover 同视觉，保证方向键操作时看得见当前选中项 */
+.tc-ai-chat__mention-item--active,
+.tc-ai-chat__mention-item--active:hover {
+  background: rgba(127, 127, 127, 0.18);
 }
 
 .tc-ai-chat__mention-item-label {

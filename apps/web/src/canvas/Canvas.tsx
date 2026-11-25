@@ -447,6 +447,15 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
   // 画布缩放（工具栏百分比显示；zoom 变化才重渲染）
   const canvasZoom = useStore((s) => s.transform[2])
 
+  // 选中态缩放补偿：把 1/zoom 写入 CSS 变量，styles.css 用它给所有节点的 .selected 描边/柔光做反补。
+  // 这样任何缩放级别下选中描边的视觉粗细恒定，缩小画布后仍能定位节点；节点组件本身不需要改。
+  useEffect(() => {
+    const zoom = canvasZoom > 0 ? canvasZoom : 1
+    // 封顶 4 倍：极端缩小下继续加粗会糊成一片
+    const compensation = zoom < 1 ? Math.min(1 / zoom, 4) : 1
+    document.documentElement.style.setProperty('--tc-inv-zoom', String(compensation))
+  }, [canvasZoom])
+
   // 整理画布快捷键 ⌥⌘F（Alt+Meta+F）
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
