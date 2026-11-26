@@ -124,7 +124,94 @@ describe('分镜提示词的画布资产候选', () => {
     expect(reopened.getByRole('textbox').querySelectorAll('[data-prompt-token]')).toHaveLength(0)
   })
 
-  it('仅恢复有结束边界的显式名称，避免短名吞掉长名', () => {
+  it('原子引用后接分号及空格退格不弹出候选', () => {
+    canvas.nodes = [asset('1', 1, '小明')]
+    for (const separator of [';', '；']) {
+      const token = '@[lens-asset:1:1:%E5%B0%8F%E6%98%8E]'
+      const ui = render(<Composer initial={token + separator} />)
+      const editor = ui.getByRole('textbox')
+      expect(editor.querySelectorAll('[data-prompt-token]')).toHaveLength(1)
+      const text = editor.lastChild as Text
+      text.data += ' '
+      window.getSelection()?.collapse(text, text.length)
+      fireEvent.input(editor)
+      expect(ui.queryByRole('listbox')).toBeNull()
+      text.data = text.data.slice(0, -1)
+      fireEvent.input(editor)
+      expect(ui.queryByRole('listbox')).toBeNull()
+      ui.unmount()
+    }
+  })
+
+  it('旧名称跨分号后不重新解析，新 @ 查询仍可筛选选择', () => {
+    canvas.nodes = [asset('1', 1, '小明')]
+    const ui = render(<Composer initial={'@小明；'} />)
+    const editor = ui.getByRole('textbox')
+    expect(editor.querySelectorAll('[data-prompt-token]')).toHaveLength(1)
+    const text = editor.lastChild as Text
+    text.data += ' '
+    window.getSelection()?.collapse(text, text.length)
+    fireEvent.input(editor)
+    expect(ui.queryByRole('listbox')).toBeNull()
+    enterText(editor, '@小')
+    expect(ui.getByRole('listbox')).toBeTruthy()
+    fireEvent.keyDown(editor, { key: 'Enter' })
+    expect(readPromptDOM(editor)).toContain('@[lens-asset:1:1:')
+  })
+  it.each([';', '；'])('按退格删除已恢复引用后面的 %s 和空格时不重开候选', separator => {
+    const ui = render(<Composer initial={'@小明' + separator + ' '} refs={[{ category: 1, id: '1', name: '小明' }]} />)
+    const editor = ui.getByRole('textbox')
+    editor.focus()
+    expect(editor.querySelector('[data-prompt-token]')).not.toBeNull()
+    const record = () => {
+      const selection = window.getSelection()!
+      const prefix = document.createRange()
+      prefix.selectNodeContents(editor)
+      prefix.setEnd(selection.anchorNode!, selection.anchorOffset)
+      return [readPromptDOM(editor), readPromptDOM(prefix.cloneContents()).length, Boolean(ui.queryByRole('listbox'))]
+    }
+    const suffix = editor.lastChild as Text
+    const snapshots = []
+    for (const index of [2, 1]) {
+      window.getSelection()!.collapse(suffix, index)
+      snapshots.push(record())
+      expect(fireEvent.keyDown(editor, { key: 'Backspace' })).toBe(true)
+      suffix.deleteData(index - 1, 1)
+      window.getSelection()!.collapse(suffix, index - 1)
+      fireEvent.input(editor, { inputType: 'deleteContentBackward' })
+      snapshots.push(record())
+    }
+    expect(snapshots).toEqual([
+      ['@小明' + separator + ' ', 5, false], ['@小明' + separator, 4, false],
+      ['@小明' + separator, 4, false], ['@小明', 3, false],
+    ])
+  })
+
+
+  it.each([';', '；'])('恢复分号 %s 后连续出现且紧接中文正文的显式引用', separator => {
+    canvas.nodes = [asset('1', 1, '壮汉', { imageUrl: '/strong.png' })]
+    const refs = [{ id: '2', category: 1, name: '陈渊', imgUrl: '/chen.png' }]
+    const value = '镜头拉近' + separator + '@壮汉又在@陈渊、@陈渊在院落中' + separator + '@壮汉@陈渊'
+    const ui = render(<Composer initial={value} refs={refs} />)
+    const editor = ui.getByRole('textbox')
+    const chips = Array.from(editor.querySelectorAll('[data-prompt-token]'))
+    expect(chips.map(chip => chip.textContent)).toEqual(['壮汉', '陈渊', '陈渊', '壮汉', '陈渊'])
+    expect(chips.map(chip => chip.querySelector('img')?.getAttribute('src')?.split('?')[0]))
+      .toEqual(['/strong.png', '/chen.png', '/chen.png', '/strong.png', '/chen.png'])
+    expect(readPromptDOM(editor)).toBe(value)
+    expect(ui.queryByRole('listbox')).toBeNull()
+  })
+
+  it('最长已知名称优先，较长名称重名时不回退成短名', () => {
+    canvas.nodes = [asset('1', 1, '小明'), asset('2', 1, '小明明'), asset('3', 2, '小明月'), asset('4', 3, '小明月')]
+    const value = '@小明明走来；@小明月走来；@小明（外套）走来'
+    const ui = render(<Composer initial={value} />)
+    const editor = ui.getByRole('textbox')
+    expect(Array.from(editor.querySelectorAll('[data-prompt-token]'), chip => chip.textContent)).toEqual(['小明明'])
+    expect(readPromptDOM(editor)).toBe(value)
+  })
+
+  it('保留未知的重复字名称及子造型', () => {
     canvas.nodes = [asset('1', 1, '小明')]
     const ui = render(<Composer initial="@小明明 @小明（外套）" />)
     expect(ui.getByRole('textbox').querySelector('[data-prompt-token]')).toBeNull()

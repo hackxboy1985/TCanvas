@@ -11,6 +11,7 @@
   display: inline-flex; vertical-align: middle; align-items: center; gap: 4px;
   padding: 0 5px; margin: 0 2px; max-width: 100%; height: 24px; border-radius: 4px;
   background: var(--mantine-color-default-hover); color: var(--mantine-color-text);
+  box-shadow: inset 0 0 0 1px var(--mantine-color-default-border, var(--mantine-color-gray-4));
   user-select: all; white-space: nowrap;
 }
 .tc-chat-mention-composer__thumbnail { width: 20px; height: 20px; object-fit: cover; border-radius: 3px; }

@@ -12,6 +12,8 @@ export interface PromptReference {
   matchTokens?: string[]
   label: string
   imageUrl?: string | null
+  /** 仅占住显式引用的完整名称，同名多身份时保留原文。 */
+  unresolved?: boolean
 }
 export interface PromptReferenceEditorHandle {
   value: string
@@ -26,7 +28,7 @@ interface Props {
   references: PromptReference[]
   /** 显式 @ 段作为整体匹配，禁止正文别名进入未识别的段。 */
   protectExplicitMentions?: boolean
-  onChange: (event: { currentTarget: PromptReferenceEditorHandle }) => void
+    onChange: (event: { currentTarget: PromptReferenceEditorHandle }) => void
   className?: string
   placeholder?: string
   readOnly?: boolean
@@ -96,6 +98,15 @@ function placeSelection(root: HTMLElement, start: number, end: number): void {
   window.getSelection()?.setBaseAndExtent(anchor.startContainer, anchor.startOffset, focus.startContainer, focus.startOffset)
 }
 
+const EXPLICIT_BOUNDARY = /[\s,，。！？、；;:：!?'"\]}>）)]/
+/** 最长已知名称后允许普通中文正文；括号造型及重复末字长名保持原文。 */
+function hasExplicitBoundary(value: string, end: number, token: string): boolean {
+  const next = value[end]
+  if (end === value.length || next === '@' || EXPLICIT_BOUNDARY.test(next) || (token.startsWith('@[') && token.endsWith(']'))) return true
+  if (!next || !/[\p{Script=Han}]/u.test(next) || token.endsWith(next) || next === '（' || next === '(') return false
+  return true
+}
+
 /** 参考 RuoYi 原子标签交互，复用 OSS 缩略图及浏览器编辑历史。 */
 export const PromptReferenceEditor = forwardRef<PromptReferenceEditorHandle, Props>(function PromptReferenceEditor(props, ref) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -130,19 +141,14 @@ export const PromptReferenceEditor = forwardRef<PromptReferenceEditorHandle, Pro
     let cursor = 0
     let plain = ''
     const flush = () => { if (plain) { fragment.append(document.createTextNode(plain)); plain = '' } }
-    const explicitBoundary = /[\s,，。！？、；;:：!?"'\]}>）)]/
     while (cursor < props.value.length) {
       const explicit = props.protectExplicitMentions && props.value[cursor] === '@'
-      const match = references.find(({ matchToken }) => {
-        if (!props.value.startsWith(matchToken, cursor)) return false
-        if (!explicit) return true
-        const next = props.value[cursor + matchToken.length]
-        return matchToken.startsWith('@') && (!next || explicitBoundary.test(next))
-      })
-      if (!match) {
+      // 按最长已知名称先确定候选，即使它重名或边界不成立，也不回退到短名。
+      const match = references.find(({ matchToken }) => props.value.startsWith(matchToken, cursor))
+      if (!match || match.item.unresolved || (explicit && !hasExplicitBoundary(props.value, cursor + match.matchToken.length, match.matchToken))) {
         plain += props.value[cursor++]
         if (explicit) {
-          while (cursor < props.value.length && props.value[cursor] !== '@' && !explicitBoundary.test(props.value[cursor])) {
+          while (cursor < props.value.length && props.value[cursor] !== '@' && !EXPLICIT_BOUNDARY.test(props.value[cursor])) {
             plain += props.value[cursor++]
           }
         }

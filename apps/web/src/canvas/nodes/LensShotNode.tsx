@@ -451,30 +451,40 @@ export function shotPromptForModel(value: string): string {
 
 /** 定位光标前的 @ 查询，仅替换触发符和已输入的查询文本。 */
 function readShotMention(value: string, caret: number) {
-  const match = /@([^\s@[\]]*)$/.exec(value.slice(0, caret))
+  const match = /@([^\s@[\]，。！？、；;:：!?"'\]}>）)]*)$/.exec(value.slice(0, caret))
   return match ? { start: match.index, end: caret, query: match[1].toLowerCase() } : null
+}
+
+/** 将原子标签的 DOM 范围换算成序列化偏移，排除标签内已有的 @。 */
+function readLiveShotMention(value: string, caret: number, root: HTMLElement | null) {
+  const selection = window.getSelection()
+  if (!root || !selection?.isCollapsed || !root.contains(selection.anchorNode)) return null
+  const mention = readShotMention(value, caret)
+  if (!mention) return null
+  const range = document.createRange()
+  range.selectNodeContents(root)
+  for (const chip of root.querySelectorAll<HTMLElement>('[data-prompt-token]')) {
+    range.setEndBefore(chip)
+    const start = readPromptDOM(range.cloneContents()).length
+    const end = start + readPromptDOM(chip).length
+    if (mention.start >= start && mention.start < end) return null
+  }
+  return mention
 }
 
 
 
-/** 业务引用保留裸名别名。重开后只有唯一的显式 @名称 才从画布恢复。 */
+/** 业务引用保留裸名别名，显式引用按实际名称及资产身份恢复。 */
 function buildShotPromptReferences(value: string, refs: readonly LensShotRef[], assets: readonly LensShotRef[]): PromptReference[] {
-  const byName = new Map<string, Set<string>>()
+  const byId = new Map<string, LensShotRef>()
   for (const ref of [...refs, ...assets]) {
-    const identities = byName.get(ref.name) ?? new Set<string>()
-    identities.add(referenceKey(ref))
-    byName.set(ref.name, identities)
+    const key = referenceKey(ref)
+    if (!byId.get(key)?.imgUrl) byId.set(key, ref)
   }
-  const business = refs.filter(ref => {
-    if (!ref.name) return false
-    const token = `@${ref.name}`
-    const explicit = value.includes(token) || value.includes(JSON.stringify(token).slice(1, -1))
-    return !explicit || byName.get(ref.name)?.size === 1
-  }).map(ref => ({
+  const business = refs.filter(ref => ref.name).map(ref => ({
     token: `@${ref.name}`, displayToken: ref.name, matchTokens: [ref.name, ref.baseName || ''].filter(Boolean),
     label: ref.name, imageUrl: ref.imgUrl,
   }))
-  const byId = new Map([...refs, ...assets].map(ref => [referenceKey(ref), ref]))
   const explicit: PromptReference[] = []
   for (const [token, category, id, name] of value.matchAll(SHOT_ASSET_TOKEN)) {
     try {
@@ -482,11 +492,23 @@ function buildShotPromptReferences(value: string, refs: readonly LensShotRef[], 
       explicit.push({ token, label: ref?.name || decodeURIComponent(name), imageUrl: ref?.imgUrl })
     } catch { /* 非法编码按普通正文处理。 */ }
   }
-  for (const ref of assets) {
-    if (byName.get(ref.name)?.size !== 1) continue
-    const token = `@${ref.name}`
+  // 以完整字面量分组，JSON 转义后的名称也要检查是否重名。
+  const byToken = new Map<string, Map<string, LensShotRef>>()
+  for (const ref of [...refs, ...assets]) {
+    if (!ref.name) continue
+    const token = '@' + ref.name
     for (const literal of new Set([token, JSON.stringify(token).slice(1, -1)])) {
-      if (value.includes(literal)) explicit.push({ token: literal, label: ref.name, imageUrl: ref.imgUrl })
+      if (!value.includes(literal)) continue
+      const identities = byToken.get(literal) ?? new Map<string, LensShotRef>()
+      const key = referenceKey(ref)
+      if (!identities.get(key)?.imgUrl) identities.set(key, ref)
+      byToken.set(literal, identities)
+    }
+  }
+  for (const [token, identities] of byToken) {
+    for (const ref of identities.values()) {
+      explicit.push({ token, label: ref.name, imageUrl: ref.imgUrl, unresolved: identities.size > 1 })
+      break
     }
   }
   return [...explicit, ...business]
@@ -503,6 +525,7 @@ interface ShotPromptEditorProps {
 export function ShotPromptEditor({ mode, value, refs, onChange }: ShotPromptEditorProps): JSX.Element {
   const editor = useRef<PromptReferenceEditorHandle>(null)
   const list = useRef<HTMLDivElement>(null)
+  const composer = useRef<HTMLDivElement>(null)
   const pendingCaret = useRef<number | null>(null)
   const [assets, setAssets] = useState(() => mode === 'prompt' ? collectShotPromptAssets(useRFStore.getState().nodes) : [])
   const [mention, setMention] = useState<ReturnType<typeof readShotMention>>(null)
@@ -534,7 +557,7 @@ export function ShotPromptEditor({ mode, value, refs, onChange }: ShotPromptEdit
     const current = input?.value
     // 验证实时光标和查询，禁止在旧选区写入。
     if (!mention || !selection?.isCollapsed || caret !== mention.end || current === undefined ||
-        readShotMention(current, caret)?.start !== mention.start || current !== value) {
+        readLiveShotMention(current, caret, composer.current?.querySelector('.lens-shot-prompt-editor') ?? null)?.start !== mention.start || current !== value) {
       setMention(null)
       return
     }
@@ -583,7 +606,7 @@ export function ShotPromptEditor({ mode, value, refs, onChange }: ShotPromptEdit
   }
 
   return (
-    <div className="lens-shot-prompt-composer" style={{ position: 'relative' }} onCopyCapture={handleClipboard} onCutCapture={handleClipboard}>
+    <div ref={composer} className="lens-shot-prompt-composer" style={{ position: 'relative', zIndex: mention ? 4 : undefined }} onCopyCapture={handleClipboard} onCutCapture={handleClipboard}>
       <PromptReferenceEditor
         ref={editor}
         {...editorProps}
@@ -594,8 +617,8 @@ export function ShotPromptEditor({ mode, value, refs, onChange }: ShotPromptEdit
         onChange={({ currentTarget }) => {
           const next = currentTarget.value
           if (mode === 'prompt') {
-            const selection = window.getSelection()
-            const nextMention = selection?.isCollapsed ? readShotMention(next, currentTarget.selectionStart) : null
+            const root = composer.current?.querySelector<HTMLElement>('.lens-shot-prompt-editor') ?? null
+            const nextMention = readLiveShotMention(next, currentTarget.selectionStart, root)
             if (nextMention && !mention) setAssets(collectShotPromptAssets(useRFStore.getState().nodes))
             setMention(nextMention)
             setActiveIndex(0)
@@ -613,8 +636,8 @@ export function ShotPromptEditor({ mode, value, refs, onChange }: ShotPromptEdit
           className="lens-shot-prompt-mentions nodrag nopan nowheel"
           role="listbox"
           aria-label={$('画布资产候选')}
-          style={{ position: 'absolute', zIndex: 1, insetInlineStart: 0, bottom: '100%', width: 'min(320px, 100%)', maxHeight: 220,
-            overflowY: 'auto', background: 'var(--mantine-color-body)', boxShadow: 'var(--mantine-shadow-md)', borderRadius: 'var(--mantine-radius-md)', padding: 4 }}
+          style={{ position: 'absolute', zIndex: 5, insetInlineStart: 0, bottom: '100%', width: 'min(320px, 100%)', maxHeight: 220,
+            overflowY: 'auto', background: 'var(--mantine-color-body)', border: '1px solid var(--mantine-color-default-border)', boxShadow: 'var(--mantine-shadow-md)', borderRadius: 'var(--mantine-radius-md)', padding: 4 }}
         >
           {candidates.map((candidate, index) => (
             <button
