@@ -316,6 +316,9 @@ function isLensAssetNode(n: Node): boolean {
  * model 必须保留：分镜节点用户手动选择的生视频模型是节点级编排配置，
  * lens 业务表没有该字段（投影重建不出来），必须随 flow 持久化，
  * 否则刷新/重开画布后用户选择会丢失并回退到剧配置 autoGenerateModel。
+ *
+ * textBackgroundColor 必须保留：文本节点（剧本/台本/文本）的背景色是节点级展示配置，
+ * lens 业务表没有该字段，投影文本节点重开画布时会被重建覆盖，必须随 flow 持久化。
  */
 const PROJECTION_KEPT_DATA_KEYS = [
   'kind',
@@ -334,6 +337,8 @@ const PROJECTION_KEPT_DATA_KEYS = [
   'roleCardId',
   // 分镜节点用户手动选择的生视频模型：节点级编排配置，lens 业务表没有该字段，必须随 flow 持久化
   'model',
+  // 文本节点背景色：节点级展示配置，lens 业务表没有该字段，投影文本节点重开画布会丢，必须随 flow 持久化
+  'textBackgroundColor',
 ] as const
 
 /**
@@ -1578,18 +1583,31 @@ export default function LensCanvasApp(): JSX.Element {
   const arrangeLayout = useCallback(() => {
     const projection = lastProjectionRef.current
     if (!projection) return
-    // 整理画布只重排布局，不能丢节点级模型选择：
-    // lastProjectionRef 是业务投影快照，不含 data.model（lens 业务表没有该字段），
-    // 直接整体 load 会把用户手动选择的模型覆盖掉，这里只把当前 store 同 id 节点上的 model 合回投影节点。
+    // 整理画布只重排布局，不能丢节点级编排/展示配置（模型选择、文本背景色）：
+    // lastProjectionRef 是业务投影快照，不含 data.model / data.textBackgroundColor
+    // （lens 业务表没有这些字段），直接整体 load 会把用户设置覆盖掉，
+    // 这里只把当前 store 同 id 节点上的这些字段合回投影节点。
     const currentModelById = new Map<string, string>()
+    const currentTextBackgroundById = new Map<string, string>()
     for (const node of useRFStore.getState().nodes) {
-      const model = String((node.data as { model?: unknown } | undefined)?.model ?? '').trim()
+      const nodeData = node.data as { model?: unknown; textBackgroundColor?: unknown } | undefined
+      const model = String(nodeData?.model ?? '').trim()
       if (model) currentModelById.set(node.id, model)
+      const textBackgroundColor = String(nodeData?.textBackgroundColor ?? '').trim()
+      if (textBackgroundColor) currentTextBackgroundById.set(node.id, textBackgroundColor)
     }
     const nodes = projection.nodes.map((node) => {
       const model = currentModelById.get(node.id)
-      if (!model) return node
-      return { ...node, data: { ...(node.data as Record<string, unknown>), model } }
+      const textBackgroundColor = currentTextBackgroundById.get(node.id)
+      if (!model && !textBackgroundColor) return node
+      return {
+        ...node,
+        data: {
+          ...(node.data as Record<string, unknown>),
+          ...(model ? { model } : null),
+          ...(textBackgroundColor ? { textBackgroundColor } : null),
+        },
+      }
     })
     load({ nodes, edges: projection.edges })
     window.setTimeout(() => { canvasApiRef.current?.fitView() }, 60)

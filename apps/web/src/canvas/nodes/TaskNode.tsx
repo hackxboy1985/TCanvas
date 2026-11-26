@@ -1205,6 +1205,29 @@ function collectDynamicUpstreamReferenceEntriesForNode(
   return out
 }
 
+/** 文本节点背景色预设项 */
+type TextBackgroundPreset = {
+  /** 预设标识：default=跟随主题（清空自定义色），其余为设计定稿固定色 */
+  id: string
+  /** Tooltip 中文名 */
+  label: string
+  /** 圆点展示色；默认项用主题 CSS 变量表达“跟随主题” */
+  color: string
+}
+
+/**
+ * 归一化背景色比较键：忽略大小写与空白。
+ *
+ * <p>历史 flow 里可能存了带空格或大写 hex 的值，不归一化会导致预设匹配不到、
+ * 选中态丢失，或把预设色误判成历史存量色再套 0.35 透明度。</p>
+ *
+ * @param value 颜色字符串
+ * @returns 归一化后的颜色比较键
+ */
+function normalizeTextBackgroundColorToken(value: string): string {
+  return String(value || '').replace(/\s+/g, '').toLowerCase()
+}
+
 function TaskNodeInner({ id, data, selected, dragging }: NodeProps<TaskNodeType>): JSX.Element {
   // 临时调试日志：只打印视频节点渲染，避免图片/文本节点刷屏
   if (data?.kind === 'video') console.warn('[DEBUG] TaskNode 渲染:', { id, kind: data?.kind, selected })
@@ -8176,14 +8199,79 @@ const rewritePromptWithCharacters = React.useCallback(
   })
   const [textColorPickerOpen, setTextColorPickerOpen] = React.useState(false)
   const [textBgPickerOpen, setTextBgPickerOpen] = React.useState(false)
+  /** 背景色预设的鼠标悬停项 id（inline style 无 :hover，用状态驱动圆点底色与缩放） */
+  const [textBgHoverId, setTextBgHoverId] = React.useState<string | null>(null)
+  /** 背景色预设的键盘焦点项 id（仅 :focus-visible 时显示焦点环） */
+  const [textBgFocusId, setTextBgFocusId] = React.useState<string | null>(null)
+  /** 当前节点自定义背景色（trim 后为空=跟随主题默认背景） */
+  const textBackgroundCustomValue = String(
+    (data as { textBackgroundColor?: string } | undefined)?.textBackgroundColor || '',
+  ).trim()
   const TEXT_COLOR_PRESETS = React.useMemo(
     () => ['#0f172a', '#f8fafc', '#1d4ed8', '#b91c1c', '#047857', '#7c3aed'],
     [],
   )
-  const TEXT_BG_PRESETS = React.useMemo(
-    () => ['rgba(248,250,255,0.95)', 'rgba(12,17,28,0.88)', '#fff7ed', '#eff6ff', '#ecfeff', '#f5f3ff'],
-    [],
+  /**
+   * 文本节点背景色预设：按当前主题两套，第 1 项固定为「跟随主题」的默认项。
+   *
+   * <p>默认项 color 用主题 CSS 变量表达跟随主题（深色 dark-6 / 浅色 white），
+   * 点击时清空自定义色；其余 5 项为设计定稿 hex，点击后 100% 不透明渲染。
+   * 深色/浅色两套色值均按与画布背景的对比度公式实算，不要随意替换。</p>
+   */
+  const TEXT_BG_PRESETS = React.useMemo<TextBackgroundPreset[]>(
+    () => (
+      isDarkUi
+        ? [
+            { id: 'default', label: $('默认背景'), color: 'var(--mantine-color-dark-6)' },
+            { id: 'ink-blue', label: $('墨蓝'), color: '#3d4f61' },
+            { id: 'pine-green', label: $('松绿'), color: '#3e5345' },
+            { id: 'tea-brown', label: $('茶褐'), color: '#5c4937' },
+            { id: 'wine-red', label: $('酒红'), color: '#604546' },
+            { id: 'dusk-purple', label: $('暮紫'), color: '#51495c' },
+          ]
+        : [
+            { id: 'default', label: $('默认背景'), color: 'var(--mantine-color-white)' },
+            { id: 'mist-blue', label: $('雾蓝'), color: '#c1d1e3' },
+            { id: 'moss-green', label: $('苔绿'), color: '#c2d5c5' },
+            { id: 'rice-apricot', label: $('米杏'), color: '#deccb8' },
+            { id: 'lotus-pink', label: $('藕粉'), color: '#e1c9c8' },
+            { id: 'lilac', label: $('淡紫'), color: '#d5cade' },
+          ]
+    ),
+    [isDarkUi],
   )
+  /**
+   * 命中的自定义背景色预设：仅认当前主题的 5 个固定色，默认项不参与（默认=无自定义色）。
+   *
+   * <p>归一化后比较，兼容历史数据的大小写/空格；匹配不到返回 null（不伪造选中）。</p>
+   */
+  const matchedTextBackgroundPreset = React.useMemo<TextBackgroundPreset | null>(() => {
+    if (!textBackgroundCustomValue) return null
+    const normalized = normalizeTextBackgroundColorToken(textBackgroundCustomValue)
+    return (
+      TEXT_BG_PRESETS.find(
+        (preset) => preset.id !== 'default' && normalizeTextBackgroundColorToken(preset.color) === normalized,
+      ) || null
+    )
+  }, [TEXT_BG_PRESETS, textBackgroundCustomValue])
+  /** 当前选中的预设 id：无自定义色=默认项；自定义色命中 5 色之一=该项；都匹配不到=不选中任何项 */
+  const selectedTextBackgroundPresetId = textBackgroundCustomValue
+    ? matchedTextBackgroundPreset?.id ?? null
+    : 'default'
+  /**
+   * 点击背景色预设：默认项清空自定义色（回退跟随主题），其它项写入定稿 hex。
+   * 两者都立即关闭面板（点击即生效），节点数据随 flow 持久化。
+   *
+   * @param preset 被点击的预设项
+   */
+  const handleSelectTextBackgroundPreset = React.useCallback((preset: TextBackgroundPreset) => {
+    if (preset.id === 'default') {
+      updateNodeData(id, { textBackgroundColor: undefined })
+    } else {
+      updateNodeData(id, { textBackgroundColor: preset.color })
+    }
+    setTextBgPickerOpen(false)
+  }, [id, updateNodeData])
   const blurActiveEditableElement = React.useCallback(() => {
     const activeElement = document.activeElement
     if (!(activeElement instanceof HTMLElement)) return
@@ -8222,13 +8310,13 @@ const rewritePromptWithCharacters = React.useCallback(
     return raw
   }, [])
   // 文本节点卡片底色：默认直接用主题输入框底（Mantine dark-6 / 白），和底部提示词编辑框内部完全同色，
-  // 保证在画布上与编辑框视觉一致且有明显层次；用户显式设置过自定义背景色时按该色渲染
-  // （0.125 在深色画布上几乎不可见，故提高到 0.35）
-  const textNodeHasCustomBackground = Boolean(
-    String((data as { textBackgroundColor?: string } | undefined)?.textBackgroundColor || '').trim(),
-  )
+  // 保证在画布上与编辑框视觉一致且有明显层次。
+  // 自定义背景色分两种口径：
+  // 1) 命中当前主题 5 个预设之一 → 直接用定稿 hex、100% 不透明（预设色本身已按对比度实算）；
+  // 2) 历史存量非预设值 → 沿用 withAlpha(0.35) 旧口径，避免旧浅色在深色主题下变成白底白字。
+  const textNodeHasCustomBackground = Boolean(textBackgroundCustomValue)
   const textBackgroundTint = textNodeHasCustomBackground
-    ? withAlpha(textBackgroundColor, 0.35)
+    ? (matchedTextBackgroundPreset?.color ?? withAlpha(textBackgroundColor, 0.35))
     : (isDarkUi ? 'var(--mantine-color-dark-6)' : 'var(--mantine-color-white)')
   const rawTextHtml = String((data as any)?.textHtml || '').trim()
   React.useEffect(() => {
@@ -9120,21 +9208,119 @@ const rewritePromptWithCharacters = React.useCallback(
                 </div>
               </Popover.Target>
               <Popover.Dropdown>
-                <Group className="tc-task-node__text-inline-palette" gap={4} wrap="nowrap">
-                  {TEXT_BG_PRESETS.map((colorValue) => (
-                    <ActionIcon
-                      key={colorValue}
-                      className="tc-task-node__text-inline-color"
-                      size="sm"
-                      variant="subtle"
-                      onClick={() => {
-                        updateNodeData(id, { textBackgroundColor: colorValue })
-                        setTextBgPickerOpen(false)
-                      }}
-                    >
-                      <span className="tc-task-node__text-inline-color-dot" style={{ width: 12, height: 12, borderRadius: 999, background: colorValue, border: '1px solid rgba(255,255,255,0.25)' }} />
-                    </ActionIcon>
-                  ))}
+                <Group
+                  className="tc-task-node__text-bg-palette"
+                  gap={6}
+                  wrap="nowrap"
+                  role="radiogroup"
+                  aria-label={$('背景色')}
+                >
+                  {TEXT_BG_PRESETS.map((preset, index) => {
+                    const isDefaultPreset = preset.id === 'default'
+                    const isSelected = selectedTextBackgroundPresetId === preset.id
+                    const isHovered = textBgHoverId === preset.id
+                    const isFocusVisible = textBgFocusId === preset.id
+                    // 选中环与对勾统一用高对比色：深色主题浅色、浅色主题深色（非颜色信号，不只靠颜色区分）
+                    const selectionSignalColor = isDarkUi ? '#f8fafc' : '#0f172a'
+                    const hoverBackground = isDarkUi ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'
+                    const dotBorder = isDarkUi ? '1px solid rgba(226,232,240,0.20)' : '1px solid rgba(15,23,42,0.18)'
+                    const defaultDotBorder = isDarkUi ? '1px dashed rgba(226,232,240,0.55)' : '1px dashed rgba(15,23,42,0.45)'
+                    // 默认项圆点用 135° 双色渐变（当前主题色 0-50% + 对侧主题色 50-100%），表达“跟随主题”。
+                    // 两半都用主题 CSS 变量而非硬编码 hex：Mantine 版本升级会调整暗色板（当前 dark-6 实测 #2e2e2e），
+                    // 写死旧暗色值会与同文件默认项 color、真实节点默认底色不一致。
+                    const dotBackground = isDefaultPreset
+                      ? (isDarkUi
+                          ? 'linear-gradient(135deg, var(--mantine-color-dark-6) 0%, var(--mantine-color-dark-6) 50%, var(--mantine-color-white) 50%, var(--mantine-color-white) 100%)'
+                          : 'linear-gradient(135deg, var(--mantine-color-white) 0%, var(--mantine-color-white) 50%, var(--mantine-color-dark-6) 50%, var(--mantine-color-dark-6) 100%)')
+                      : preset.color
+                    return (
+                      <React.Fragment key={preset.id}>
+                        {index === 1 && (
+                          <span
+                            className="tc-task-node__text-bg-palette-divider"
+                            aria-hidden="true"
+                            style={{
+                              width: 1,
+                              height: 20,
+                              flex: '0 0 1px',
+                              alignSelf: 'center',
+                              background: isDarkUi ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.10)',
+                            }}
+                          />
+                        )}
+                        <Tooltip label={preset.label} position="bottom" withArrow>
+                          <ActionIcon
+                            className="tc-task-node__text-bg-preset"
+                            role="radio"
+                            aria-checked={isSelected}
+                            aria-label={preset.label}
+                            size={28}
+                            radius="xl"
+                            variant="transparent"
+                            p={0}
+                            onMouseEnter={() => setTextBgHoverId(preset.id)}
+                            onMouseLeave={() => setTextBgHoverId((prev) => (prev === preset.id ? null : prev))}
+                            onFocus={(event) => {
+                              if (event.currentTarget.matches(':focus-visible')) setTextBgFocusId(preset.id)
+                            }}
+                            onBlur={() => setTextBgFocusId((prev) => (prev === preset.id ? null : prev))}
+                            onClick={() => handleSelectTextBackgroundPreset(preset)}
+                            style={{
+                              width: 28,
+                              height: 28,
+                              padding: 0,
+                              borderRadius: 999,
+                              background: isHovered ? hoverBackground : 'transparent',
+                              transition: 'background 120ms ease',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              outline: isFocusVisible ? `2px solid ${isDarkUi ? '#7dd3fc' : '#2563eb'}` : 'none',
+                              outlineOffset: 2,
+                            }}
+                          >
+                            <span
+                              className="tc-task-node__text-bg-preset-dot"
+                              style={{
+                                boxSizing: 'border-box',
+                                width: 18,
+                                height: 18,
+                                borderRadius: 999,
+                                background: dotBackground,
+                                border: isDefaultPreset ? defaultDotBorder : dotBorder,
+                                transform: isHovered ? 'scale(1.08)' : 'none',
+                                transition: 'transform 120ms ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                ...(isSelected
+                                  ? {
+                                      // 2px 环：先留 2px 面板底色间距再画环，圆点+环仍在 28×28 命中区内。
+                                      // 深色间距必须用 Popover 弹层真实底色 dark-6（dark-7 更暗，会在环与圆点间露出一圈深色）；
+                                      // 浅色弹层是白色，对应 white。
+                                      boxShadow: `0 0 0 2px ${isDarkUi ? 'var(--mantine-color-dark-6)' : 'var(--mantine-color-white)'}, 0 0 0 4px ${selectionSignalColor}`,
+                                    }
+                                  : {}),
+                              }}
+                            >
+                              {isSelected && !isDefaultPreset ? (
+                                <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true" style={{ display: 'block' }}>
+                                  <path
+                                    d="M2 5.2 L4.2 7.4 L8 3.2"
+                                    fill="none"
+                                    stroke={selectionSignalColor}
+                                    strokeWidth={2.2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              ) : null}
+                            </span>
+                          </ActionIcon>
+                        </Tooltip>
+                      </React.Fragment>
+                    )
+                  })}
                 </Group>
               </Popover.Dropdown>
             </Popover>
