@@ -2,6 +2,7 @@ import React from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position, NodeResizeControl, NodeToolbar, useStore } from '@xyflow/react'
 import { useRFStore } from '../store'
+import { useCanvasBadgePlacement } from '../badgePlacementConfig'
 import { useUIStore } from '../../ui/uiStore'
 import { ASSET_REFRESH_EVENT, notifyAssetRefresh } from '../../ui/assetEvents'
 import { ActionIcon, Group, Paper, Popover, Button, Text, Stack, TextInput, Textarea, Select, Loader, Badge, Slider, Modal, Tooltip, Switch, useMantineColorScheme, useMantineTheme } from '@mantine/core'
@@ -8038,6 +8039,8 @@ const rewritePromptWithCharacters = React.useCallback(
     })
   }, [data])
 
+  // 类型角标位置（画布配置 → 通用）：capsule=并进标题胶囊；overlay=卡片内居中浮层
+  const badgePlacement = useCanvasBadgePlacement()
   const imageCategoryBadge = (() => {
     if (!isImageNode) return null
     const nodeData = data as Record<string, unknown>
@@ -8922,9 +8925,11 @@ const rewritePromptWithCharacters = React.useCallback(
     : (isLensProjectionNode
       ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel)
       : subtitle)
-  // 角标已并进标题胶囊，这里不再叠一份居中浮层；用布尔常量判别，避免 imageCategoryBadge 被收窄成 never
+  // 用布尔常量判别，避免 imageCategoryBadge 被 TS 收窄成 never。
+  // 胶囊模式（画布配置→通用）：角标已渲染进标题胶囊，不再叠居中浮层；overlay 模式保持原样。
   const hasImageCategoryBadge = Boolean(imageCategoryBadge)
-  const imageCardSubtitleOverlay = isImageNode && !hasImageCategoryBadge && String(imageCardSubtitleText || '').trim() ? (
+  const showImageBadgeOverlay = !(badgePlacement === 'capsule') || !hasImageCategoryBadge
+  const imageCardSubtitleOverlay = isImageNode && showImageBadgeOverlay && String(imageCardSubtitleText || '').trim() ? (
     <div
       className="tc-task-node__card-subtitle"
       style={{
@@ -9029,7 +9034,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showMeta={false}
         showIcon={false}
         showStatus={false}
-        showSubtitle={Boolean(imageCategoryBadge) || (!isImageNode && (isLensProjectionNode || Boolean(derivedSubtitle)))}
+        showSubtitle={(badgePlacement === 'capsule' && Boolean(imageCategoryBadge)) || (!isImageNode && (isLensProjectionNode || Boolean(derivedSubtitle)))}
         scale={headerScale}
         zoom={canvasZoomStep}
           onLabelDraftChange={setLabelDraft}

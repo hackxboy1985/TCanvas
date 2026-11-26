@@ -44,6 +44,11 @@ import {
   type LensStyleDirector,
 } from '../api/lens'
 import {
+  readCanvasBadgePlacement,
+  saveCanvasBadgePlacement,
+  type CanvasBadgePlacement,
+} from '../canvas/badgePlacementConfig'
+import {
   readCanvasShortcutConfig,
   saveCanvasShortcutConfig,
   type CanvasShortcutConfig,
@@ -85,6 +90,12 @@ const REFERENCE_IMG_TYPE_OPTIONS = [
 const SHORTCUT_OPTIONS: Array<{ value: CanvasShortcutKey; label: string }> = [
   { value: 'enter', label: $('Enter 回车键') },
   { value: 'ctrl+enter', label: $('Ctrl/⌘ + Enter 回车键') },
+]
+
+/** 类型角标位置下拉选项 */
+const BADGE_PLACEMENT_OPTIONS: Array<{ value: CanvasBadgePlacement; label: string }> = [
+  { value: 'capsule', label: $('标题胶囊内（与一级标题同排）') },
+  { value: 'overlay', label: $('卡片内居中浮层') },
 ]
 
 /** 基本设置表单默认值（与 lens 配置页默认值一致） */
@@ -155,6 +166,8 @@ function buildComboSelectData(combos: LensPromptCombo[]): Array<{ value: string;
  */
 export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Element {
   const [activeTab, setActiveTab] = React.useState<string | null>('basic')
+  // 类型角标位置（纯前端展示偏好，存 localStorage，切换即生效）
+  const [badgePlacement, setBadgePlacement] = React.useState<CanvasBadgePlacement>(() => readCanvasBadgePlacement())
   const [loading, setLoading] = React.useState(false)
   // 基本设置加载失败标记：失败时禁止保存，避免用默认值覆盖服务端真实配置
   const [loadFailed, setLoadFailed] = React.useState(false)
@@ -735,6 +748,22 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
               <Text size="xs" c="dimmed">
                 { $('当前：Enter =') }{shortcut.submit === 'enter' ? $('发送') : $('换行')}，Ctrl/⌘+Enter = {shortcut.submit === 'enter' ? $('换行') : $('发送')}
               </Text>
+              <div>
+                <Text size="xs" fw={500} mb={4}>{ $('类型角标位置') }</Text>
+                <Select
+                  id="canvas-config-badge-placement-select"
+                  data={BADGE_PLACEMENT_OPTIONS}
+                  value={badgePlacement}
+                  onChange={(value) => {
+                    if (!value) return
+                    setBadgePlacement(saveCanvasBadgePlacement(value as CanvasBadgePlacement))
+                  }}
+                  comboboxProps={{ withinPortal: true }}
+                />
+                <Text size="xs" c="dimmed" mt={4}>
+                  { $('标题胶囊内：角标与一级标题同排，画布缩小时不会被上层胶囊遮挡；卡片内居中浮层：角标浮在卡片顶部正中。切换后立即生效。') }
+                </Text>
+              </div>
             </Stack>
           </Tabs.Panel>
         </Tabs>
