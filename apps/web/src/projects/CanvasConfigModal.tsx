@@ -92,10 +92,10 @@ const SHORTCUT_OPTIONS: Array<{ value: CanvasShortcutKey; label: string }> = [
   { value: 'ctrl+enter', label: $('Ctrl/⌘ + Enter 回车键') },
 ]
 
-/** 类型角标位置下拉选项 */
+/** 节点类型样式下拉选项（默认与当前实现一致：与标题同缩放） */
 const BADGE_PLACEMENT_OPTIONS: Array<{ value: CanvasBadgePlacement; label: string }> = [
-  { value: 'capsule', label: $('标题胶囊内（与一级标题同排）') },
-  { value: 'overlay', label: $('卡片内居中浮层') },
+  { value: 'capsule', label: $('节点类型与标题同缩放') },
+  { value: 'overlay', label: $('节点类型顶部居中展示') },
 ]
 
 /** 基本设置表单默认值（与 lens 配置页默认值一致） */
@@ -749,7 +749,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                 { $('当前：Enter =') }{shortcut.submit === 'enter' ? $('发送') : $('换行')}，Ctrl/⌘+Enter = {shortcut.submit === 'enter' ? $('换行') : $('发送')}
               </Text>
               <div>
-                <Text size="xs" fw={500} mb={4}>{ $('类型角标位置') }</Text>
+                <Text size="xs" fw={500} mb={4}>{ $('节点类型样式') }</Text>
                 <Select
                   id="canvas-config-badge-placement-select"
                   data={BADGE_PLACEMENT_OPTIONS}
@@ -761,7 +761,7 @@ export function CanvasConfigModal({ opened, dramaId, onClose }: Props): JSX.Elem
                   comboboxProps={{ withinPortal: true }}
                 />
                 <Text size="xs" c="dimmed" mt={4}>
-                  { $('标题胶囊内：角标与一级标题同排，画布缩小时不会被上层胶囊遮挡；卡片内居中浮层：角标浮在卡片顶部正中。切换后立即生效。') }
+                  { $('节点类型与标题同缩放：与一级标题同处标题胶囊，跟随缩放；节点类型顶部居中展示：浮在卡片顶部正中。切换后立即生效。') }
                 </Text>
               </div>
             </Stack>
