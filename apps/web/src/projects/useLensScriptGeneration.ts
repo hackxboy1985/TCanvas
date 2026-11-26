@@ -40,10 +40,19 @@ import { $, $t } from '../canvas/i18n'
 const POLL_INTERVAL_MS = 5000
 /** 单次任务最多轮询次数：120 次 ≈ 10 分钟，与 EpisodeContent._pollScriptGenResult 一致 */
 const MAX_POLL_ATTEMPTS = 120
+/** 轮询间隔上限：无任务时指数退避到 15 秒，避免长任务空转刷接口 */
+const POLL_MAX_INTERVAL_MS = 15000
 /** 拆分镜兜底时长（秒）：剧配置未给出 maxVideoDuration 时与分镜板/后端默认值一致 */
 const DEFAULT_SPLIT_VALUE_SECONDS = 15
-/** 后端「该集没有任务」的业务错误文案片段：属正常态，不是失败 */
-const NO_TASK_ERROR_MARK = '未找到该集'
+/**
+ * 后端「该集没有任务」的业务错误文案片段（msg.storyboard.t029）：属正常态，不是失败。
+ *
+ * <p>必须按当前请求语言同时覆盖中文/英文两份文案：该接口按 i18n 返回
+ * 「未找到该集的任务」或「Task for this episode not found」，
+ * 只匹配中文时英文环境会把正常态误判成失败。文案来源见
+ * {@code zsapps-admin/src/main/resources/i18n/messages*.properties}。</p>
+ */
+const NO_TASK_ERROR_MARKS = ['未找到该集', 'Task for this episode not found'] as const
 
 export interface UseLensScriptGenerationOptions {
   dramaId: string
@@ -72,9 +81,10 @@ function errorMessage(error: unknown, fallback: string): string {
   return message || raw || fallback
 }
 
-/** 是否为「该集没有任务」的正常态错误 */
+/** 是否为「该集没有任务」的正常态错误（中/英文案任一命中即视为正常态） */
 function isNoTaskError(error: unknown): boolean {
-  return errorMessage(error, '').includes(NO_TASK_ERROR_MARK)
+  const message = errorMessage(error, '')
+  return NO_TASK_ERROR_MARKS.some((mark) => message.includes(mark))
 }
 
 /**
@@ -143,16 +153,21 @@ export function useLensScriptGeneration(options: UseLensScriptGenerationOptions)
    * @param token 轮询令牌，令牌失效（切集/新任务）时立即停止
    */
   const pollSplitShots = useCallback(async (token: number): Promise<void> => {
+    // 「该集还没有任务」期间按指数退避拉长轮询间隔，减少无效请求（后端每次要跑一整条鉴权链路）
+    let intervalMs = POLL_INTERVAL_MS
     for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
-      await delay(POLL_INTERVAL_MS)
+      await delay(intervalMs)
       if (pollTokenRef.current !== token) return
       let task: LensEpisodeTaskStatus
       try {
         task = await getEpisodeTaskStatus(dramaId, episodeNum)
+        // 任务已落库：恢复正常轮询节奏
+        intervalMs = POLL_INTERVAL_MS
       } catch (error) {
         // 「该集还没有拆分镜任务」是正常中间态：无台本时先生成台本、台本完成后自动生图并拆镜，
         // 拆分镜任务落库前 Redis 里没有映射。此时要结合台本状态判断，台本没在跑也没生成出来才是失败。
         if (!isNoTaskError(error)) throw error
+        intervalMs = Math.min(Math.round(intervalMs * 1.5), POLL_MAX_INTERVAL_MS)
         const scriptStatus = await getScriptStatus(dramaId, episodeNum)
         if (pollTokenRef.current !== token) return
         if (!scriptStatus.hasRunningTask && !scriptStatus.hasScript) {
