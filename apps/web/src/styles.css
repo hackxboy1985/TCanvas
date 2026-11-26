@@ -231,6 +231,18 @@ body {
   outline: none !important;
 }
 
+/* 节点拖拽期间：关掉被拖节点子树的模糊/光泽，降低每帧重绘成本
+   （拖拽结束后属性移除，视觉立即恢复；不影响非拖拽节点） */
+:root[data-canvas-node-dragging='true'] .react-flow__node.dragging *,
+:root[data-canvas-node-dragging='true'] .react-flow__node.dragging {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root[data-canvas-node-dragging='true'] .react-flow__node.dragging .task-node-image__glass-sheen {
+  display: none !important;
+}
+
 /* ==========================================================================
    节点选中态（统一）：描边 + 柔光
    - 用 React Flow 的 .selected 外层伪元素绘制，节点组件与业务逻辑完全不需要改

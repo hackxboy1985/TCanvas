@@ -613,6 +613,21 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     }
   }, [setSpotlightVisible, viewportMoving])
 
+  // 节点拖拽期间的视觉降级：拖拽时每一帧都要重绘节点，卡片上的 backdrop-filter(blur) 是重绘大头。
+  // 这里只在“正在拖拽”期间给根节点打标记，由 styles.css 关掉被拖节点子树的模糊/光泽，拖完立即恢复。
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (dragging) {
+      root.setAttribute('data-canvas-node-dragging', 'true')
+    } else {
+      root.removeAttribute('data-canvas-node-dragging')
+    }
+    return () => {
+      root.removeAttribute('data-canvas-node-dragging')
+    }
+  }, [dragging])
+
   const deriveLabelFromFileName = (name: string): string => {
     const trimmed = (name || '').trim()
     if (!trimmed) return 'Image'
