@@ -8834,7 +8834,9 @@ const rewritePromptWithCharacters = React.useCallback(
     : (isLensProjectionNode
       ? String((data as { lensTypeLabel?: string })?.lensTypeLabel || schema.label || defaultLabel)
       : subtitle)
-  const imageCardSubtitleOverlay = isImageNode && String(imageCardSubtitleText || '').trim() ? (
+  // 角标已并进标题胶囊，这里不再叠一份居中浮层；用布尔常量判别，避免 imageCategoryBadge 被收窄成 never
+  const hasImageCategoryBadge = Boolean(imageCategoryBadge)
+  const imageCardSubtitleOverlay = isImageNode && !hasImageCategoryBadge && String(imageCardSubtitleText || '').trim() ? (
     <div
       className="tc-task-node__card-subtitle"
       style={{
@@ -8939,7 +8941,7 @@ const rewritePromptWithCharacters = React.useCallback(
         showMeta={false}
         showIcon={false}
         showStatus={false}
-        showSubtitle={!isImageNode && (Boolean(imageCategoryBadge) || isLensProjectionNode || Boolean(derivedSubtitle))}
+        showSubtitle={Boolean(imageCategoryBadge) || (!isImageNode && (isLensProjectionNode || Boolean(derivedSubtitle)))}
         scale={headerScale}
         zoom={canvasZoomStep}
           onLabelDraftChange={setLabelDraft}

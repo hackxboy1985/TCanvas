@@ -259,7 +259,7 @@ export function TaskNodeHeader({
             <NodeIcon className="task-node-header-icon-svg" size={18} />
           </div>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Text
             className="task-node-header-compact-title"
             size="sm"
@@ -279,6 +279,31 @@ export function TaskNodeHeader({
           >
             {currentLabel}
           </Text>
+          {/* 类型角标与一级标题同处一层：避免被上层名牌胶囊（z-index 41 深灰底）遮挡后显得发暗 */}
+          {showSubtitle && subtitleBadge && (
+            <span
+              className="task-node-header-subtitle-badge"
+              title={subtitleBadge.label}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: 17,
+                padding: '0 6px',
+                borderRadius: 6,
+                border: `1px solid ${subtitleBadge.borderColor}`,
+                background: subtitleBadge.background,
+                color: subtitleBadge.textColor ?? subtitleBadge.color,
+                fontSize: 10.5,
+                fontWeight: 500,
+                lineHeight: '15px',
+                letterSpacing: 0.3,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {subtitleBadge.label}
+            </span>
+          )}
           {showSubtitleRow && (subtitleBadge ? (
             <span
               className="task-node-header-subtitle-badge"
