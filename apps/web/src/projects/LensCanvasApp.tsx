@@ -312,6 +312,10 @@ function isLensAssetNode(n: Node): boolean {
  *
  * anchorBindings 不保留：它由投影在每次打开画布时重建，且其 imageUrl/entityId/label
  * 与 data 顶层字段重复。手动绑卡信息改由 roleCardId 承载，可跨会话保留。
+ *
+ * model 必须保留：分镜节点用户手动选择的生视频模型是节点级编排配置，
+ * lens 业务表没有该字段（投影重建不出来），必须随 flow 持久化，
+ * 否则刷新/重开画布后用户选择会丢失并回退到剧配置 autoGenerateModel。
  */
 const PROJECTION_KEPT_DATA_KEYS = [
   'kind',
@@ -328,6 +332,8 @@ const PROJECTION_KEPT_DATA_KEYS = [
   // 用户手动拖拽过的尺寸标记：重开画布时据此跳过“图片节点统一尺寸”的归一化
   'nodeSizeManual',
   'roleCardId',
+  // 分镜节点用户手动选择的生视频模型：节点级编排配置，lens 业务表没有该字段，必须随 flow 持久化
+  'model',
 ] as const
 
 /**
@@ -1572,7 +1578,20 @@ export default function LensCanvasApp(): JSX.Element {
   const arrangeLayout = useCallback(() => {
     const projection = lastProjectionRef.current
     if (!projection) return
-    load({ nodes: projection.nodes, edges: projection.edges })
+    // 整理画布只重排布局，不能丢节点级模型选择：
+    // lastProjectionRef 是业务投影快照，不含 data.model（lens 业务表没有该字段），
+    // 直接整体 load 会把用户手动选择的模型覆盖掉，这里只把当前 store 同 id 节点上的 model 合回投影节点。
+    const currentModelById = new Map<string, string>()
+    for (const node of useRFStore.getState().nodes) {
+      const model = String((node.data as { model?: unknown } | undefined)?.model ?? '').trim()
+      if (model) currentModelById.set(node.id, model)
+    }
+    const nodes = projection.nodes.map((node) => {
+      const model = currentModelById.get(node.id)
+      if (!model) return node
+      return { ...node, data: { ...(node.data as Record<string, unknown>), model } }
+    })
+    load({ nodes, edges: projection.edges })
     window.setTimeout(() => { canvasApiRef.current?.fitView() }, 60)
   }, [load])
 

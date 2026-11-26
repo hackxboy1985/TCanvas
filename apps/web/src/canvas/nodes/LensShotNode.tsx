@@ -41,6 +41,7 @@ import {
   readLensModelIsDefault,
   useLensModelOptions,
 } from '../../config/useModelOptions'
+import type { ModelOption } from '../../config/models'
 import { resolveModelGenerationCredits } from '../../config/modelPricing'
 import { useCanvasRenderContext } from '../CanvasRenderContext'
 import { editStoryboard, clearStoryboardSpeaker, submitShotVideo, editReference, type LensAssetEnriched } from '../../api/lens'
@@ -134,6 +135,13 @@ export interface LensShotNodeData extends Record<string, unknown> {
   refs?: LensShotRef[]
   /** 是否展示底部引用行（画布顶部开关控制） */
   showRefs?: boolean
+  /**
+   * 生视频模型应用ID（节点级覆盖）。
+   *
+   * <p>用户在下拉里手动选择后写入；存在时优先于剧配置 autoGenerateModel。
+   * 为空表示未手动切换过，继续跟随剧配置。</p>
+   */
+  model?: string
   entityId?: string
   sourceProjectId?: string
 }
@@ -351,7 +359,40 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
       ? data.refs.map((r) => (r.category === 1 ? { ...r, isSpeaker: names.includes(String(r.name || '').trim()) } : r))
       : [],
   })
-}function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
+}
+
+/**
+ * 解析分镜节点当前应使用的生视频模型。
+ *
+ * <p>优先级：节点已存 data.model（用户手动切换）> 剧配置 autoGenerateModel >
+ * 接口默认(isDefault) > 列表首项。用户清空下拉后没有 data.model 可用，
+ * 同样走本函数回填剧配置/默认值，保证下拉不会停在空白。</p>
+ *
+ * @param models 生视频模型选项（来自 /api/model/shot_video）
+ * @param savedValue 节点已存的模型值（data.model，已 trim）
+ * @param configValue 剧配置 autoGenerateModel（已 trim）
+ * @returns 命中的模型 value；模型列表为空时返回 null。
+ *          列表非空但全部禁用时仍按首项兜底（与历史兜底口径一致），避免下拉没有任何选中值
+ */
+function resolveShotModelValue(
+  models: readonly ModelOption[],
+  savedValue: string,
+  configValue: string,
+): string | null {
+  if (models.length === 0) return null
+  // 1) 节点已存值：用户手动切换过的模型是节点级覆盖，优先级最高
+  const savedMatched = savedValue ? findModelOptionByIdentifier(models, savedValue) : null
+  if (savedMatched && !savedMatched.disabled) return savedMatched.value
+  // 2) 剧配置指定的模型（未手动切换过的节点继续跟随剧配置）
+  const configMatched = configValue ? findModelOptionByIdentifier(models, configValue) : null
+  if (configMatched && !configMatched.disabled) return configMatched.value
+  // 3) 接口默认 / 首项（首项不额外过滤 disabled：列表全禁用时仍给出值，保持与历史兜底口径一致）
+  const configuredDefault = models.find((option) => readLensModelIsDefault(option.meta) && !option.disabled)
+  const fallback = configuredDefault || models[0]
+  return fallback ? fallback.value : null
+}
+
+function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
   // 任务结果抽屉的入口回调（由 LensCanvasApp 注入；未注入则不显示按钮）
   const { onOpenTaskResult } = useCanvasRenderContext()
   const { colorScheme } = useMantineColorScheme()
@@ -422,12 +463,12 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
   // 分镜节点只存在于 lens 画布：显式走 /api/model/shot_video，不依赖 URL 判断模式
   // （模型能力 supportedRatios / resolutions 决定画幅与分辨率选项，取错数据源会静默回退兜底值）
   const models = useLensModelOptions('video')
-  // 剧配置（唯一权威来源）：模型/画幅/分辨率/时长均以它为准
+  // 剧配置：画幅/分辨率/时长以它为准；模型仅在节点未手动选择（data.model 为空）时作为默认来源
   const lensProjectConfig = useUIStore((state) => state.lensProjectConfig)
   // 编辑区草稿（选中展开时显示，保存时写回节点 + 同步分镜板）
   const [scriptDraft, setScriptDraft] = useState<string>(String(data.scriptContent ?? ''))
   const [timeDraft, setTimeDraft] = useState<string>(String(data.timeOfDay ?? ''))
-  // 模型：剧配置 autoGenerateModel 优先，其次节点已存值，最后由接口默认/首项兜底（见下方 effect）
+  // 模型：节点已存 data.model（用户手动切换）优先，其次剧配置 autoGenerateModel，最后由接口默认/首项兜底（见下方 effect）
   const [modelValue, setModelValue] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<string>('')
   // 编辑模式：prompt=分镜提示词（默认展示），script=分镜剧本
@@ -508,25 +549,41 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
     }
   }, [id, lensProjectConfig, configAspect, configResolution, aspectValue, resolutionValue, aspectOptions, resolutionOptions])
 
-  // 模型选择优先级：剧配置 autoGenerateModel > 节点已存值 > 接口默认(isDefault) > 列表首项
-  // 剧配置是唯一权威来源，不能被节点里存的旧值覆盖（否则改了剧配置对已有节点不生效）。
+  // 模型选择优先级：节点已存 data.model（用户手动切换）> 剧配置 autoGenerateModel > 接口默认(isDefault) > 列表首项
+  // 只有「用户手动切换过」的节点才用 data.model 覆盖剧配置；data.model 为空的节点仍跟随剧配置，
+  // 保证改剧配置对未手动切换的节点继续生效。解析逻辑统一由 resolveShotModelValue 提供。
+  // 依赖里刻意不含 modelValue：否则用户切换 → setModelValue → 本 effect 重跑 → 又把剧配置值写回，表现为自动回弹。
+  const configModel = lensProjectConfig?.autoGenerateModel
+  const configModelValue = configModel === undefined || configModel === null ? '' : String(configModel).trim()
   useEffect(() => {
-    if (models.length === 0) return
-    // 1) 剧配置指定的模型
-    const configModel = lensProjectConfig?.autoGenerateModel
-    const configValue = configModel === undefined || configModel === null ? '' : String(configModel).trim()
-    const configMatched = configValue ? findModelOptionByIdentifier(models, configValue) : null
-    if (configMatched && !configMatched.disabled) {
-      if (modelValue !== configMatched.value) setModelValue(configMatched.value)
+    const savedValue = typeof data.model === 'string' ? data.model.trim() : ''
+    const nextValue = resolveShotModelValue(models, savedValue, configModelValue)
+    if (!nextValue) return
+    setModelValue((prev) => (prev === nextValue ? prev : nextValue))
+  }, [models, configModelValue, data.model])
+
+  /**
+   * 切换生视频模型：更新本地显示状态，并写回节点 data.model 做节点级覆盖。
+   *
+   * <p>data.model 会随 flow 持久化（LensCanvasApp 的投影字段白名单保留 model），
+   * 刷新/重开画布后仍是用户选择；清空下拉（next 为空）时把 data.model 置空，
+   * 回退为跟随剧配置 autoGenerateModel。</p>
+   *
+   * @param next 选中的模型应用ID；null/空字符串表示清空选择
+   */
+  const handleModelChange = useCallback((next: string | null) => {
+    const nextModel = next || null
+    if (!nextModel) {
+      // 清空即回退剧配置/默认值：从未手动选过的节点 data.model 本来就是 undefined，
+      // 再写 undefined 不会改变依赖 → 上面的初始化 effect 不会重跑，
+      // 因此必须在这里同步回填，否则下拉停在空白、生成被「请先选择生视频模型」拦住。
+      setModelValue(resolveShotModelValue(models, '', configModelValue))
+      useRFStore.getState().updateNodeData(id, { model: undefined })
       return
     }
-    // 2) 节点已存值
-    if (modelValue) return
-    // 3) 接口默认 / 首项
-    const configuredDefault = models.find((option) => readLensModelIsDefault(option.meta) && !option.disabled)
-    const fallback = configuredDefault || models[0]
-    if (fallback) setModelValue(fallback.value)
-  }, [models, modelValue, lensProjectConfig])
+    setModelValue(nextModel)
+    useRFStore.getState().updateNodeData(id, { model: nextModel })
+  }, [id, models, configModelValue])
 
   // 媒体实际宽高比（用于节点高度随视频比例：宽度恒 384 填满，高度按比例）
   const [mediaAspect, setMediaAspect] = useState<number | null>(null)
@@ -1622,7 +1679,7 @@ function updateSpeakerState(nodeId: string, data: LensShotNodeData, nextSpeakerN
                     style={{ flex: 1, minWidth: 0 }}
                     data={models.map((m) => ({ value: m.value, label: m.label, disabled: m.disabled }))}
                     value={modelValue}
-                    onChange={(v) => setModelValue(v)}
+                    onChange={handleModelChange}
                     placeholder={models.length ? $('选择生视频模型') : $('暂无可用模型')}
                   />
                   {/* 画幅：选项来自所选模型 others.supportedRatios，未配置时用通用兜底 */}
