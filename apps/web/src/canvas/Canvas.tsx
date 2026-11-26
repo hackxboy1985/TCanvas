@@ -613,6 +613,29 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
     }
   }, [setSpotlightVisible, viewportMoving])
 
+  // 平移/缩放期间的视觉降级标记。
+  // React Flow 的 paneDragging 只在「拖拽平移」时为 true；本画布开了 panOnScroll，
+  // 触控板/滚轮平移不会置位，于是原来那套 viewport-moving 降级规则实际没生效，平移才发卡。
+  // 这里改为由 onMove（任何视口变化都会触发）直接打标记，手势结束后 180ms 自动移除。
+  const viewportMoveAttrTimerRef = React.useRef<number | null>(null)
+  const markViewportMoving = React.useCallback(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.setAttribute('data-canvas-viewport-moving', 'true')
+    if (viewportMoveAttrTimerRef.current !== null) {
+      window.clearTimeout(viewportMoveAttrTimerRef.current)
+    }
+    viewportMoveAttrTimerRef.current = window.setTimeout(() => {
+      viewportMoveAttrTimerRef.current = null
+      document.documentElement.removeAttribute('data-canvas-viewport-moving')
+    }, 180)
+  }, [])
+  React.useEffect(() => () => {
+    if (viewportMoveAttrTimerRef.current !== null) {
+      window.clearTimeout(viewportMoveAttrTimerRef.current)
+      viewportMoveAttrTimerRef.current = null
+    }
+  }, [])
+
   // 节点拖拽期间的视觉降级：拖拽时每一帧都要重绘节点，卡片上的 backdrop-filter(blur) 是重绘大头。
   // 这里只在“正在拖拽”期间给根节点打标记，由 styles.css 关掉被拖节点子树的模糊/光泽，拖完立即恢复。
   useEffect(() => {
@@ -3522,6 +3545,7 @@ function CanvasInner({ className, canvasApiRef, arrangeHandler, shotArrange, onS
         // 内的子造型、子场景、分镜）会中招——表现就是双击后画布被放大 2 倍且不居中。
         // 双击聚焦统一由 onNodeDoubleClick 处理，这里必须关掉内置行为。
         zoomOnDoubleClick={false}
+        onMove={markViewportMoving}
         onMoveEnd={(_evt, vp) => {
           setCanvasViewport(vp)
           const lastPointer = lastPointerScreenRef.current
