@@ -184,6 +184,8 @@ docker-compose --profile credit-worker up --build
 
 ## AI 对话架构（当前）
 
+补充（2026-11-25，引用编辑交互）：Lens 聊天正文使用 `ChatMentionComposer` 显示“缩略图＋名称”的原子引用；上下键与回车在候选面板打开时优先选择节点。直接删除、剪切或选区删除标签会同步正文引用身份，提交时按节点 ID 去重为 `contextNodeIds`，普通同名 @ 文本不自动变成引用。分镜工具栏与通用提示词区使用 `PromptReferenceEditor`，只序列化既有原始引用 token；正文删除只更新提示词，不解绑资产关系、不删除连线。编辑组件在组合输入期间不拦截确认键。
+
 本节描述当前真实运行中的 AI 对话链路。当前版本已经收敛为“前端收集上下文、后端注入作用域与协议、agents 自主决策、skills 承载方法论”的结构；当前唯一聊天入口为 `POST /public/agents/chat`；旧 `/public/chat` 系列文本入口与 `/storyboard/*`、`/agents/storyboard/workflow/*` 生产链已删除。
 
 补充（2026-11-01，lens 画布模式）：lens 画布（`/canvas/?dramaId=...`，由 `apps/web/src/projects/LensCanvasApp.tsx` 承接）内的 AI 对话不走本节的 `/public/agents/chat`。该模式下复用的 `AiChatDialog` 由 `apps/web/src/api/lensAgentChat.ts` 把对话改道到 lens Java 后端 `POST /api/canvas/agent/chat`（POST SSE，直接透传 agents-cli 事件：initial/session/thinking/content/tool/todo_list/thread.*/turn.*/item.*/result/error/done）；lens Java 桥负责组装 lens 画布上下文、调用 `apps/agents-cli` 的 `/chat`，并通过 `POST /api/canvas/agent/tools/execute` 回调执行画布工具（tapcanvas_flow_get / tapcanvas_flow_patch / 项目上下文与任务查询工具）。canvas plan 正常执行：前端建节点/连线落库并 autoRun 生成；flow_patch 修改已有节点后前端触发 reload 与重新生成。LLM 由 lens「提示词设置-画布配置」选择的数据源池经 lens LLM 代理转发，agents-cli 不持有模型 key。本节其余描述仅适用于非 lens 的 tapcanvas 主站对话。

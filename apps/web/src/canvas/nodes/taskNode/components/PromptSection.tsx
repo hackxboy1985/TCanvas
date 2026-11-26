@@ -1,6 +1,7 @@
 import React from 'react'
-import { ActionIcon, Textarea, Text, Group, Button, TextInput, Badge, Select, Portal } from '@mantine/core'
+import { ActionIcon, Text, Group, Button, TextInput, Badge, Select, Portal } from '@mantine/core'
 import { IconBrain, IconBulb } from '@tabler/icons-react'
+import { PromptReferenceEditor, type PromptReferenceEditorHandle, readPromptDOM } from './PromptReferenceEditor'
 import { $ } from '../../../i18n'
 
 type MentionMenuPosition = {
@@ -22,73 +23,6 @@ export type MentionSuggestionItem = {
   }
 }
 
-type CaretMetrics = {
-  left: number
-  top: number
-  lineHeight: number
-}
-
-function getTextareaCaretMetrics(textarea: HTMLTextAreaElement, caret: number): CaretMetrics {
-  const styles = window.getComputedStyle(textarea)
-  const mirror = document.createElement('div')
-  const marker = document.createElement('span')
-  const textareaRect = textarea.getBoundingClientRect()
-
-  mirror.setAttribute('data-role', 'prompt-caret-mirror')
-  mirror.style.position = 'fixed'
-  mirror.style.visibility = 'hidden'
-  mirror.style.pointerEvents = 'none'
-  mirror.style.left = `${textareaRect.left}px`
-  mirror.style.top = `${textareaRect.top}px`
-  mirror.style.whiteSpace = 'pre-wrap'
-  mirror.style.wordWrap = 'break-word'
-  mirror.style.overflowWrap = 'break-word'
-  mirror.style.boxSizing = styles.boxSizing
-  mirror.style.width = `${textarea.clientWidth}px`
-  mirror.style.font = styles.font
-  mirror.style.fontFamily = styles.fontFamily
-  mirror.style.fontSize = styles.fontSize
-  mirror.style.fontWeight = styles.fontWeight
-  mirror.style.fontStyle = styles.fontStyle
-  mirror.style.letterSpacing = styles.letterSpacing
-  mirror.style.textTransform = styles.textTransform
-  mirror.style.textIndent = styles.textIndent
-  mirror.style.padding = styles.padding
-  mirror.style.border = styles.border
-  mirror.style.lineHeight = styles.lineHeight
-  mirror.style.tabSize = styles.tabSize
-  mirror.style.textAlign = styles.textAlign
-
-  const valueBeforeCaret = textarea.value.slice(0, caret)
-  mirror.textContent = valueBeforeCaret
-  if (valueBeforeCaret.endsWith('\n')) {
-    mirror.textContent += ' '
-  }
-
-  marker.textContent = '\u200b'
-  mirror.appendChild(marker)
-  document.body.appendChild(mirror)
-
-  const mirrorRect = mirror.getBoundingClientRect()
-  const markerRect = marker.getBoundingClientRect()
-  const lineHeightValue = Number.parseFloat(styles.lineHeight)
-  const fontSizeValue = Number.parseFloat(styles.fontSize)
-  const lineHeight = Number.isFinite(lineHeightValue)
-    ? lineHeightValue
-    : (Number.isFinite(fontSizeValue) ? fontSizeValue * 1.4 : 20)
-
-  const left = markerRect.left - textarea.scrollLeft
-  const top = markerRect.top - textarea.scrollTop
-
-  document.body.removeChild(mirror)
-
-  return {
-    left,
-    top,
-    lineHeight,
-  }
-}
-
 type PromptSectionProps = {
   isCharacterNode: boolean
   isComposerNode: boolean
@@ -102,7 +36,7 @@ type PromptSectionProps = {
   readOnlyHint?: string
   prompt: string
   setPrompt: (value: string) => void
-  onUpdateNodeData: (patch: any) => void
+  onUpdateNodeData: (patch: { prompt: string }) => void
   placeholder?: string
   minRows?: number
   maxRows?: number
@@ -222,7 +156,15 @@ export function PromptSection({
     : suggestionsEnabled
       ? $('智能建议已启用 (Ctrl/Cmd+Space 切换)')
       : $('智能建议已禁用 (Ctrl/Cmd+Space 启用)')
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
+  // 搜索候选会被筛选，已知引用不能随菜单过滤而消失。
+  const referenceCache = React.useRef(new Map<string, MentionSuggestionItem>())
+  mentionItems.forEach(item => referenceCache.current.set(item.username, item))
+  const promptReferences = Array.from(referenceCache.current.values()).map(item => ({
+    token: '@' + item.username.replace(/^@/, ''),
+    label: item.display_name || item.username,
+    imageUrl: item.profile_picture_url || item.assetBinding?.url,
+  }))
+  const textareaRef = React.useRef<PromptReferenceEditorHandle | null>(null)
   const inputWrapRef = React.useRef<HTMLDivElement | null>(null)
   const [activeMention, setActiveMention] = React.useState(0)
   const [mentionMenuPosition, setMentionMenuPosition] = React.useState<MentionMenuPosition | null>(null)
@@ -237,7 +179,8 @@ export function PromptSection({
     }
 
     const textareaRect = textarea.getBoundingClientRect()
-    const caretMetrics = getTextareaCaretMetrics(textarea, meta.caret)
+    const caretRect = textarea.getCaretRect()
+    const caretMetrics = { left: caretRect.left, top: caretRect.top, lineHeight: caretRect.height || 20 }
     const preferredWidth = Math.min(320, Math.max(220, textareaRect.width - 16))
     const minLeft = 8
     const maxLeft = Math.max(minLeft, window.innerWidth - preferredWidth - 8)
@@ -256,7 +199,7 @@ export function PromptSection({
   }, [mentionMetaRef])
 
   const syncMentionState = React.useCallback((input: {
-    textarea: HTMLTextAreaElement
+    textarea: Pick<PromptReferenceEditorHandle, 'selectionStart'>
     value: string
   }) => {
     const caret = typeof input.textarea.selectionStart === 'number'
@@ -439,10 +382,10 @@ export function PromptSection({
             )}
           </div>
         )}
-        <Textarea
+        <PromptReferenceEditor
+          references={promptReferences}
           className="task-node-prompt__textarea"
           ref={textareaRef}
-          autosize
           minRows={typeof minRows === 'number' ? minRows : 2}
           maxRows={typeof maxRows === 'number' ? maxRows : 6}
           readOnly={readOnly}
@@ -462,18 +405,18 @@ export function PromptSection({
         }}
           onClick={(e) => {
             if (readOnly) return
-            syncMentionState({ textarea: e.currentTarget, value: e.currentTarget.value })
+            syncMentionState({ textarea: { selectionStart: textareaRef.current?.selectionStart ?? prompt.length }, value: readPromptDOM(e.currentTarget) })
           }}
           onKeyUp={(e) => {
             if (readOnly) return
             const key = e.key
             if (key.startsWith('Arrow') || key === 'Home' || key === 'End') {
-              syncMentionState({ textarea: e.currentTarget, value: e.currentTarget.value })
+              syncMentionState({ textarea: { selectionStart: textareaRef.current?.selectionStart ?? prompt.length }, value: readPromptDOM(e.currentTarget) })
             }
           }}
           onSelect={(e) => {
             if (readOnly) return
-            syncMentionState({ textarea: e.currentTarget, value: e.currentTarget.value })
+            syncMentionState({ textarea: { selectionStart: textareaRef.current?.selectionStart ?? prompt.length }, value: readPromptDOM(e.currentTarget) })
           }}
           onBlur={() => {
             if (readOnly) return
@@ -641,7 +584,7 @@ export function PromptSection({
               return (
                 <div
                   className="task-node-prompt__mention"
-                  key={username || item?.id || item?.name || idx}
+                  key={username || idx}
                   style={{
                     padding: '6px 8px',
                     borderRadius: 6,

@@ -12,9 +12,9 @@
  * <p>与 tapCanvas 现有 storyboard 节点（分镜图生视频）区分：本节点是「参考图 + 提示词生视频」，
  * 现有 storyboard 节点保留不动。
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { Handle, Position, NodeToolbar, useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
-import { ActionIcon, Button, Group, Select, Switch, Text, Textarea, Tooltip, Menu } from '@mantine/core'
+import { ActionIcon, Button, Group, Select, Switch, Text, Tooltip, Menu } from '@mantine/core'
 import {
   IconBrain,
   IconClock,
@@ -29,10 +29,12 @@ import { useRFStore } from '../../canvas/store'
 import { getNodeAbsRect } from '../utils/nodeBounds'
 import { focusNodeInViewport } from '../utils/nodeFocus'
 import { useMantineColorScheme } from '@mantine/core'
+import { PromptReferenceEditor, readPromptDOM, type PromptReference, type PromptReferenceEditorHandle } from './taskNode/components/PromptReferenceEditor'
+import { toOssResponsiveUrl } from '../utils/ossResponsive'
 import { LensReferencePicker } from '../components/LensReferencePicker'
 import { connectShotReferences, disconnectShotReference, referenceFromNode, referenceKey, ReferenceCategory } from './lensShotReferences'
 import { useUIStore } from '../../ui/uiStore'
-import { collectOrderedUpstreamReferenceItems } from './taskNode/upstreamReferences'
+import { collectOrderedUpstreamReferenceItems, pickPrimaryImageFromNode } from './taskNode/upstreamReferences'
 import { VideoFramePreview } from './taskNode/components/VideoFramePreview'
 import { collectUpstreamVideoTextContext } from './taskNode/videoPromptGeneration'
 import {
@@ -392,6 +394,255 @@ function resolveShotModelValue(
   return fallback ? fallback.value : null
 }
 
+/** 当前画布资产是提示词的文本候选，不进入分镜业务引用。 */
+export function collectShotPromptAssets(nodes: readonly Node[]): LensShotRef[] {
+  const assets = new Map<string, LensShotRef>()
+  for (const node of nodes) {
+    const category = Number(node.data.assetCategory)
+    if (category !== ReferenceCategory.Role && category !== ReferenceCategory.Scene && category !== ReferenceCategory.Prop) continue
+    if (String(node.data.source || '').trim() !== 'lens_projection') continue
+    const id = String(node.data.entityId ?? '').trim()
+    const name = String(node.data.label ?? '').trim()
+    if (!id || !name) continue
+    const parentId = String(node.data.parentEntityId ?? '').trim() || undefined
+    const variant = String(node.data.variantName || node.data.cloneName || node.data.childName || '').trim()
+    const { baseName, variantName } = splitRefNames(name, parentId, variant)
+    const asset = {
+      id, category, name, parentId, baseName, variantName,
+      imgUrl: pickPrimaryImageFromNode(node),
+    }
+    const key = referenceKey(asset)
+    if (!assets.get(key)?.imgUrl) assets.set(key, asset)
+  }
+  // 资产库补建节点也可能只带基础名称，候选统一使用完整子资产名。
+  return Array.from(assets.values(), (asset) => {
+    if (!asset.parentId || !asset.variantName) return asset
+    const parent = assets.get(referenceKey({ ...asset, id: asset.parentId }))
+    const baseName = parent?.name || asset.baseName
+    const hasSuffix = splitRefNames(asset.name, asset.parentId, asset.variantName).baseName !== asset.name
+    return hasSuffix ? asset : { ...asset, name: `${baseName}（${asset.variantName}）`, baseName }
+  })
+}
+/** 会话内标记携带身份，离开编辑会话前转换为已有的 @完整名称。 */
+const SHOT_ASSET_TOKEN = /@\[lens-asset:([123]):([^:\]\s]+):([^\]\s]+)\]/g
+function shotAssetToken(ref: LensShotRef): string {
+  return `@[lens-asset:${ref.category}:${encodeURIComponent(ref.id)}:${encodeURIComponent(ref.name)}]`
+}
+
+/** 保存与模型提交共用转换，并保留 JSON 字符串内名称的转义。 */
+export function shotPromptForModel(value: string): string {
+  const json = /^[\s]*[\[{]/.test(value)
+  let cursor = 0
+  let inString = false
+  let escaped = false
+  return value.replace(SHOT_ASSET_TOKEN, (token: string, _category: string, _id: string, name: string, offset: number) => {
+    for (; json && cursor < offset; cursor++) {
+      if (escaped) escaped = false
+      else if (inString && value[cursor] === '\\') escaped = true
+      else if (value[cursor] === '"') inString = !inString
+    }
+    cursor = offset + token.length
+    try {
+      const text = `@${decodeURIComponent(name)}`
+      return inString ? JSON.stringify(text).slice(1, -1) : text
+    } catch { return '@' }
+  }).replace(/@\[lens-asset:[^\]\s"]*\]?/g, '@')
+}
+
+/** 定位光标前的 @ 查询，仅替换触发符和已输入的查询文本。 */
+function readShotMention(value: string, caret: number) {
+  const match = /@([^\s@[\]]*)$/.exec(value.slice(0, caret))
+  return match ? { start: match.index, end: caret, query: match[1].toLowerCase() } : null
+}
+
+
+
+/** 业务引用保留裸名别名。重开后只有唯一的显式 @名称 才从画布恢复。 */
+function buildShotPromptReferences(value: string, refs: readonly LensShotRef[], assets: readonly LensShotRef[]): PromptReference[] {
+  const byName = new Map<string, Set<string>>()
+  for (const ref of [...refs, ...assets]) {
+    const identities = byName.get(ref.name) ?? new Set<string>()
+    identities.add(referenceKey(ref))
+    byName.set(ref.name, identities)
+  }
+  const business = refs.filter(ref => {
+    if (!ref.name) return false
+    const token = `@${ref.name}`
+    const explicit = value.includes(token) || value.includes(JSON.stringify(token).slice(1, -1))
+    return !explicit || byName.get(ref.name)?.size === 1
+  }).map(ref => ({
+    token: `@${ref.name}`, displayToken: ref.name, matchTokens: [ref.name, ref.baseName || ''].filter(Boolean),
+    label: ref.name, imageUrl: ref.imgUrl,
+  }))
+  const byId = new Map([...refs, ...assets].map(ref => [referenceKey(ref), ref]))
+  const explicit: PromptReference[] = []
+  for (const [token, category, id, name] of value.matchAll(SHOT_ASSET_TOKEN)) {
+    try {
+      const ref = byId.get(`${category}:${decodeURIComponent(id)}`)
+      explicit.push({ token, label: ref?.name || decodeURIComponent(name), imageUrl: ref?.imgUrl })
+    } catch { /* 非法编码按普通正文处理。 */ }
+  }
+  for (const ref of assets) {
+    if (byName.get(ref.name)?.size !== 1) continue
+    const token = `@${ref.name}`
+    for (const literal of new Set([token, JSON.stringify(token).slice(1, -1)])) {
+      if (value.includes(literal)) explicit.push({ token: literal, label: ref.name, imageUrl: ref.imgUrl })
+    }
+  }
+  return [...explicit, ...business]
+}
+
+interface ShotPromptEditorProps {
+  mode: 'prompt' | 'script'
+  value: string
+  refs: readonly LensShotRef[]
+  onChange: (value: string) => void
+}
+
+/** 用原有提示词编辑器渲染原子标签，候选期间保留输入中的临时 DOM。 */
+export function ShotPromptEditor({ mode, value, refs, onChange }: ShotPromptEditorProps): JSX.Element {
+  const editor = useRef<PromptReferenceEditorHandle>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const pendingCaret = useRef<number | null>(null)
+  const [assets, setAssets] = useState(() => mode === 'prompt' ? collectShotPromptAssets(useRFStore.getState().nodes) : [])
+  const [mention, setMention] = useState<ReturnType<typeof readShotMention>>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const references = useMemo(() => buildShotPromptReferences(value, refs, assets), [value, refs, assets])
+  const frozen = useRef({ value, references })
+  // 查询前缀可能恰好是一个完整的资产名，等退出候选态再交给编辑器进行原子化。
+  const editorProps = mention ? frozen.current : { value, references }
+  useLayoutEffect(() => {
+    if (!mention) frozen.current = { value, references }
+    if (pendingCaret.current !== null) {
+      editor.current?.setSelectionRange(pendingCaret.current, pendingCaret.current)
+      pendingCaret.current = null
+    }
+  }, [mention, value, references])
+
+  const candidates = useMemo(() => mention ? assets.filter(ref =>
+    [ref.name, ref.baseName, ref.variantName].some(name => name?.toLowerCase().includes(mention.query)),
+  ) : [], [assets, mention])
+
+  useEffect(() => {
+    list.current?.children[activeIndex]?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex, candidates])
+
+  const choose = (candidate: LensShotRef) => {
+    const input = editor.current
+    const selection = window.getSelection()
+    const caret = input?.selectionStart
+    const current = input?.value
+    // 验证实时光标和查询，禁止在旧选区写入。
+    if (!mention || !selection?.isCollapsed || caret !== mention.end || current === undefined ||
+        readShotMention(current, caret)?.start !== mention.start || current !== value) {
+      setMention(null)
+      return
+    }
+    const latest = collectShotPromptAssets(useRFStore.getState().nodes)
+    const asset = latest.find(ref => referenceKey(ref) === referenceKey(candidate))
+    setMention(null)
+    setAssets(latest)
+    if (!asset) return
+    const token = `${shotAssetToken(asset)} `
+    pendingCaret.current = mention.start + token.length
+    onChange(current.slice(0, mention.start) + token + current.slice(caret))
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!mention || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    const { key } = event
+    if (key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      setMention(null)
+    } else if (candidates.length && (key === 'ArrowUp' || key === 'ArrowDown' || key === 'Enter')) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (key === 'Enter') choose(candidates[activeIndex])
+      else setActiveIndex(index => (index + (key === 'ArrowDown' ? 1 : -1) + candidates.length) % candidates.length)
+    } else if (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'Home' || key === 'End') {
+      setMention(null)
+    }
+  }
+
+  /** 会话标记可用于编辑器序列化，但复制和剪切输出可读正文。 */
+  const handleClipboard = (event: ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection()
+    if (!selection?.rangeCount || selection.isCollapsed) return
+    const range = selection.getRangeAt(0)
+    if (!event.currentTarget.contains(range.commonAncestorContainer)) return
+    const text = readPromptDOM(range.cloneContents())
+    if (!text.includes('@[lens-asset:')) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.clipboardData.setData('text/plain', shotPromptForModel(text))
+    if (event.type === 'cut' && document.execCommand('delete') && editor.current) {
+      setMention(null)
+      onChange(editor.current.value)
+    }
+  }
+
+  return (
+    <div className="lens-shot-prompt-composer" style={{ position: 'relative' }} onCopyCapture={handleClipboard} onCutCapture={handleClipboard}>
+      <PromptReferenceEditor
+        ref={editor}
+        {...editorProps}
+        protectExplicitMentions
+        className="lens-shot-prompt-editor"
+        minRows={7}
+        maxRows={7}
+        onChange={({ currentTarget }) => {
+          const next = currentTarget.value
+          if (mode === 'prompt') {
+            const selection = window.getSelection()
+            const nextMention = selection?.isCollapsed ? readShotMention(next, currentTarget.selectionStart) : null
+            if (nextMention && !mention) setAssets(collectShotPromptAssets(useRFStore.getState().nodes))
+            setMention(nextMention)
+            setActiveIndex(0)
+          }
+          onChange(next)
+        }}
+        onClick={() => setMention(null)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => setMention(null)}
+        placeholder={mode === 'prompt' ? $('分镜提示词（生视频用，可为 JSON）') : $('分镜剧本（含动作与对白）')}
+      />
+      {mention && (
+        <div
+          ref={list}
+          className="lens-shot-prompt-mentions nodrag nopan nowheel"
+          role="listbox"
+          aria-label={$('画布资产候选')}
+          style={{ position: 'absolute', zIndex: 1, insetInlineStart: 0, bottom: '100%', width: 'min(320px, 100%)', maxHeight: 220,
+            overflowY: 'auto', background: 'var(--mantine-color-body)', boxShadow: 'var(--mantine-shadow-md)', borderRadius: 'var(--mantine-radius-md)', padding: 4 }}
+        >
+          {candidates.map((candidate, index) => (
+            <button
+              key={referenceKey(candidate)}
+              className="lens-shot-prompt-mention"
+              type="button"
+              role="option"
+              tabIndex={-1}
+              aria-selected={index === activeIndex}
+              onMouseDown={event => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => choose(candidate)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 32, padding: '4px 8px',
+                border: 0, color: 'var(--mantine-color-text)', textAlign: 'start', cursor: 'pointer',
+                background: index === activeIndex ? 'var(--mantine-primary-color-light)' : 'transparent' }}
+            >
+              {candidate.imgUrl && <img className="lens-shot-prompt-mention-image" src={toOssResponsiveUrl(candidate.imgUrl, 48)} alt="" loading="lazy" width={24} height={24} style={{ objectFit: 'cover' }} />}
+              <span className="lens-shot-prompt-mention-name" style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{candidate.name}</span>
+              <span className="lens-shot-prompt-mention-category">{refBadgeLabel(candidate)}</span>
+            </button>
+          ))}
+          {!candidates.length && <div className="lens-shot-prompt-mention-empty" style={{ padding: 8 }}>{$('无匹配的画布资产')}</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.Element {
   // 任务结果抽屉的入口回调（由 LensCanvasApp 注入；未注入则不显示按钮）
   const { onOpenTaskResult } = useCanvasRenderContext()
@@ -600,7 +851,8 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
   useEffect(() => {
     setScriptDraft(String(data.scriptContent ?? ''))
     setTimeDraft(String(data.timeOfDay ?? ''))
-    setPromptDraft(String(data.prompt ?? ''))
+    const prompt = String(data.prompt ?? '')
+    setPromptDraft(previous => shotPromptForModel(previous) === prompt ? previous : prompt)
   }, [data.scriptContent, data.timeOfDay, data.prompt])
 
   /** 聚焦或播放当前视频时，暂停同一画布的其他视频，保留其播放进度。 */
@@ -680,7 +932,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
 
   /** 提交生成用的提示词：优先分镜提示词草稿，为空回退分镜剧本 */
   const effectivePrompt = useCallback((): string => {
-    const promptText = String(promptDraft || '').trim()
+    const promptText = shotPromptForModel(promptDraft).trim()
     if (promptText) return promptText
     return String(scriptDraft || '').trim()
   }, [promptDraft, scriptDraft])
@@ -695,7 +947,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     // 时长与提交生成同一口径收敛，避免「保存的秒数」和「实际下发的秒数」不一致
     const duration = clampDuration(durationValue, minDuration, maxDuration)
     const patch = {
-      prompt: promptDraft,
+      prompt: shotPromptForModel(promptDraft),
       scriptContent: scriptDraft,
       timeOfDay: timeDraft,
       ...(duration === null ? null : { time: duration }),
@@ -750,7 +1002,7 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
     const refsText = refs.length
       ? '本分镜引用资产：' + refs.map((ref) => (REF_LABEL[ref.category] || '引') + '·' + ref.name).join('、')
       : null
-    const currentDraft = String(promptDraft || '').trim()
+    const currentDraft = shotPromptForModel(promptDraft).trim()
     const promptText = [
       '请基于以下上下文，生成当前分镜视频的最终执行 prompt。',
       '视频参数：时长=' + durationText + 's；画幅=' + (aspectValue || '16:9'),
@@ -1654,19 +1906,12 @@ function LensShotNode({ id, data, selected }: NodeProps<LensShotNodeType>): JSX.
                   />
                 </Group>
               </Group>
-              {/* 两种内容共用固定高度，避免切换到长提示词时撑出工具栏滚动条。 */}
-              <Textarea
-                className="lens-shot-prompt-editor"
-                size="sm"
-                rows={7}
+              <ShotPromptEditor
+                key={promptMode}
+                mode={promptMode}
+                refs={displayRefs}
                 value={promptMode === 'prompt' ? promptDraft : scriptDraft}
-                onChange={(e) => {
-                  const next = e.currentTarget.value
-                  if (promptMode === 'prompt') setPromptDraft(next)
-                  else setScriptDraft(next)
-                }}
-                placeholder={promptMode === 'prompt' ? $('分镜提示词（生视频用，可为 JSON）') : $('分镜剧本（含动作与对白）')}
-                mb={12}
+                onChange={promptMode === 'prompt' ? setPromptDraft : setScriptDraft}
               />
 
               {/* 底部控制栏：模型 + 画幅 + 分辨率 + 积分 + 生成；保存位于上方提示词开关前。 */}

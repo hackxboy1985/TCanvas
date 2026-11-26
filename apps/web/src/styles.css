@@ -8408,8 +8408,8 @@ body {
   width: 100%;
 }
 
-.tc-ai-chat--dock-right.tc-ai-chat--expanded .tc-ai-chat__input .mantine-Textarea-input,
-.tc-ai-chat--dock-right.tc-ai-chat--maximized .tc-ai-chat__input .mantine-Textarea-input {
+.tc-ai-chat--dock-right.tc-ai-chat--expanded .tc-ai-chat__input,
+.tc-ai-chat--dock-right.tc-ai-chat--maximized .tc-ai-chat__input {
   padding: 0 52px 52px 4px !important;
 }
 

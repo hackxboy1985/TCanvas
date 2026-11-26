@@ -1,5 +1,7 @@
 import React from 'react'
-import { ActionIcon, Badge, Button, Group, Menu, Modal, Paper, ScrollArea, Stack, Text, Textarea, Tooltip } from '@mantine/core'
+import { createEmptyLensChatComposerState, isLensChatHistoryRequestCurrent } from './lensChatSessionState'
+import { ChatMentionComposer, type ChatMention, type ChatMentionComposerHandle } from './ChatMentionComposer'
+import { ActionIcon, Badge, Button, Group, Menu, Modal, Paper, ScrollArea, Stack, Text, Tooltip } from '@mantine/core'
 import { IconArrowsMaximize, IconArrowsMinimize, IconBook2, IconChevronDown, IconChevronUp, IconHistory, IconMessageCircle, IconMessagePlus, IconPaperclip, IconPhoto, IconSend2, IconSparkles, IconTrash, IconUpload, IconX } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import {
@@ -2053,17 +2055,31 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   ))
   const [lensChatSessionsLoading, setLensChatSessionsLoading] = React.useState(false)
   const lensChatSessionRestoredRef = React.useRef(false)
+  const historyLoadVersionRef = React.useRef(0)
   // lens 画布内置技能（后端 GET /skills 提供，内容为 tapcanvas skills 拷贝）：选中后随对话请求传 skillKey
   const [lensAgentSkills, setLensAgentSkills] = React.useState<LensAgentSkill[]>([])
   const [lensAgentSkillsLoading, setLensAgentSkillsLoading] = React.useState(false)
   const [lensActiveSkill, setLensActiveSkill] = React.useState<LensAgentSkill | null>(null)
   // 用户 @ 引用的画布节点（最多 5 个，随对话请求传 contextNodeIds）
-  const [lensMentionedNodes, setLensMentionedNodes] = React.useState<Array<{ id: string; label: string }>>([])
+  const [lensMentionedNodes, setLensMentionedNodes] = React.useState<ChatMention[]>([])
   // @ 弹层候选项与当前查询串（null=未在 @ 输入态）
   const [lensMentionCandidates, setLensMentionCandidates] = React.useState<Array<{ id: string; label: string; kind: string }>>([])
+  /** @ 引用候选的键盘高亮下标（↑/↓ 移动，Enter 选中） */
+  const [lensMentionActiveIndex, setLensMentionActiveIndex] = React.useState(0)
   const [lensMentionQuery, setLensMentionQuery] = React.useState<string | null>(null)
   const lensMentionStartRef = React.useRef<number>(-1)
   const lensMentionCaretRef = React.useRef<number>(0)
+  /** 跨会话时整体清理正文、引用和候选位置，避免下一会话沿用旧节点。 */
+  const clearLensChatComposer = React.useCallback((): void => {
+    const empty = createEmptyLensChatComposerState()
+    setDraft(empty.draft)
+    setLensMentionedNodes(empty.mentionedNodes)
+    setLensMentionQuery(empty.query)
+    setLensMentionCandidates(empty.candidates)
+    setLensMentionActiveIndex(empty.activeIndex)
+    lensMentionStartRef.current = empty.mentionStart
+    lensMentionCaretRef.current = empty.mentionCaret
+  }, [])
   // 思考链仅管理员可见：默认 false（fail-closed），由后端 initial/session 事件的 isAdmin 置位
   const [isAdminViewer, setIsAdminViewer] = React.useState(false)
   // 画布对话快捷键（换行/提交互斥，来自「配置」弹窗；默认换行=ctrl+enter、提交=enter）
@@ -2109,22 +2125,34 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     return () => { cancelled = true }
   }, [lensCanvasMode])
 
+  // 卸载时让所有在途历史请求失效，包括菜单触发的切换请求。
+  React.useEffect(() => () => { historyLoadVersionRef.current += 1 }, [])
+
   // lens 画布：首次打开/刷新后恢复当前 Tab 会话的历史消息（点击历史列表切换时走 switchLensChatSession）
   React.useEffect(() => {
     if (!lensCanvasMode || lensChatSessionRestoredRef.current) return
     lensChatSessionRestoredRef.current = true
     const sessionId = getLensChatSessionId()
+    const requestVersion = ++historyLoadVersionRef.current
+    let cancelled = false
     setLensChatSessionIdState(sessionId)
     void (async () => {
       try {
         const history = await fetchLensChatSessionMessages(sessionId)
+        if (!isLensChatHistoryRequestCurrent(requestVersion, historyLoadVersionRef.current, cancelled)) return
         if (history.length > 0) {
           setMessages(mapLensHistoryToChatMessages(history))
         }
       } catch (error) {
+        if (!isLensChatHistoryRequestCurrent(requestVersion, historyLoadVersionRef.current, cancelled)) return
         console.warn('[ai-chat] 恢复 lens 历史会话失败', error)
       }
     })()
+    return () => {
+      cancelled = true
+      // React 严格模式重新执行 effect 时需要重新恢复，旧请求已由 cancelled 失效。
+      lensChatSessionRestoredRef.current = false
+    }
   }, [lensCanvasMode])
   const activePanel = useUIStore((s) => s.activePanel)
   const currentProjectId = useUIStore((s) => (s.currentProject?.id ? String(s.currentProject.id).trim() : ''))
@@ -2210,12 +2238,11 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     }, []),
   )
   const agentLoadingRef = React.useRef(false)
-  const historyLoadVersionRef = React.useRef(0)
   const loadedSessionKeyRef = React.useRef('')
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
   const messagesContentRef = React.useRef<HTMLDivElement | null>(null)
-  const compactInputRef = React.useRef<HTMLTextAreaElement | null>(null)
-  const expandedInputRef = React.useRef<HTMLTextAreaElement | null>(null)
+  const compactInputRef = React.useRef<ChatMentionComposerHandle | null>(null)
+  const expandedInputRef = React.useRef<ChatMentionComposerHandle | null>(null)
   const activeStreamInterruptRef = React.useRef<null | (() => void)>(null)
   // 本轮是否成功调用过 flow_patch（lens 模式下据此判断后端已写画布，需要 reload；新前缀 gycanvas_，旧名前缀兜底）
   const flowPatchSucceededRef = React.useRef(false)
@@ -2275,6 +2302,8 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   }, [mode])
 
   React.useEffect(() => {
+    // Lens 历史独立恢复，不能递增版本或清空其正在恢复的消息。
+    if (lensCanvasMode) return
     const sessionKey = String(effectiveChatSessionKey || '').trim()
     shouldAutoScrollRef.current = true
     const requestVersion = historyLoadVersionRef.current + 1
@@ -2291,9 +2320,6 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
       setMessages([])
       return
     }
-    // lens 画布：对话历史由 lensAgentChat 适配层维护，lens 后端没有 tapcanvas 的 /public/agents/memory 记忆接口
-    if (isLensCanvasMode()) return
-
     let cancelled = false
     void (async () => {
       try {
@@ -2319,7 +2345,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     return () => {
       cancelled = true
     }
-  }, [effectiveChatSessionKey])
+  }, [effectiveChatSessionKey, lensCanvasMode])
 
   const scrollToBottom = React.useCallback(() => {
     const el = viewportRef.current
@@ -2807,7 +2833,15 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     }
     setLensMentionQuery(query)
     setLensMentionCandidates(candidates)
+    setLensMentionActiveIndex(0)
   }, [lensCanvasMode])
+
+  /** 键盘移动 @ 候选高亮时，把高亮项滚动到可视区 */
+  React.useEffect(() => {
+    if (!lensCanvasMode || lensMentionQuery === null) return
+    const active = document.querySelector('.tc-ai-chat__mention-item[data-active="true"]')
+    if (active instanceof HTMLElement) active.scrollIntoView({ block: 'nearest' })
+  }, [lensCanvasMode, lensMentionActiveIndex, lensMentionQuery])
 
   /** 输入框变更：同步 draft 与 @ 引用候选（光标位置用于替换 @查询串） */
   const handleComposerDraftChange = React.useCallback((value: string, caret?: number): void => {
@@ -2819,25 +2853,20 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   const selectLensMentionCandidate = React.useCallback((candidate: { id: string; label: string; kind: string }): void => {
     const start = lensMentionStartRef.current
     const caret = lensMentionCaretRef.current
-    const current = String(draft || '')
-    setDraft(start >= 0 && caret >= start
-      ? `${current.slice(0, start)}@${candidate.label} ${current.slice(caret)}`
-      : `${current}@${candidate.label} `)
-    setLensMentionedNodes((prev) => {
-      if (prev.some((item) => item.id === candidate.id)) return prev
-      if (prev.length >= 5) {
-        toast($('最多引用 5 个画布节点'), 'warning')
-        return prev
-      }
-      return [...prev, { id: candidate.id, label: candidate.label }]
-    })
+    if (!lensMentionedNodes.some((item) => item.id === candidate.id) && new Set(lensMentionedNodes.map((item) => item.id)).size >= 5) {
+      toast($('最多引用 5 个画布节点'), 'warning')
+      return
+    }
+    const node = useRFStore.getState().nodes.find((item) => item.id === candidate.id)
+    const input = expandedInputRef.current || compactInputRef.current
+    input?.insertMention({ ...candidate, imageUrl: readImageUrlFromCanvasNode(node) }, start >= 0 ? start : draft.length, caret >= start ? caret : draft.length)
     setLensMentionQuery(null)
     setLensMentionCandidates([])
     lensMentionStartRef.current = -1
     window.setTimeout(() => {
       (expandedInputRef.current || compactInputRef.current)?.focus()
     }, 0)
-  }, [draft])
+  }, [draft, lensMentionedNodes])
 
   const normalizedDraft = React.useMemo(() => String(draft || '').trim(), [draft])
   const activeSkillContextName = React.useMemo(() => {
@@ -3084,7 +3113,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
         ...(requestSelectedCanvasNodeContext?.nodeId ? { canvasNodeId: requestSelectedCanvasNodeContext.nodeId } : {}),
         // 用户 @ 引用的画布节点（lens）：只传 id，节点名称由后端/agent 读取画布解析
         ...(lensCanvasMode && lensMentionedNodes.length
-          ? { contextNodeIds: lensMentionedNodes.map((node) => node.id) }
+          ? { contextNodeIds: Array.from(new Set(lensMentionedNodes.map((node) => node.id))) }
           : {}),
         chatContext: {
           ...(requestSkill
@@ -3565,6 +3594,10 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     setActiveSkill(nextSkill)
     setChatSessionLane('general')
     setDraft('')
+    // 整体清空正文时同时移除行内引用，避免下一轮携带旧节点。
+    setLensMentionedNodes([])
+    setLensMentionQuery(null)
+    setLensMentionCandidates([])
     setMessages([])
     setReplicateTargetImage('')
     setChatSessionBaseKey(persistChatSessionBaseKey(createChatSessionBaseKey()))
@@ -3607,34 +3640,36 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
   const switchLensChatSession = React.useCallback(async (summary: LensChatSessionSummary): Promise<void> => {
     setLensChatSessionId(summary.sessionId)
     setLensChatSessionIdState(summary.sessionId)
-    historyLoadVersionRef.current += 1
+    const requestVersion = ++historyLoadVersionRef.current
+    clearLensChatComposer()
+    setMessages([])
     activeStreamInterruptRef.current?.()
     activeStreamInterruptRef.current = null
     try {
       const history = await fetchLensChatSessionMessages(summary.sessionId)
+      if (!isLensChatHistoryRequestCurrent(requestVersion, historyLoadVersionRef.current)) return
       setMessages(mapLensHistoryToChatMessages(history))
       toast($t('已切换到历史对话（{{count}} 条消息）', { count: history.length }), 'success')
     } catch (error) {
+      if (!isLensChatHistoryRequestCurrent(requestVersion, historyLoadVersionRef.current)) return
       setMessages([])
       const message = error instanceof Error ? error.message : $('未知错误')
       toast($t('恢复历史对话失败：{{message}}', { message: message }), 'error')
     }
-  }, [])
+  }, [clearLensChatComposer])
 
   /** 开启 lens 画布新对话：生成新 sessionId 并清空当前消息/能力/@ 引用 */
   const startNewLensConversation = React.useCallback((): void => {
     const nextSessionId = createLensChatSessionId()
     setLensChatSessionIdState(nextSessionId)
     setLensActiveSkill(null)
-    setLensMentionedNodes([])
-    setLensMentionQuery(null)
+    clearLensChatComposer()
     historyLoadVersionRef.current += 1
     activeStreamInterruptRef.current?.()
     activeStreamInterruptRef.current = null
-    setDraft('')
     setMessages([])
     toast($('已开启新对话'), 'success')
-  }, [])
+  }, [clearLensChatComposer])
 
   const startNewConversation = React.useCallback(() => {
     // lens 画布：历史会话由 agents-cli 持久化，新对话必须换 sessionId，避免继续沿用旧会话历史
@@ -3646,6 +3681,10 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     clearCreationSession()
     setChatSessionLane('general')
     setDraft('')
+    // 整体清空正文时同时移除行内引用，避免下一轮携带旧节点。
+    setLensMentionedNodes([])
+    setLensMentionQuery(null)
+    setLensMentionCandidates([])
     setMessages([])
     setChatSessionBaseKey(persistChatSessionBaseKey(createChatSessionBaseKey()))
     toast($('已开启新对话'), 'success')
@@ -3653,6 +3692,8 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
 
   const applyTutorialPrompt = React.useCallback((prompt: string) => {
     setDraft(String(prompt || '').trim())
+    setLensMentionedNodes([])
+    setLensMentionQuery(null)
     setTutorialOpened(false)
     if (mode === 'compact') {
       setMode('expanded')
@@ -3664,7 +3705,39 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
 
   // 输入框快捷键：由「配置 → 通用」的换行/提交快捷键驱动（默认 Enter 发送、Ctrl+Enter 换行）；
   // Shift/Alt+Enter 始终保留默认换行；输入法组合输入（isComposing）时不拦截，避免选词确认误发。
-  const handleComposerKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleComposerKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    // 中文选词的方向键、确认键都交给输入法，不改变候选或发送消息。
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+    // @ 引用面板打开时优先接管键盘：↑/↓ 选择、Enter 确认、Esc 关闭
+    const mentionOpen = lensCanvasMode && lensMentionQuery !== null && lensMentionCandidates.length > 0
+    if (mentionOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setLensMentionActiveIndex((prev) => (prev + 1) % lensMentionCandidates.length)
+        return
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setLensMentionActiveIndex((prev) => (prev - 1 + lensMentionCandidates.length) % lensMentionCandidates.length)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setLensMentionQuery(null)
+        setLensMentionCandidates([])
+        return
+      }
+      if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
+        const nativeEvent = event.nativeEvent
+        if (nativeEvent.isComposing || nativeEvent.keyCode === 229) return
+        const candidate = lensMentionCandidates[Math.min(lensMentionActiveIndex, lensMentionCandidates.length - 1)]
+        if (candidate) {
+          event.preventDefault()
+          selectLensMentionCandidate(candidate)
+          return
+        }
+      }
+    }
     if (event.key !== 'Enter') return
     const nativeEvent = event.nativeEvent
     if (nativeEvent.isComposing || nativeEvent.keyCode === 229) return
@@ -3675,15 +3748,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     /** 在光标处插入换行（部分浏览器/平台的 Ctrl+Enter 不会触发 textarea 默认换行，受控组件需手动插入） */
     const insertLineBreakAtCursor = () => {
       event.preventDefault()
-      const target = event.currentTarget
-      const start = target.selectionStart ?? target.value.length
-      const end = target.selectionEnd ?? start
-      const nextValue = target.value.slice(0, start) + '\n' + target.value.slice(end)
-      setDraft(nextValue)
-      // 受控组件更新后把光标移到换行之后，保持连续输入体验
-      requestAnimationFrame(() => {
-        target.setSelectionRange(start + 1, start + 1)
-      })
+      ;(expandedInputRef.current || compactInputRef.current)?.insertText('\n')
     }
     // 提交：命中配置的提交快捷键
     const isSubmitKey = (shortcutConfig.submit === 'enter' && isPlainEnter)
@@ -3700,7 +3765,7 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
     if (isLineBreakKey) {
       insertLineBreakAtCursor()
     }
-  }, [canSendMessage, shortcutConfig, send, sending])
+  }, [canSendMessage, lensCanvasMode, lensMentionActiveIndex, lensMentionCandidates, lensMentionQuery, selectLensMentionCandidate, shortcutConfig, send, sending])
 
   const inspirationQuickActions = React.useMemo<InspirationQuickAction[]>(() => {
     return buildChatInspirationQuickActions({
@@ -4338,31 +4403,19 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                   onClear={clearReferenceImages}
                   disabled={sending || refsLoading}
                 />
-                {lensCanvasMode && lensMentionedNodes.length > 0 ? (
-                  <Group className="tc-ai-chat__mention-chips" gap={6} wrap="wrap" mb={8}>
-                    {lensMentionedNodes.map((node) => (
-                      <Badge
-                        key={node.id}
-                        className="tc-ai-chat__mention-chip"
-                        size="sm"
-                        radius="sm"
-                        variant="light"
-                        rightSection={<IconX className="tc-ai-chat__mention-chip-close" size={10} />}
-                        onClick={() => setLensMentionedNodes((prev) => prev.filter((item) => item.id !== node.id))}
-                      >
-                        {`@${node.label}`}
-                      </Badge>
-                    ))}
-                  </Group>
-                ) : null}
+
                 {lensCanvasMode && lensMentionQuery !== null && lensMentionCandidates.length > 0 ? (
                   <div className="tc-ai-chat__mention-panel" role="listbox" aria-label={ $('选择画布节点') }>
                     <Text className="tc-ai-chat__mention-title" size="xs" c="dimmed">{$('插入画布节点引用')}</Text>
-                    {lensMentionCandidates.map((candidate) => (
+                    {lensMentionCandidates.map((candidate, candidateIndex) => (
                       <button
                         key={candidate.id}
                         type="button"
-                        className="tc-ai-chat__mention-item"
+                        data-active={candidateIndex === lensMentionActiveIndex ? 'true' : undefined}
+                        className={candidateIndex === lensMentionActiveIndex
+                          ? 'tc-ai-chat__mention-item tc-ai-chat__mention-item--active'
+                          : 'tc-ai-chat__mention-item'}
+                        onMouseEnter={() => setLensMentionActiveIndex(candidateIndex)}
                         onMouseDown={(event) => { event.preventDefault(); selectLensMentionCandidate(candidate) }}
                       >
                         <span className="tc-ai-chat__mention-item-label">{`@${candidate.label}`}</span>
@@ -4402,15 +4455,16 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                         </div>
 
                         <div className="tc-ai-chat__input-slot">
-                          <Textarea
+                          <ChatMentionComposer
                             ref={compactInputRef}
                             className="tc-ai-chat__input"
-                            autosize
                             minRows={1}
                             maxRows={4}
                             placeholder={$('请输入你的设计需求')}
                             value={draft}
-                            onChange={(e) => handleComposerDraftChange(e.currentTarget.value, e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
+                            mentions={lensMentionedNodes}
+                      onChange={(value, caret, mentions) => { setLensMentionedNodes(mentions); handleComposerDraftChange(value, caret) }}
+                      onCaretChange={updateLensMentionState}
                             onKeyDown={handleComposerKeyDown}
                             disabled={sending}
                             onFocus={() => {
@@ -4698,31 +4752,19 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                     </Text>
                   </div>
                 ) : null}
-                {lensCanvasMode && lensMentionedNodes.length > 0 ? (
-                  <Group className="tc-ai-chat__mention-chips" gap={6} wrap="wrap" mb={8}>
-                    {lensMentionedNodes.map((node) => (
-                      <Badge
-                        key={node.id}
-                        className="tc-ai-chat__mention-chip"
-                        size="sm"
-                        radius="sm"
-                        variant="light"
-                        rightSection={<IconX className="tc-ai-chat__mention-chip-close" size={10} />}
-                        onClick={() => setLensMentionedNodes((prev) => prev.filter((item) => item.id !== node.id))}
-                      >
-                        {`@${node.label}`}
-                      </Badge>
-                    ))}
-                  </Group>
-                ) : null}
+
                 {lensCanvasMode && lensMentionQuery !== null && lensMentionCandidates.length > 0 ? (
                   <div className="tc-ai-chat__mention-panel" role="listbox" aria-label={ $('选择画布节点') }>
                     <Text className="tc-ai-chat__mention-title" size="xs" c="dimmed">{$('插入画布节点引用')}</Text>
-                    {lensMentionCandidates.map((candidate) => (
+                    {lensMentionCandidates.map((candidate, candidateIndex) => (
                       <button
                         key={candidate.id}
                         type="button"
-                        className="tc-ai-chat__mention-item"
+                        data-active={candidateIndex === lensMentionActiveIndex ? 'true' : undefined}
+                        className={candidateIndex === lensMentionActiveIndex
+                          ? 'tc-ai-chat__mention-item tc-ai-chat__mention-item--active'
+                          : 'tc-ai-chat__mention-item'}
+                        onMouseEnter={() => setLensMentionActiveIndex(candidateIndex)}
                         onMouseDown={(event) => { event.preventDefault(); selectLensMentionCandidate(candidate) }}
                       >
                         <span className="tc-ai-chat__mention-item-label">{`@${candidate.label}`}</span>
@@ -4738,15 +4780,16 @@ export default function AiChatDialog({ className }: { className?: string }): JSX
                   </div>
 
                   <div className="tc-ai-chat__input-slot">
-                    <Textarea
+                    <ChatMentionComposer
                       ref={expandedInputRef}
                       className="tc-ai-chat__input"
-                      autosize
                       minRows={2}
                       maxRows={6}
                       placeholder={$('请输入你的设计需求')}
                       value={draft}
-                      onChange={(e) => handleComposerDraftChange(e.currentTarget.value, e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
+                      mentions={lensMentionedNodes}
+                      onChange={(value, caret, mentions) => { setLensMentionedNodes(mentions); handleComposerDraftChange(value, caret) }}
+                      onCaretChange={updateLensMentionState}
                       onKeyDown={handleComposerKeyDown}
                       disabled={sending}
                     />
