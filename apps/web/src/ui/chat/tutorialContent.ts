@@ -104,8 +104,8 @@ const tutorialSteps: AiChatTutorialStep[] = [
 ]
 
 export const AI_CHAT_TUTORIAL_CONTENT: AiChatTutorialContent = {
-  sourceTitle: 'TapCanvas Workflow Tutorial',
-  sourceSummary: $('这里保留一组固定教程，概括 TapCanvas 在图像到视频工作流中的核心编排原则，不再依赖 ai-metadata 生成。'),
+  sourceTitle: 'GyCanvas Workflow Tutorial',
+  sourceSummary: $('这里保留一组固定教程，概括 GyCanvas 在图像到视频工作流中的核心编排原则，不再依赖 ai-metadata 生成。'),
   methodology: [
     $('先锁世界，再做镜头。先拿到一张权威基底帧，再继续扩镜与视频化。'),
     $('每次只改一个变量。机位、POV、道具状态和动作边界要拆步处理。'),
@@ -116,8 +116,8 @@ export const AI_CHAT_TUTORIAL_CONTENT: AiChatTutorialContent = {
 }
 
 export const AI_CHAT_WORKFLOW_SYSTEM_PROMPT = [
-  '【TapCanvas Workflow Orchestrator 能力】',
-  '你默认掌握 TapCanvas 的通用创作编排方法，不依赖外部 ai-metadata。',
+  '【GyCanvas Workflow Orchestrator 能力】',
+  '你默认掌握 GyCanvas 的通用创作编排方法，不依赖外部 ai-metadata。',
   '处理 AI 创作、分镜、连续性、多镜头扩展、图转视频时，必须优先按下面的步骤思考：',
   '1. 先识别 scene type：start_new_scene / expand_stable_image_to_shots / repair_continuity / convert_keyframe_to_video / repair_video_drift。',
   `2. 再检查状态字段：${WORKFLOW_STATE_FIELDS.join(', ')}。`,
